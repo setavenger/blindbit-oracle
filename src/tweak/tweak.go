@@ -103,7 +103,7 @@ func sumPublicKeys(pubKeys []string) (*btcec.PublicKey, error) {
 	for idx, pubKey := range pubKeys {
 		bytesPubKey, err := hex.DecodeString(pubKey)
 		if err != nil {
-			fmt.Println(err)
+			common.Logger.Error(err.Error())
 			panic(err)
 			return nil, err
 		}
@@ -112,7 +112,7 @@ func sumPublicKeys(pubKeys []string) (*btcec.PublicKey, error) {
 		}
 		publicKey, err := btcec.ParsePubKey(bytesPubKey)
 		if err != nil {
-			fmt.Println(err)
+			common.Logger.Error(err.Error())
 			panic(err)
 			return nil, err
 		}
@@ -122,17 +122,27 @@ func sumPublicKeys(pubKeys []string) (*btcec.PublicKey, error) {
 		} else {
 			var decodeString []byte
 			x, y := curve.Add(lastPubKey.X(), lastPubKey.Y(), publicKey.X(), publicKey.Y())
-			decodeString, err = hex.DecodeString(fmt.Sprintf("04%x%x", x, y))
+
+			// in case big int omits leading zero
+			sX := fmt.Sprintf("%x", x)
+			if len(sX)%2 != 0 {
+				sX = "0" + sX
+			}
+			sY := fmt.Sprintf("%x", y)
+			if len(sY)%2 != 0 {
+				sY = "0" + sY
+			}
+			fmt.Println(fmt.Sprintf("04%x%x", sX, sY))
+			decodeString, err = hex.DecodeString(fmt.Sprintf("04%s%s", sX, sY))
 			if err != nil {
-				fmt.Println(err)
+				common.Logger.Error(err.Error())
 				panic(err)
 				return nil, err
 			}
 
-			// directly assigns
 			lastPubKey, err = btcec.ParsePubKey(decodeString)
 			if err != nil {
-				fmt.Println(err)
+				common.Logger.Error(err.Error())
 				panic(err)
 				return nil, err
 			}
@@ -147,7 +157,8 @@ func computeOutpointsHash(tx *common.Transaction) ([32]byte, error) {
 		nBuf := new(bytes.Buffer)
 		err := binary.Write(nBuf, binary.LittleEndian, vin.Vout)
 		if err != nil {
-			panic(err)
+			common.Logger.Error(err.Error())
+			return [32]byte{}, err
 		}
 		txIdBytes, err := hex.DecodeString(vin.Txid)
 		if err != nil {

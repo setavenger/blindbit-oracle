@@ -8,19 +8,17 @@ import (
 	"encoding/hex"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
-	"log"
-	"os"
-	"os/signal"
+	"time"
 )
 
 func main() {
-	interrupt := make(chan os.Signal, 1)
-	signal.Notify(interrupt, os.Interrupt)
+	//interrupt := make(chan os.Signal, 1)
+	//signal.Notify(interrupt, os.Interrupt)
 
 	// make sure everything is ready before we receive data
 	mongodb.CreateIndices()
 
-	messageOutChan := make(chan wire.Message, 10)
+	messageOutChan := make(chan wire.Message, 100)
 	foundTaprootTxChan := make(chan chainhash.Hash, 300)
 	bestHeightChan := make(chan uint32)
 
@@ -36,6 +34,7 @@ func main() {
 		FullySyncedChan:    fullySyncedChan,
 	}
 	go p2p.StartPeerRoutine(&ph, messageOutChan, doneChan)
+
 	go tweak.StartFetchRoutine(foundTaprootTxChan, &ph)
 	api := server.ApiHandler{
 		BestHeightChan: bestHeightChan,
@@ -44,22 +43,27 @@ func main() {
 	go server.RunServer(&api)
 	//<-time.After(1 * time.Second)
 
-	bytes, err := hex.DecodeString("33d717cce7160b51351f22b283b8ea2ab0e3f5ee41c06bde717dc499dbb58a91")
-	if err != nil {
-		panic(err)
-	}
-	//_ = bytes
-	//
+	// wait for initial sync to be concluded
 	<-fullySyncedChan
-	messageOutChan <- p2p.MakeBlockRequest(bytes, wire.InvTypeBlock)
+
+	for i, header := range ph.Headers {
+		if i < 100 {
+			continue
+		}
+		bytes, err := hex.DecodeString(header.Hash.String())
+		if err != nil {
+			panic(err)
+		}
+
+		messageOutChan <- p2p.MakeBlockRequest(bytes, wire.InvTypeBlock)
+	}
+	//bytes, err := hex.DecodeString("31f789a51350e5795174996495117a86e0e212e9c25b17c789c0923fd2b2513a")
+	//if err != nil {
+	//	panic(err)
+	//}
+	//
+	//messageOutChan <- p2p.MakeBlockRequest(bytes, wire.InvTypeBlock)
 	//transactions := mongodb.RetrieveByBlockHeight(806758)
 	//fmt.Println(transactions[0])
-	for {
-		select {
-
-		case <-interrupt:
-			log.Println("interrupt")
-			return
-		}
-	}
+	<-time.After(24 * time.Hour)
 }

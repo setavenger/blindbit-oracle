@@ -1,6 +1,7 @@
 package common
 
 import (
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 )
 
@@ -86,4 +87,9 @@ type TransactionStatus struct {
 	BlockHeight uint32 `json:"block_height"`
 	BlockHash   string `json:"block_hash"`
 	//BlockTime   int    `json:"block_time"`
+}
+
+type Header struct {
+	Hash      *chainhash.Hash
+	Timestamp uint32
 }

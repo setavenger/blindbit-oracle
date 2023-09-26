@@ -32,9 +32,9 @@ func GetChainHash(hash chainhash.Hash) *chainhash.Hash {
 
 }
 
-func IndexOfHash(element *chainhash.Hash, data []*chainhash.Hash) int32 {
+func IndexOfHashInHeaderList(element *chainhash.Hash, data []*Header) int32 {
 	for i, v := range data {
-		if *element == *v {
+		if *element == *v.Hash {
 			return int32(i)
 		}
 	}

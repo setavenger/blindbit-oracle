@@ -9,19 +9,22 @@ import (
 	"fmt"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"io/ioutil"
+	"log/slog"
 	"net/http"
 )
 
 //const MempoolEndpoint = "https://mempool.space/api/tx/"
 
 func StartFetchRoutine(foundTaprootTXChan chan chainhash.Hash, handler *p2p.PeerHandler) {
+	common.Logger.Info("starting fetch routine")
 	for {
 		select {
 		case txId := <-foundTaprootTXChan:
-			_ = txId
+			common.Logger.Info("new txid:", txId.String())
+
 			transactionDetails, err := getTransactionDetails(txId, handler)
 			if err != nil {
-				fmt.Println(err)
+				common.Logger.Error(err.Error())
 				continue
 			}
 			//fmt.Printf("%+v\n", transactionDetails)
@@ -44,7 +47,7 @@ func StartFetchRoutine(foundTaprootTXChan chan chainhash.Hash, handler *p2p.Peer
 			//fmt.Println("here")
 			tweakData, err := ComputeTweak(transactionDetails)
 			if err != nil {
-				fmt.Println(err)
+				common.Logger.Error(err.Error())
 				continue
 			}
 			mongodb.SaveTweakData(tweakData)
@@ -60,33 +63,34 @@ func getTransactionDetails(txId chainhash.Hash, ph *p2p.PeerHandler) (*common.Tr
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		fmt.Println("Transaction was not found:", txId)
+		slog.Error("Transaction was not found:", txId)
 		return nil, fmt.Errorf("HTTP status %d: %s", resp.StatusCode, resp.Status)
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Println(err)
+		common.Logger.Error(err.Error())
 		return nil, err
 	}
 
 	var tx common.Transaction
 	err = json.Unmarshal(body, &tx)
 	if err != nil {
-		fmt.Println(err)
+		common.Logger.Error(err.Error())
 		return nil, err
 	}
 
 	bytes, err := hex.DecodeString(tx.Status.BlockHash)
 	if err != nil {
-		fmt.Println(err)
+		common.Logger.Error(err.Error())
 		return nil, err
 	}
 
 	hash := chainhash.Hash{}
 	err = hash.SetBytes(bytes)
 	if err != nil {
-		fmt.Println(err)
+		common.Logger.Error(err.Error())
+		//panic(err)
 		return nil, err
 	}
 

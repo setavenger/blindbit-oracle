@@ -187,12 +187,14 @@ func SaveTransactionDetails(transaction *common.Transaction) {
 func SaveFilter(filter *common.Filter) {
 	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(mongoDBURI))
 	if err != nil {
-		panic(err)
+		common.Logger.Error(err.Error())
+		return
 	}
 
 	defer func() {
 		if err = client.Disconnect(context.TODO()); err != nil {
-			panic(err)
+			common.Logger.Error(err.Error())
+			return
 		}
 	}()
 
@@ -200,12 +202,12 @@ func SaveFilter(filter *common.Filter) {
 
 	result, err := coll.InsertOne(context.TODO(), filter)
 	if err != nil {
-		fmt.Println(err)
-		//panic(err)
+		//todo don't log duplicate keys as error but rather as debug
+		common.Logger.Error(err.Error())
 		return
 	}
 
-	fmt.Printf("Filter inserted with ID: %s\n", result.InsertedID)
+	common.Logger.Debug("Filter inserted", "ID", result.InsertedID)
 }
 
 func SaveLightUTXO(utxo *common.LightUTXO) {
@@ -276,7 +278,7 @@ func SaveSpentUTXO(utxo *common.SpentUTXO) {
 		return
 	}
 
-	fmt.Printf("Tweak inserted with ID: %s\n", result.InsertedID)
+	fmt.Printf("Spent Transaction output inserted with ID: %s\n", result.InsertedID)
 }
 
 func RetrieveTransactionsByHeight(blockHeight uint32) []*common.Transaction {
@@ -413,7 +415,7 @@ func RetrieveTweakDataByHeight(blockHeight uint32) []*common.TweakData {
 	return results
 }
 
-func DeleteLightUTXOByTxIndex(txId string, Index uint32) {
+func DeleteLightUTXOByTxIndex(txId string, vout uint32) {
 	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(mongoDBURI))
 	if err != nil {
 		panic(err)
@@ -426,7 +428,7 @@ func DeleteLightUTXOByTxIndex(txId string, Index uint32) {
 	}()
 
 	coll := client.Database("transaction_outputs").Collection("unspent")
-	filter := bson.D{{"txid", txId}, {"index", Index}}
+	filter := bson.D{{"txid", txId}, {"vout", vout}}
 
 	result, err := coll.DeleteOne(context.TODO(), filter)
 	if err != nil {

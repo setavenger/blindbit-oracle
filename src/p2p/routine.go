@@ -49,7 +49,7 @@ func StartPeerRoutine(ph *PeerHandler, messageOutChan chan wire.Message, doneCha
 	for {
 		select {
 		case <-doneChan:
-			fmt.Println("was sent")
+			fmt.Println("message was sent out")
 		case msg := <-messageOutChan:
 			fmt.Println("message about to queue")
 			p.QueueMessage(msg, doneChan)

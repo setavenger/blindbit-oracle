@@ -20,7 +20,7 @@ type PeerHandler struct {
 	MessageOutChan     chan wire.Message
 	BestHeightChan     chan uint32
 	SyncChan           chan *wire.MsgHeaders
-	HeaderChain        []*chainhash.Hash
+	Headers            []*common.Header
 	FullySyncedChan    chan struct{}
 }
 
@@ -60,10 +60,11 @@ func (h *PeerHandler) onInv(p *peer.Peer, msg *wire.MsgInv) {
 }
 
 func (h *PeerHandler) onCFilter(p *peer.Peer, msg *wire.MsgCFilter) {
+	common.Logger.Debug("Received filter for:", "filter", msg.BlockHash.String())
 
 	mongodb.SaveFilter(&common.Filter{
 		FilterType:  msg.FilterType,
-		BlockHeight: uint32(common.IndexOfHash(&msg.BlockHash, h.HeaderChain)),
+		BlockHeight: uint32(h.GetBlockHeightByHeader(&msg.BlockHash)),
 		Data:        msg.Data,
 		BlockHeader: msg.BlockHash.String(),
 	})
@@ -90,9 +91,7 @@ func (h *PeerHandler) onBlock(p *peer.Peer, msg *wire.MsgBlock, buf []byte) {
 	<-time.After(5 * time.Second)
 
 	// we are checking for the prev block => +2; we could check the current block but then it has to be 100% in the chain already
-	thisBlocksHeight := common.IndexOfHash(&msg.Header.PrevBlock, h.HeaderChain) + 1
-	fmt.Println(msg.Header.PrevBlock)
-	fmt.Println(h.HeaderChain[len(h.HeaderChain)-5:])
+	thisBlocksHeight := h.GetBlockHeightByHeader(&msg.Header.PrevBlock) + 1
 
 	// -1 + 1 = 0
 	if thisBlocksHeight == 0 {
@@ -103,10 +102,12 @@ func (h *PeerHandler) onBlock(p *peer.Peer, msg *wire.MsgBlock, buf []byte) {
 		perTransactionFlag = false
 		for index, txOut := range tx.TxOut {
 			if bytes.Equal(txOut.PkScript[:2], []byte{81, 32}) {
+				common.Logger.Info(tx.TxHash().String())
 				if !perTransactionFlag {
+					common.Logger.Debug("To taproot chan", "txid", tx.TxHash().String())
 					h.FoundTaprootTXChan <- tx.TxHash()
 				}
-				fmt.Println(tx.TxHash().String())
+
 				mongodb.SaveLightUTXO(&common.LightUTXO{
 					Txid:         tx.TxHash().String(),
 					Vout:         uint32(index),

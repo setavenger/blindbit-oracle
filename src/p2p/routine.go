@@ -15,7 +15,7 @@ func StartPeerRoutine(ph *PeerHandler, messageOutChan chan wire.Message, doneCha
 		UserAgentName:    "SilentPaymentAppGo", // User agent name to advertise.
 		UserAgentVersion: "0.0.1",              // User agent version to advertise.
 		//ChainParams:      &chaincfg.MainNetParams,
-		ChainParams:     &chaincfg.RegressionNetParams,
+		ChainParams:     &chaincfg.SigNetParams,
 		Services:        0,
 		ProtocolVersion: 70016,
 		TrickleInterval: time.Second * 10,
@@ -31,8 +31,16 @@ func StartPeerRoutine(ph *PeerHandler, messageOutChan chan wire.Message, doneCha
 		},
 		AllowSelfConns: true,
 	}
-	//p, err := peer.NewOutboundPeer(peerCfg, "192.168.178.25:8333")
-	p, err := peer.NewOutboundPeer(peerCfg, "127.0.0.1:18444")
+	/*
+		Signet
+		178.128.221.177:38333
+		103.16.128.63:38333
+		153.126.143.201:38333
+		192.241.163.142:38333
+	*/
+	//p, err := peer.NewOutboundPeer(peerCfg, "192.168.178.25:8333")  // umbrel mainnet
+	//p, err := peer.NewOutboundPeer(peerCfg, "127.0.0.1:18444")  // regtest
+	p, err := peer.NewOutboundPeer(peerCfg, "178.128.221.177:38333")
 	if err != nil {
 		fmt.Printf("NewOutboundPeer: error %v\n", err)
 		return

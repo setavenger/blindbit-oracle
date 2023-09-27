@@ -1,6 +1,7 @@
 package server
 
 import (
+	"SilentPaymentAppBackend/src/common"
 	"SilentPaymentAppBackend/src/db/mongodb"
 	"bytes"
 	"encoding/hex"
@@ -23,8 +24,13 @@ type TxRequest struct {
 func (h *ApiHandler) HandleBestHeightUpdate() {
 	for {
 		select {
-		case h.BestHeight = <-h.BestHeightChan:
-			fmt.Println("new height", h.BestHeight)
+		case height := <-h.BestHeightChan:
+			if height < h.BestHeight {
+				continue
+			} else {
+				h.BestHeight = height
+				fmt.Println("new height", h.BestHeight)
+			}
 		}
 	}
 }
@@ -140,9 +146,9 @@ func (h *ApiHandler) ForwardRawTX(c *gin.Context) {
 }
 
 func forwardTxToMemPool(txHex string) error {
-	url := "http://localhost/api/tx"
+	//url := "http://localhost/api/tx"
 
-	resp, err := http.Post(url, "application/x-www-form-urlencoded", bytes.NewBufferString(txHex))
+	resp, err := http.Post(common.MempoolEndpoint, "application/x-www-form-urlencoded", bytes.NewBufferString(txHex))
 	if err != nil {
 		fmt.Printf("Failed to make request: %s\n", err)
 		return err

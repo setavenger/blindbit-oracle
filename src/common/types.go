@@ -91,6 +91,7 @@ type TransactionStatus struct {
 }
 
 type Header struct {
-	Hash      *chainhash.Hash
-	Timestamp uint32
+	BlockHash *chainhash.Hash `bson:"block_hash"`
+	PrevBlock *chainhash.Hash `bson:"prev_block"`
+	Timestamp uint32          `bson:"timestamp"`
 }

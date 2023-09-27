@@ -55,7 +55,7 @@ func StartFetchRoutine(foundTaprootTXChan chan chainhash.Hash, handler *p2p.Peer
 }
 
 func getTransactionDetails(txId chainhash.Hash, ph *p2p.PeerHandler) (*common.Transaction, error) {
-	resp, err := http.Get(common.MempoolEndpoint + txId.String())
+	resp, err := http.Get(fmt.Sprintf("%s/%s", common.MempoolEndpoint, txId.String()))
 	if err != nil {
 		return nil, err
 	}

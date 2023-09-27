@@ -34,7 +34,7 @@ func GetChainHash(hash chainhash.Hash) *chainhash.Hash {
 
 func IndexOfHashInHeaderList(element *chainhash.Hash, data []*Header) int32 {
 	for i, v := range data {
-		if *element == *v.Hash {
+		if *element == *v.BlockHash {
 			return int32(i)
 		}
 	}

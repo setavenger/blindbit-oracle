@@ -47,10 +47,10 @@ func main() {
 	<-fullySyncedChan
 
 	for i, header := range ph.Headers {
-		if i < 100 {
+		if i < 162460 {
 			continue
 		}
-		bytes, err := hex.DecodeString(header.Hash.String())
+		bytes, err := hex.DecodeString(header.BlockHash.String())
 		if err != nil {
 			panic(err)
 		}
@@ -58,13 +58,11 @@ func main() {
 		messageOutChan <- p2p.MakeBlockRequest(bytes, wire.InvTypeBlock)
 	}
 
-	//bytes, err := hex.DecodeString("31f789a51350e5795174996495117a86e0e212e9c25b17c789c0923fd2b2513a")
+	//bytes, err := hex.DecodeString("0000009d659814e85a25bab650bb30a121d7ab091e7eeed99f7e884bbc80a5ae")
 	//if err != nil {
 	//	panic(err)
 	//}
-	//
 	//messageOutChan <- p2p.MakeBlockRequest(bytes, wire.InvTypeBlock)
-	//transactions := mongodb.RetrieveByBlockHeight(806758)
-	//fmt.Println(transactions[0])
+
 	<-time.After(24 * time.Hour)
 }

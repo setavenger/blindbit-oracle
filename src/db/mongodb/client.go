@@ -20,6 +20,7 @@ func CreateIndices() {
 	CreateIndexTweaks()
 	CreateIndexUTXOs()
 	CreateIndexSpentTXOs()
+	CreateIndexHeaders()
 }
 
 func CreateIndexTransactions() {
@@ -160,6 +161,33 @@ func CreateIndexTweaks() {
 	fmt.Println("Created Index with name:", nameIndex)
 }
 
+func CreateIndexHeaders() {
+	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(mongoDBURI))
+	if err != nil {
+		panic(err)
+	}
+
+	defer func() {
+		if err = client.Disconnect(context.TODO()); err != nil {
+			panic(err)
+		}
+	}()
+
+	coll := client.Database("headers").Collection("headers")
+	indexModel := mongo.IndexModel{
+		Keys: bson.M{
+			"block_hash": 1,
+		},
+		Options: options.Index().SetUnique(true),
+	}
+	nameIndex, err := coll.Indexes().CreateOne(context.TODO(), indexModel)
+	if err != nil {
+		// will panic because it only runs on startup and should be executed
+		panic(err)
+	}
+	fmt.Println("Created Index with name:", nameIndex)
+}
+
 func SaveTransactionDetails(transaction *common.Transaction) {
 	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(mongoDBURI))
 	if err != nil {
@@ -279,6 +307,92 @@ func SaveSpentUTXO(utxo *common.SpentUTXO) {
 	}
 
 	fmt.Printf("Spent Transaction output inserted with ID: %s\n", result.InsertedID)
+}
+
+func SaveBulkHeaders(headers []*common.Header) {
+	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(mongoDBURI))
+	if err != nil {
+		panic(err)
+	}
+
+	defer func() {
+		if err = client.Disconnect(context.TODO()); err != nil {
+			panic(err)
+		}
+	}()
+
+	coll := client.Database("headers").Collection("headers")
+
+	// Convert []*common.Header to []interface{}
+	var interfaceHeaders []interface{}
+	for _, header := range headers {
+		interfaceHeaders = append(interfaceHeaders, header)
+	}
+
+	result, err := coll.InsertMany(context.TODO(), interfaceHeaders)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Printf("Bulk inserted %d new headers\n", len(result.InsertedIDs))
+}
+
+func RetrieveLastHeader() *common.Header {
+	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(mongoDBURI))
+	if err != nil {
+		panic(err)
+	}
+
+	defer func() {
+		if err = client.Disconnect(context.TODO()); err != nil {
+			panic(err)
+		}
+	}()
+	coll := client.Database("headers").Collection("headers")
+	var result common.Header
+	filter := bson.D{}                                                   // no filter, get all documents
+	optionsQuery := options.FindOne().SetSort(bson.D{{"timestamp", -1}}) // sort by timestamp in descending order
+
+	err = coll.FindOne(context.TODO(), filter, optionsQuery).Decode(&result)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			fmt.Println("No documents found!")
+			return nil
+		}
+		panic(err)
+	}
+
+	return &result
+}
+
+func RetrieveAllHeaders() []*common.Header {
+	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(mongoDBURI))
+	if err != nil {
+		panic(err)
+	}
+
+	defer func() {
+		if err = client.Disconnect(context.TODO()); err != nil {
+			panic(err)
+		}
+	}()
+	coll := client.Database("headers").Collection("headers")
+
+	filter := bson.D{}                                               // no filter, get all documents
+	optionsQuery := options.Find().SetSort(bson.D{{"timestamp", 1}}) // sort by timestamp in descending order
+
+	cursor, err := coll.Find(context.TODO(), filter, optionsQuery)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	var results []*common.Header
+	if err = cursor.All(context.TODO(), &results); err != nil {
+		panic(err)
+	}
+
+	return results
 }
 
 func RetrieveTransactionsByHeight(blockHeight uint32) []*common.Transaction {

@@ -60,7 +60,7 @@ func (h *PeerHandler) onInv(p *peer.Peer, msg *wire.MsgInv) {
 }
 
 func (h *PeerHandler) onCFilter(p *peer.Peer, msg *wire.MsgCFilter) {
-	common.Logger.Debug("Received filter for:", "filter", msg.BlockHash.String())
+	fmt.Println("Received filter for:", "filter", msg.BlockHash.String())
 
 	mongodb.SaveFilter(&common.Filter{
 		FilterType:  msg.FilterType,
@@ -88,7 +88,7 @@ func (h *PeerHandler) onHeaders(p *peer.Peer, msg *wire.MsgHeaders) {
 func (h *PeerHandler) onBlock(p *peer.Peer, msg *wire.MsgBlock, buf []byte) {
 	var perTransactionFlag bool
 	h.AppendBlockerHeader(&msg.Header)
-	<-time.After(5 * time.Second)
+	<-time.After(1 * time.Second)
 
 	// we are checking for the prev block => +2; we could check the current block but then it has to be 100% in the chain already
 	thisBlocksHeight := h.GetBlockHeightByHeader(&msg.Header.PrevBlock) + 1
@@ -102,18 +102,20 @@ func (h *PeerHandler) onBlock(p *peer.Peer, msg *wire.MsgBlock, buf []byte) {
 		perTransactionFlag = false
 		for index, txOut := range tx.TxOut {
 			if bytes.Equal(txOut.PkScript[:2], []byte{81, 32}) {
-				common.Logger.Info(tx.TxHash().String())
+				fmt.Println(tx.TxHash().String())
 				if !perTransactionFlag {
-					common.Logger.Debug("To taproot chan", "txid", tx.TxHash().String())
+					fmt.Println("To taproot chan", "txid", tx.TxHash().String())
 					h.FoundTaprootTXChan <- tx.TxHash()
 				}
 
+				hash := msg.Header.BlockHash()
 				mongodb.SaveLightUTXO(&common.LightUTXO{
 					Txid:         tx.TxHash().String(),
 					Vout:         uint32(index),
 					Value:        uint64(txOut.Value),
 					Scriptpubkey: hex.EncodeToString(txOut.PkScript),
 					BlockHeight:  uint32(thisBlocksHeight),
+					Timestamp:    h.GetTimestampByHeader(&hash),
 				})
 				perTransactionFlag = true
 			}

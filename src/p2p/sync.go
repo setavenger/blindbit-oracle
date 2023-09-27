@@ -63,3 +63,7 @@ func (h *PeerHandler) AppendBlockerHeader(header *wire.BlockHeader) {
 func (h *PeerHandler) GetBlockHeightByHeader(headerHash *chainhash.Hash) int32 {
 	return common.IndexOfHashInHeaderList(headerHash, h.Headers)
 }
+
+func (h *PeerHandler) GetTimestampByHeader(headerHash *chainhash.Hash) uint32 {
+	return h.Headers[common.IndexOfHashInHeaderList(headerHash, h.Headers)].Timestamp
+}

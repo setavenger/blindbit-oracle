@@ -57,6 +57,7 @@ func main() {
 
 		messageOutChan <- p2p.MakeBlockRequest(bytes, wire.InvTypeBlock)
 	}
+
 	//bytes, err := hex.DecodeString("31f789a51350e5795174996495117a86e0e212e9c25b17c789c0923fd2b2513a")
 	//if err != nil {
 	//	panic(err)

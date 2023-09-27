@@ -1,7 +1,6 @@
 package server
 
 import (
-	"SilentPaymentAppBackend/src/common"
 	"SilentPaymentAppBackend/src/db/mongodb"
 	"bytes"
 	"encoding/hex"
@@ -50,7 +49,7 @@ func (h *ApiHandler) GetCFilterByHeight(c *gin.Context) {
 		return
 	}
 	cFilter := mongodb.RetrieveCFilterByHeight(uint32(height))
-	common.Logger.Debug("Filter:", strconv.FormatUint(height, 10), cFilter)
+	fmt.Println("Filter:", strconv.FormatUint(height, 10), cFilter)
 	data := gin.H{
 		"filter_type":  cFilter.FilterType,
 		"block_height": cFilter.BlockHeight,

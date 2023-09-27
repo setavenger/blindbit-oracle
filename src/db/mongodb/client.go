@@ -187,13 +187,13 @@ func SaveTransactionDetails(transaction *common.Transaction) {
 func SaveFilter(filter *common.Filter) {
 	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(mongoDBURI))
 	if err != nil {
-		common.Logger.Error(err.Error())
+		fmt.Println(err.Error())
 		return
 	}
 
 	defer func() {
 		if err = client.Disconnect(context.TODO()); err != nil {
-			common.Logger.Error(err.Error())
+			fmt.Println(err.Error())
 			return
 		}
 	}()
@@ -203,11 +203,11 @@ func SaveFilter(filter *common.Filter) {
 	result, err := coll.InsertOne(context.TODO(), filter)
 	if err != nil {
 		//todo don't log duplicate keys as error but rather as debug
-		common.Logger.Error(err.Error())
+		fmt.Println(err.Error())
 		return
 	}
 
-	common.Logger.Debug("Filter inserted", "ID", result.InsertedID)
+	fmt.Println("Filter inserted", "ID", result.InsertedID)
 }
 
 func SaveLightUTXO(utxo *common.LightUTXO) {

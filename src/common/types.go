@@ -19,6 +19,7 @@ type SpentUTXO struct {
 	SpentIn     string `json:"spent_in"`
 	Txid        string `json:"txid"`
 	Vout        uint32 `json:"vout"`
+	Value       uint64 `json:"value"`
 	BlockHeight uint32 `json:"block_height"`
 	BlockHeader string `json:"block_header"`
 	Timestamp   uint32 `json:"timestamp"`

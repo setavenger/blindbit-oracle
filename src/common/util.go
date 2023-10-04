@@ -18,11 +18,11 @@ func GetChainHash(hash chainhash.Hash) *chainhash.Hash {
 		panic(err)
 	}
 	bytes = bytes[:32]
-	//fmt.Println("Before reversing:", bytes)
+	//log.Println("Before reversing:", bytes)
 	//for i, j := 0, len(bytes)-1; i < j; i, j = i+1, j-1 {
 	//	bytes[i], bytes[j] = bytes[j], bytes[i]
 	//}
-	//fmt.Println("After reversing:", bytes)
+	//log.Println("After reversing:", bytes)
 
 	newHash, err := chainhash.NewHash(bytes[:32])
 	if err != nil {

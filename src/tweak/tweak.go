@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcd/txscript"
+	"log"
 	"sort"
 	"strings"
 )
@@ -18,12 +20,16 @@ import (
 func ComputeTweak(tx *common.Transaction) (*common.TweakData, error) {
 	pubKeys := extractPubKeys(tx)
 	if pubKeys == nil {
-		fmt.Printf("%+v\n", tx)
+		// mainly relevant for test environments, unlikely on mainnet
+		if len(tx.Vin) == 1 && tx.Vin[0].IsCoinbase {
+			return nil, errors.New("coinbase transaction")
+		}
+		log.Printf("%+v\n", tx)
 		return nil, errors.New("no pub keys were extracted")
 	}
 	key, err := sumPublicKeys(pubKeys)
 	if err != nil {
-		fmt.Println(err)
+		common.ErrorLogger.Println(err)
 		return nil, err
 	}
 	hash, err := computeOutpointsHash(tx)
@@ -32,6 +38,7 @@ func ComputeTweak(tx *common.Transaction) (*common.TweakData, error) {
 	}
 	curve := btcec.KoblitzCurve{}
 
+	// todo change to 33bytes
 	x, _ := curve.ScalarMult(key.X(), key.Y(), hash[:])
 
 	// sometimes an uneven number hex string is returned, so we have to pad the zeros
@@ -41,7 +48,7 @@ func ComputeTweak(tx *common.Transaction) (*common.TweakData, error) {
 	}
 	decodedString, err := hex.DecodeString(s)
 	if err != nil {
-		fmt.Println(err)
+		common.ErrorLogger.Println(err)
 		return nil, err
 	}
 	tweakBytes := [32]byte{}
@@ -67,14 +74,51 @@ func extractPubKeys(tx *common.Transaction) []string {
 		case "P2SH-P2WPKH":
 			pubKeys = append(pubKeys, vin.Witness[1])
 		case "P2PKH":
-			//	todo implement me
-			panic("implement me")
+			p2PKH, err := extractFromP2PKH(vin.Scriptsig)
+			if err != nil {
+				common.ErrorLogger.Println(err)
+				continue
+			}
+			pubKeys = append(pubKeys, hex.EncodeToString(p2PKH))
 		default:
 			continue
 		}
 	}
 
 	return pubKeys
+}
+
+// extractPublicKey tries to find a public key within the given scriptSig.
+func extractFromP2PKH(scriptSig string) ([]byte, error) {
+	decodeString, err := hex.DecodeString(scriptSig)
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return nil, err
+	}
+
+	// Disassemble the script into its string representation
+	disassembled, err := txscript.DisasmString(decodeString)
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return nil, err
+	}
+
+	// Split the disassembled string by space to get individual operations
+	ops := strings.Split(disassembled, " ")
+
+	for _, op := range ops {
+		// The byte sequence might represent a public key if it has the right length
+		data, err := hex.DecodeString(op)
+		if err != nil {
+			common.ErrorLogger.Println(err)
+			return nil, err
+		}
+		if len(data) == 33 || len(data) == 65 {
+			return data, nil
+		}
+	}
+
+	return nil, errors.New("no public key found in scriptSig")
 }
 
 func extractSpentTaprootPubKeys(tx *common.Transaction, ph *p2p.PeerHandler) []common.SpentUTXO {
@@ -87,13 +131,13 @@ func extractSpentTaprootPubKeys(tx *common.Transaction, ph *p2p.PeerHandler) []c
 			// todo what to do in cases of errors, for robustness they should be collected somewhere
 			blockHashBytes, err := hex.DecodeString(tx.Status.BlockHash)
 			if err != nil {
-				fmt.Println(err)
+				common.ErrorLogger.Println(err)
 				continue
 			}
 			hash := chainhash.Hash{}
 			err = hash.SetBytes(common.ReverseBytes(blockHashBytes))
 			if err != nil {
-				fmt.Println(err)
+				common.ErrorLogger.Println(err)
 				continue
 			}
 			vins = append(vins, common.SpentUTXO{
@@ -120,7 +164,7 @@ func sumPublicKeys(pubKeys []string) (*btcec.PublicKey, error) {
 	for idx, pubKey := range pubKeys {
 		bytesPubKey, err := hex.DecodeString(pubKey)
 		if err != nil {
-			fmt.Println(err.Error())
+			common.ErrorLogger.Println(err)
 			panic(err)
 			return nil, err
 		}
@@ -129,7 +173,7 @@ func sumPublicKeys(pubKeys []string) (*btcec.PublicKey, error) {
 		}
 		publicKey, err := btcec.ParsePubKey(bytesPubKey)
 		if err != nil {
-			fmt.Println(err.Error())
+			common.ErrorLogger.Println(err)
 			panic(err)
 			return nil, err
 		}
@@ -149,17 +193,17 @@ func sumPublicKeys(pubKeys []string) (*btcec.PublicKey, error) {
 			if len(sY)%2 != 0 {
 				sY = "0" + sY
 			}
-			fmt.Println(fmt.Sprintf("04%x%x", sX, sY))
+			log.Println(fmt.Sprintf("04%s%s", sX, sY))
 			decodeString, err = hex.DecodeString(fmt.Sprintf("04%s%s", sX, sY))
 			if err != nil {
-				fmt.Println(err.Error())
+				common.ErrorLogger.Println(err)
 				panic(err)
 				return nil, err
 			}
 
 			lastPubKey, err = btcec.ParsePubKey(decodeString)
 			if err != nil {
-				fmt.Println(err.Error())
+				common.ErrorLogger.Println(err)
 				panic(err)
 				return nil, err
 			}
@@ -174,7 +218,7 @@ func computeOutpointsHash(tx *common.Transaction) ([32]byte, error) {
 		nBuf := new(bytes.Buffer)
 		err := binary.Write(nBuf, binary.LittleEndian, vin.Vout)
 		if err != nil {
-			fmt.Println(err.Error())
+			common.ErrorLogger.Println(err)
 			return [32]byte{}, err
 		}
 		txIdBytes, err := hex.DecodeString(vin.Txid)

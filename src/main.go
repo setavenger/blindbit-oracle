@@ -1,19 +1,41 @@
 package main
 
 import (
+	"SilentPaymentAppBackend/src/common"
 	"SilentPaymentAppBackend/src/db/mongodb"
 	"SilentPaymentAppBackend/src/p2p"
 	"SilentPaymentAppBackend/src/server"
 	"SilentPaymentAppBackend/src/tweak"
-	"encoding/hex"
+	"fmt"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
+	"log"
+	"os"
+	"os/signal"
 	"time"
 )
 
+func init() {
+	err := os.Mkdir("./logs", 0666)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	file, err := os.OpenFile(fmt.Sprintf("./logs/logs-%s.txt", time.Now()), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	common.DebugLogger = log.New(file, "[DEBUG] ", log.Ldate|log.Ltime|log.Lshortfile|log.Lmsgprefix)
+	common.InfoLogger = log.New(file, "[INFO] ", log.Ldate|log.Ltime|log.Lshortfile|log.Lmsgprefix)
+	common.WarningLogger = log.New(file, "[WARNING] ", log.Ldate|log.Ltime|log.Lshortfile)
+	common.ErrorLogger = log.New(file, "[ERROR] ", log.Ldate|log.Ltime|log.Lshortfile)
+}
+
 func main() {
-	//interrupt := make(chan os.Signal, 1)
-	//signal.Notify(interrupt, os.Interrupt)
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+	interrupt := make(chan os.Signal, 1)
+	signal.Notify(interrupt, os.Interrupt)
 
 	// make sure everything is ready before we receive data
 	mongodb.CreateIndices()
@@ -46,23 +68,34 @@ func main() {
 	// wait for initial sync to be concluded
 	<-fullySyncedChan
 
-	for i, header := range ph.Headers {
-		if i < 162460 {
-			continue
-		}
-		bytes, err := hex.DecodeString(header.BlockHash.String())
-		if err != nil {
-			panic(err)
-		}
+	// 162458 start of the signet experiments
+	// todo 162591 was error with p2pkh input, use for testing (b9d5c5dceed52098e0aa4529e55f5279b79bd510fce8429d6b0914e10215279f)
+	//for i, header := range ph.Headers {
+	//	if i < 162458 {
+	//		continue
+	//	}
+	//	bytes, err := hex.DecodeString(header.BlockHash.String())
+	//	if err != nil {
+	//		panic(err)
+	//	}
+	//
+	//	messageOutChan <- p2p.MakeBlockRequest(bytes, wire.InvTypeBlock)
+	//	if i != len(ph.Headers)-1 {
+	//		<-time.After(400 * time.Millisecond)
+	//	}
+	//}
 
-		messageOutChan <- p2p.MakeBlockRequest(bytes, wire.InvTypeBlock)
-	}
-
-	//bytes, err := hex.DecodeString("0000009d659814e85a25bab650bb30a121d7ab091e7eeed99f7e884bbc80a5ae")
+	//bytes, err := hex.DecodeString("000000e76341456b13358d7efb851c33413c122ffaedabea7eef53324f8d7711")
 	//if err != nil {
 	//	panic(err)
 	//}
 	//messageOutChan <- p2p.MakeBlockRequest(bytes, wire.InvTypeBlock)
 
-	<-time.After(24 * time.Hour)
+	for true {
+
+		select {
+		case <-interrupt:
+			return
+		}
+	}
 }

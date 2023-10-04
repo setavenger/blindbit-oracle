@@ -3,10 +3,10 @@ package mongodb
 import (
 	"SilentPaymentAppBackend/src/common"
 	"context"
-	"fmt"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"log"
 )
 
 const mongoDBURI = "mongodb://root:example@localhost:27017/"
@@ -47,7 +47,7 @@ func CreateIndexTransactions() {
 		// will panic because it only runs on startup and should be executed
 		panic(err)
 	}
-	fmt.Println("Created Index with name:", nameIndex)
+	log.Println("Created Index with name:", nameIndex)
 }
 
 func CreateIndexCFilters() {
@@ -75,7 +75,7 @@ func CreateIndexCFilters() {
 		// will panic because it only runs on startup and should be executed
 		panic(err)
 	}
-	fmt.Println("Created Index with name:", nameIndex)
+	log.Println("Created Index with name:", nameIndex)
 }
 
 func CreateIndexUTXOs() {
@@ -103,7 +103,7 @@ func CreateIndexUTXOs() {
 		// will panic because it only runs on startup and should be executed
 		panic(err)
 	}
-	fmt.Println("Created Index with name:", nameIndex)
+	log.Println("Created Index with name:", nameIndex)
 }
 
 func CreateIndexSpentTXOs() {
@@ -131,7 +131,7 @@ func CreateIndexSpentTXOs() {
 		// will panic because it only runs on startup and should be executed
 		panic(err)
 	}
-	fmt.Println("Created Index with name:", nameIndex)
+	log.Println("Created Index with name:", nameIndex)
 }
 
 func CreateIndexTweaks() {
@@ -158,7 +158,7 @@ func CreateIndexTweaks() {
 		// will panic because it only runs on startup and should be executed
 		panic(err)
 	}
-	fmt.Println("Created Index with name:", nameIndex)
+	log.Println("Created Index with name:", nameIndex)
 }
 
 func CreateIndexHeaders() {
@@ -185,7 +185,7 @@ func CreateIndexHeaders() {
 		// will panic because it only runs on startup and should be executed
 		panic(err)
 	}
-	fmt.Println("Created Index with name:", nameIndex)
+	log.Println("Created Index with name:", nameIndex)
 }
 
 func SaveTransactionDetails(transaction *common.Transaction) {
@@ -204,24 +204,24 @@ func SaveTransactionDetails(transaction *common.Transaction) {
 
 	result, err := coll.InsertOne(context.TODO(), transaction)
 	if err != nil {
-		fmt.Println(err)
+		common.ErrorLogger.Println(err)
 		//panic(err)
 		return
 	}
 
-	fmt.Printf("Transaction inserted with ID: %s\n", result.InsertedID)
+	log.Printf("Transaction inserted with ID: %s\n", result.InsertedID)
 }
 
 func SaveFilter(filter *common.Filter) {
 	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(mongoDBURI))
 	if err != nil {
-		fmt.Println(err.Error())
+		common.ErrorLogger.Println(err)
 		return
 	}
 
 	defer func() {
 		if err = client.Disconnect(context.TODO()); err != nil {
-			fmt.Println(err.Error())
+			common.ErrorLogger.Println(err)
 			return
 		}
 	}()
@@ -231,11 +231,37 @@ func SaveFilter(filter *common.Filter) {
 	result, err := coll.InsertOne(context.TODO(), filter)
 	if err != nil {
 		//todo don't log duplicate keys as error but rather as debug
-		fmt.Println(err.Error())
+		common.ErrorLogger.Println(err)
 		return
 	}
 
-	fmt.Println("Filter inserted", "ID", result.InsertedID)
+	log.Println("Filter inserted", "ID", result.InsertedID)
+}
+
+func SaveFilterTaproot(filter *common.Filter) {
+	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(mongoDBURI))
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return
+	}
+
+	defer func() {
+		if err = client.Disconnect(context.TODO()); err != nil {
+			common.ErrorLogger.Println(err)
+			return
+		}
+	}()
+
+	coll := client.Database("filters").Collection("taproot")
+
+	result, err := coll.InsertOne(context.TODO(), filter)
+	if err != nil {
+		//todo don't log duplicate keys as error but rather as debug
+		common.ErrorLogger.Println(err)
+		return
+	}
+
+	log.Println("Taproot Filter inserted", "ID", result.InsertedID)
 }
 
 func SaveLightUTXO(utxo *common.LightUTXO) {
@@ -254,12 +280,12 @@ func SaveLightUTXO(utxo *common.LightUTXO) {
 
 	result, err := coll.InsertOne(context.TODO(), utxo)
 	if err != nil {
-		fmt.Println(err)
+		common.ErrorLogger.Println(err)
 		//panic(err)
 		return
 	}
 
-	fmt.Printf("UTXO inserted with ID: %s\n", result.InsertedID)
+	log.Printf("UTXO inserted with ID: %s\n", result.InsertedID)
 }
 
 func SaveTweakData(tweak *common.TweakData) {
@@ -278,12 +304,12 @@ func SaveTweakData(tweak *common.TweakData) {
 
 	result, err := coll.InsertOne(context.TODO(), tweak)
 	if err != nil {
-		fmt.Println(err)
+		common.ErrorLogger.Println(err)
 		//panic(err)
 		return
 	}
 
-	fmt.Printf("Tweak inserted with ID: %s\n", result.InsertedID)
+	log.Printf("Tweak inserted with ID: %s\n", result.InsertedID)
 }
 
 func SaveSpentUTXO(utxo *common.SpentUTXO) {
@@ -302,11 +328,11 @@ func SaveSpentUTXO(utxo *common.SpentUTXO) {
 
 	result, err := coll.InsertOne(context.TODO(), utxo)
 	if err != nil {
-		fmt.Println(err)
+		common.ErrorLogger.Println(err)
 		return
 	}
 
-	fmt.Printf("Spent Transaction output inserted with ID: %s\n", result.InsertedID)
+	log.Printf("Spent Transaction output inserted with ID: %s\n", result.InsertedID)
 }
 
 func SaveBulkHeaders(headers []*common.Header) {
@@ -331,11 +357,11 @@ func SaveBulkHeaders(headers []*common.Header) {
 
 	result, err := coll.InsertMany(context.TODO(), interfaceHeaders)
 	if err != nil {
-		fmt.Println(err)
+		common.ErrorLogger.Println(err)
 		return
 	}
 
-	fmt.Printf("Bulk inserted %d new headers\n", len(result.InsertedIDs))
+	log.Printf("Bulk inserted %d new headers\n", len(result.InsertedIDs))
 }
 
 func RetrieveLastHeader() *common.Header {
@@ -357,7 +383,7 @@ func RetrieveLastHeader() *common.Header {
 	err = coll.FindOne(context.TODO(), filter, optionsQuery).Decode(&result)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			fmt.Println("No documents found!")
+			log.Println("No documents found!")
 			return nil
 		}
 		panic(err)
@@ -384,7 +410,7 @@ func RetrieveAllHeaders() []*common.Header {
 
 	cursor, err := coll.Find(context.TODO(), filter, optionsQuery)
 	if err != nil {
-		fmt.Println(err)
+		common.ErrorLogger.Println(err)
 	}
 
 	var results []*common.Header
@@ -412,7 +438,7 @@ func RetrieveTransactionsByHeight(blockHeight uint32) []*common.Transaction {
 
 	cursor, err := coll.Find(context.TODO(), filter)
 	if err != nil {
-		fmt.Println(err)
+		common.ErrorLogger.Println(err)
 	}
 
 	var results []*common.Transaction
@@ -439,7 +465,7 @@ func RetrieveLightUTXOsByHeight(blockHeight uint32) []*common.LightUTXO {
 
 	cursor, err := coll.Find(context.TODO(), filter)
 	if err != nil {
-		fmt.Println(err)
+		common.ErrorLogger.Println(err)
 	}
 
 	var results []*common.LightUTXO
@@ -466,7 +492,7 @@ func RetrieveSpentUTXOsByHeight(blockHeight uint32) []*common.SpentUTXO {
 
 	cursor, err := coll.Find(context.TODO(), filter)
 	if err != nil {
-		fmt.Println(err)
+		common.ErrorLogger.Println(err)
 	}
 
 	var results []*common.SpentUTXO
@@ -496,7 +522,32 @@ func RetrieveCFilterByHeight(blockHeight uint32) *common.Filter {
 
 	err = result.Decode(&cFilter)
 	if err != nil {
-		fmt.Println(err)
+		common.ErrorLogger.Println(err)
+	}
+
+	return &cFilter
+}
+
+func RetrieveCFilterByHeightTaproot(blockHeight uint32) *common.Filter {
+	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(mongoDBURI))
+	if err != nil {
+		panic(err)
+	}
+
+	defer func() {
+		if err = client.Disconnect(context.TODO()); err != nil {
+			panic(err)
+		}
+	}()
+	coll := client.Database("filters").Collection("taproot")
+	filter := bson.D{{"blockheight", blockHeight}}
+
+	result := coll.FindOne(context.TODO(), filter)
+	var cFilter common.Filter
+
+	err = result.Decode(&cFilter)
+	if err != nil {
+		common.ErrorLogger.Println(err)
 	}
 
 	return &cFilter
@@ -518,7 +569,7 @@ func RetrieveTweakDataByHeight(blockHeight uint32) []*common.TweakData {
 
 	cursor, err := coll.Find(context.TODO(), filter)
 	if err != nil {
-		fmt.Println(err)
+		common.ErrorLogger.Println(err)
 	}
 
 	var results []*common.TweakData
@@ -546,10 +597,10 @@ func DeleteLightUTXOByTxIndex(txId string, vout uint32) {
 
 	result, err := coll.DeleteOne(context.TODO(), filter)
 	if err != nil {
-		fmt.Println(err)
+		common.ErrorLogger.Println(err)
 		//panic(err)
 		return
 	}
 
-	fmt.Printf("Deleted %d LightUTXOs\n", result.DeletedCount)
+	log.Printf("Deleted %d LightUTXOs\n", result.DeletedCount)
 }

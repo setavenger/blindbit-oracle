@@ -5,9 +5,9 @@ import (
 	"SilentPaymentAppBackend/src/db/mongodb"
 	"bytes"
 	"encoding/hex"
-	"fmt"
 	"github.com/gin-gonic/gin"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"strconv"
 )
@@ -29,7 +29,7 @@ func (h *ApiHandler) HandleBestHeightUpdate() {
 				continue
 			} else {
 				h.BestHeight = height
-				fmt.Println("new height", h.BestHeight)
+				log.Println("new height", h.BestHeight)
 			}
 		}
 	}
@@ -55,7 +55,32 @@ func (h *ApiHandler) GetCFilterByHeight(c *gin.Context) {
 		return
 	}
 	cFilter := mongodb.RetrieveCFilterByHeight(uint32(height))
-	fmt.Println("Filter:", strconv.FormatUint(height, 10), cFilter)
+	//log.Println("Filter:", strconv.FormatUint(height, 10), cFilter)
+	data := gin.H{
+		"filter_type":  cFilter.FilterType,
+		"block_height": cFilter.BlockHeight,
+		"block_header": cFilter.BlockHeader,
+		"data":         hex.EncodeToString(cFilter.Data),
+	}
+
+	c.JSON(200, data)
+}
+
+func (h *ApiHandler) GetCFilterByHeightTaproot(c *gin.Context) {
+	heightStr := c.Param("blockheight")
+	if heightStr == "" {
+		c.JSON(http.StatusBadRequest, nil)
+		return
+	}
+	height, err := strconv.ParseUint(heightStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "could not parse height",
+		})
+		return
+	}
+	cFilter := mongodb.RetrieveCFilterByHeightTaproot(uint32(height))
+	log.Println("Filter:", strconv.FormatUint(height, 10), cFilter)
 	data := gin.H{
 		"filter_type":  cFilter.FilterType,
 		"block_height": cFilter.BlockHeight,
@@ -150,17 +175,17 @@ func forwardTxToMemPool(txHex string) error {
 
 	resp, err := http.Post(common.MempoolEndpoint, "application/x-www-form-urlencoded", bytes.NewBufferString(txHex))
 	if err != nil {
-		fmt.Printf("Failed to make request: %s\n", err)
+		log.Printf("Failed to make request: %s\n", err)
 		return err
 	}
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Printf("Failed to read response: %s\n", err)
+		log.Printf("Failed to read response: %s\n", err)
 		return err
 	}
 
-	fmt.Println("Response:", string(body))
+	log.Println("Response:", string(body))
 	return nil
 }

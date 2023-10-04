@@ -9,24 +9,25 @@ import (
 	"fmt"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"io/ioutil"
+	"log"
 	"net/http"
 )
 
 //const MempoolEndpoint = "https://mempool.space/api/tx/"
 
 func StartFetchRoutine(foundTaprootTXChan chan chainhash.Hash, handler *p2p.PeerHandler) {
-	fmt.Println("starting fetch routine")
+	log.Println("starting fetch routine")
 	for {
 		select {
 		case txId := <-foundTaprootTXChan:
-			fmt.Println("new txid:", txId.String())
+			log.Println("new txid:", txId.String())
 
 			transactionDetails, err := getTransactionDetails(txId, handler)
 			if err != nil {
-				fmt.Println(err.Error())
+				common.ErrorLogger.Println(err)
 				continue
 			}
-			//fmt.Printf("%+v\n", transactionDetails)
+			//log.Printf("%+v\n", transactionDetails)
 			// todo make a break to not query too much at once
 			//<-time.After(100 * time.Millisecond)
 
@@ -36,17 +37,17 @@ func StartFetchRoutine(foundTaprootTXChan chan chainhash.Hash, handler *p2p.Peer
 
 			go func() {
 				for _, spentUTXO := range taprootSpent {
-					fmt.Printf("Deleting Output: %s:%d\n", spentUTXO.Txid, spentUTXO.Vout)
+					log.Printf("Deleting Output: %s:%d\n", spentUTXO.Txid, spentUTXO.Vout)
 					mongodb.DeleteLightUTXOByTxIndex(spentUTXO.Txid, spentUTXO.Vout)
 					mongodb.SaveSpentUTXO(&spentUTXO)
 				}
 			}()
 
 			go mongodb.SaveTransactionDetails(transactionDetails)
-			//fmt.Println("here")
+			//log.Println("here")
 			tweakData, err := ComputeTweak(transactionDetails)
 			if err != nil {
-				fmt.Println(err.Error())
+				common.ErrorLogger.Println(err)
 				continue
 			}
 			mongodb.SaveTweakData(tweakData)
@@ -62,33 +63,33 @@ func getTransactionDetails(txId chainhash.Hash, ph *p2p.PeerHandler) (*common.Tr
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		fmt.Println("Transaction was not found:", txId)
+		log.Println("Transaction was not found:", txId)
 		return nil, fmt.Errorf("HTTP status %d: %s", resp.StatusCode, resp.Status)
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Println(err.Error())
+		common.ErrorLogger.Println(err)
 		return nil, err
 	}
 
 	var tx common.Transaction
 	err = json.Unmarshal(body, &tx)
 	if err != nil {
-		fmt.Println(err.Error())
+		common.ErrorLogger.Println(err)
 		return nil, err
 	}
 
 	bytes, err := hex.DecodeString(tx.Status.BlockHash)
 	if err != nil {
-		fmt.Println(err.Error())
+		common.ErrorLogger.Println(err)
 		return nil, err
 	}
 
 	hash := chainhash.Hash{}
 	err = hash.SetBytes(bytes)
 	if err != nil {
-		fmt.Println(err.Error())
+		common.ErrorLogger.Println(err)
 		//panic(err)
 		return nil, err
 	}

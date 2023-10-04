@@ -1,13 +1,15 @@
 package p2p
 
 import (
-	"fmt"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/peer"
 	"github.com/btcsuite/btcd/wire"
+	"log"
 	"net"
 	"time"
 )
+
+// todo implement reconnect
 
 func StartPeerRoutine(ph *PeerHandler, messageOutChan chan wire.Message, doneChan chan struct{}) {
 
@@ -29,7 +31,6 @@ func StartPeerRoutine(ph *PeerHandler, messageOutChan chan wire.Message, doneCha
 			OnBlock:   ph.onBlock,
 			OnHeaders: ph.onHeaders,
 		},
-		AllowSelfConns: true,
 	}
 	/*
 		Signet
@@ -40,32 +41,42 @@ func StartPeerRoutine(ph *PeerHandler, messageOutChan chan wire.Message, doneCha
 	*/
 	//p, err := peer.NewOutboundPeer(peerCfg, "192.168.178.25:8333")  // umbrel mainnet
 	//p, err := peer.NewOutboundPeer(peerCfg, "127.0.0.1:18444")  // regtest
-	p, err := peer.NewOutboundPeer(peerCfg, "178.128.221.177:38333")
+	p, err := peer.NewOutboundPeer(peerCfg, "103.16.128.63:38333")
 	if err != nil {
-		fmt.Printf("NewOutboundPeer: error %v\n", err)
+		log.Printf("NewOutboundPeer: error %v\n", err)
 		return
 	}
 
 	// Establish the connection to the peer address and mark it connected.
 	conn, err := net.Dial("tcp", p.Addr())
 	if err != nil {
-		fmt.Printf("net.Dial: error %v\n", err)
+		log.Printf("net.Dial: error %v\n", err)
 		return
 	}
 	p.AssociateConnection(conn)
 
+	go func() {
+		for true {
+			<-time.After(1 * time.Minute)
+			if !p.Connected() {
+				log.Println("Reconnecting to peer")
+				go StartPeerRoutine(ph, messageOutChan, doneChan)
+			}
+		}
+	}()
+
 	for {
 		select {
 		case <-doneChan:
-			fmt.Println("message was sent out")
+			log.Println("message was sent out")
 		case msg := <-messageOutChan:
-			fmt.Println("message about to queue")
+			log.Println("message about to queue")
 			p.QueueMessage(msg, doneChan)
-			fmt.Println("message queued")
-		case <-time.After(24 * time.Hour):
-			fmt.Println("Ending program")
-			p.Disconnect()
-			p.WaitForDisconnect()
+			log.Println("message queued")
+			//case <-time.After(24 * time.Hour):
+			//	log.Println("Ending program")
+			//	p.Disconnect()
+			//	p.WaitForDisconnect()
 		}
 	}
 }

@@ -35,7 +35,7 @@ type Filter struct {
 type TweakData struct {
 	TxId        string   `json:"txid"`
 	BlockHeight uint32   `json:"block_height"`
-	Data        [32]byte `json:"data"`
+	Data        [32]byte `json:"data"` // todo change to 33bytes
 }
 
 type Transaction struct {

@@ -1,7 +1,6 @@
 package p2p
 
 import (
-	"fmt"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 )
@@ -54,7 +53,7 @@ func GetNewHeaders(lastBlockHeader []byte) *wire.MsgGetHeaders {
 	hash := chainhash.Hash{}
 	err := hash.SetBytes(bytes)
 	if err != nil {
-		fmt.Println(err)
+		common.ErrorLogger.Println(err)
 		return nil
 	}
 	return &wire.MsgGetHeaders{

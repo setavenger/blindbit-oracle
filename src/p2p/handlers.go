@@ -5,8 +5,8 @@ import (
 	"SilentPaymentAppBackend/src/db/mongodb"
 	"bytes"
 	"encoding/hex"
-	"fmt"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"log"
 	"time"
 )
 import (
@@ -25,30 +25,30 @@ type PeerHandler struct {
 }
 
 func (h *PeerHandler) onPing(p *peer.Peer, msg *wire.MsgPing) {
-	fmt.Println("received ping")
+	log.Println("received ping")
 	pongMsg := wire.NewMsgPong(msg.Nonce)
 	p.QueueMessage(pongMsg, h.DoneChan)
 }
 
 func (h *PeerHandler) onPong(p *peer.Peer, msg *wire.MsgPong) {
-	fmt.Println("received pong")
+	log.Println("received pong")
 }
 
 func (h *PeerHandler) onVersion(p *peer.Peer, msg *wire.MsgVersion) *wire.MsgReject {
-	fmt.Printf("version: %+v\n", msg)
+	log.Printf("version: %+v\n", msg)
 	h.BestHeightChan <- uint32(msg.LastBlock)
 	return nil
 }
 
 func (h *PeerHandler) onVerack(p *peer.Peer, msg *wire.MsgVerAck) {
-	fmt.Printf("verarck: %+v\n", msg)
+	log.Printf("verarck: %+v\n", msg)
 	go h.InitialHeaderSync(h.FullySyncedChan)
 }
 
 func (h *PeerHandler) onInv(p *peer.Peer, msg *wire.MsgInv) {
 	for _, invVec := range msg.InvList {
 		if invVec.Type == wire.InvTypeBlock || invVec.Type == wire.InvTypeWitnessBlock {
-			fmt.Printf("New Block %+v\n", invVec)
+			log.Printf("New Block %+v\n", invVec)
 			// has to be converted due to a weird internal representation of a chainhash.hash
 			bytesHash, err := hex.DecodeString(invVec.Hash.String())
 			if err != nil {
@@ -60,7 +60,7 @@ func (h *PeerHandler) onInv(p *peer.Peer, msg *wire.MsgInv) {
 }
 
 func (h *PeerHandler) onCFilter(p *peer.Peer, msg *wire.MsgCFilter) {
-	fmt.Println("Received filter for:", "filter", msg.BlockHash.String())
+	log.Println("Received filter for:", "filter", msg.BlockHash.String())
 
 	mongodb.SaveFilter(&common.Filter{
 		FilterType:  msg.FilterType,
@@ -71,17 +71,17 @@ func (h *PeerHandler) onCFilter(p *peer.Peer, msg *wire.MsgCFilter) {
 }
 
 func (h *PeerHandler) onTx(p *peer.Peer, msg *wire.MsgTx) {
-	fmt.Printf("%+v\n", msg)
+	log.Printf("%+v\n", msg)
 	for _, txIn := range msg.TxIn {
-		fmt.Printf("%+v\n", txIn)
+		log.Printf("%+v\n", txIn)
 	}
 	for _, txOut := range msg.TxOut {
-		fmt.Printf("%+v\n", txOut)
+		log.Printf("%+v\n", txOut)
 	}
 }
 
 func (h *PeerHandler) onHeaders(p *peer.Peer, msg *wire.MsgHeaders) {
-	//fmt.Println(msg)
+	//log.Println(msg)
 	h.SyncChan <- msg
 }
 
@@ -90,21 +90,21 @@ func (h *PeerHandler) onBlock(p *peer.Peer, msg *wire.MsgBlock, buf []byte) {
 	h.AppendBlockerHeader(&msg.Header)
 	<-time.After(1 * time.Second)
 
-	// we are checking for the prev block => +2; we could check the current block but then it has to be 100% in the chain already
+	// we are checking for the prev block => +1; we could check the current block but then it has to be 100% in the chain already
 	thisBlocksHeight := h.GetBlockHeightByHeader(&msg.Header.PrevBlock) + 1
-
+	log.Println("Received blockHeight:", thisBlocksHeight)
 	// -1 + 1 = 0
 	if thisBlocksHeight == 0 {
-		fmt.Println("[ERROR]", "got a block ahead of the chain, please re-sync, the headers")
+		log.Println("[ERROR]", "got a block ahead of the chain, please re-sync, the headers")
 		return
 	}
 	for _, tx := range msg.Transactions {
 		perTransactionFlag = false
 		for index, txOut := range tx.TxOut {
 			if bytes.Equal(txOut.PkScript[:2], []byte{81, 32}) {
-				fmt.Println(tx.TxHash().String())
+				log.Println(tx.TxHash().String())
 				if !perTransactionFlag {
-					fmt.Println("To taproot chan", "txid", tx.TxHash().String())
+					log.Println("To taproot chan", "txid", tx.TxHash().String())
 					h.FoundTaprootTXChan <- tx.TxHash()
 				}
 
@@ -121,10 +121,18 @@ func (h *PeerHandler) onBlock(p *peer.Peer, msg *wire.MsgBlock, buf []byte) {
 			}
 		}
 	}
-	bytesHash, err := hex.DecodeString(msg.BlockHash().String())
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println("CFilter height:", thisBlocksHeight)
-	h.MessageOutChan <- MakeCFilterRequest(uint32(thisBlocksHeight), bytesHash)
+	// todo not needed when creating taproot filters
+	//bytesHash, err := hex.DecodeString(msg.BlockHash().String())
+	//if err != nil {
+	//	panic(err)
+	//}
+	//log.Println("CFilter height:", thisBlocksHeight)
+	//h.MessageOutChan <- MakeCFilterRequest(uint32(thisBlocksHeight), bytesHash)
+	cFilterTaproot := BuildTaprootOnlyFilter(msg, h)
+	go mongodb.SaveFilterTaproot(&common.Filter{
+		FilterType:  4,
+		BlockHeight: uint32(thisBlocksHeight),
+		Data:        cFilterTaproot,
+		BlockHeader: msg.BlockHash().String(),
+	})
 }

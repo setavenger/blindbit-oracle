@@ -15,12 +15,14 @@ const mongoDBURI = "mongodb://root:example@localhost:27017/"
 //  db.members.createIndex( { groupNumber: 1, lastname: 1, firstname: 1 }, { unique: true } )
 
 func CreateIndices() {
+	common.InfoLogger.Println("creating database indices")
 	CreateIndexTransactions()
 	CreateIndexCFilters()
 	CreateIndexTweaks()
 	CreateIndexUTXOs()
 	CreateIndexSpentTXOs()
 	CreateIndexHeaders()
+	common.InfoLogger.Println("created database indices")
 }
 
 func CreateIndexTransactions() {

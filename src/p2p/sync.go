@@ -95,7 +95,11 @@ func (h *PeerHandler) GetBlockHeightByHeader(headerHash *chainhash.Hash) int32 {
 }
 
 func (h *PeerHandler) GetTimestampByHeader(headerHash *chainhash.Hash) uint32 {
-	return h.Headers[common.IndexOfHashInHeaderList(headerHash, h.Headers)].Timestamp
+	idx := common.IndexOfHashInHeaderList(headerHash, h.Headers)
+	if idx == -1 {
+		return 0
+	}
+	return h.Headers[idx].Timestamp
 }
 
 // reindexHeaderChain makes sure that the headers pulled from the database are in the correct order

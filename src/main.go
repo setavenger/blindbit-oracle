@@ -12,12 +12,14 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"time"
 )
 
 func init() {
-	err := os.Mkdir("./logs", 0666)
-	if err != nil {
+	err := os.Mkdir("./logs", 0750)
+	if err != nil && !strings.Contains(err.Error(), "file exists") {
+		fmt.Println(err.Error())
 		log.Fatal(err)
 	}
 
@@ -28,8 +30,8 @@ func init() {
 
 	common.DebugLogger = log.New(file, "[DEBUG] ", log.Ldate|log.Ltime|log.Lshortfile|log.Lmsgprefix)
 	common.InfoLogger = log.New(file, "[INFO] ", log.Ldate|log.Ltime|log.Lshortfile|log.Lmsgprefix)
-	common.WarningLogger = log.New(file, "[WARNING] ", log.Ldate|log.Ltime|log.Lshortfile)
-	common.ErrorLogger = log.New(file, "[ERROR] ", log.Ldate|log.Ltime|log.Lshortfile)
+	common.WarningLogger = log.New(file, "[WARNING] ", log.Ldate|log.Ltime|log.Lshortfile|log.Lmsgprefix)
+	common.ErrorLogger = log.New(file, "[ERROR] ", log.Ldate|log.Ltime|log.Lshortfile|log.Lmsgprefix)
 }
 
 func main() {
@@ -37,6 +39,7 @@ func main() {
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 
+	common.InfoLogger.Println("Program Started")
 	// make sure everything is ready before we receive data
 	mongodb.CreateIndices()
 
@@ -46,6 +49,7 @@ func main() {
 
 	doneChan := make(chan struct{})
 	fullySyncedChan := make(chan struct{})
+	peerRoutineEndedChan := make(chan struct{})
 
 	ph := p2p.PeerHandler{
 		DoneChan:           doneChan,
@@ -55,7 +59,7 @@ func main() {
 		BestHeightChan:     bestHeightChan,
 		FullySyncedChan:    fullySyncedChan,
 	}
-	go p2p.StartPeerRoutine(&ph, messageOutChan, doneChan)
+	go p2p.StartPeerRoutine(&ph, messageOutChan, doneChan, peerRoutineEndedChan)
 
 	go tweak.StartFetchRoutine(foundTaprootTxChan, &ph)
 	api := server.ApiHandler{
@@ -94,6 +98,9 @@ func main() {
 	for true {
 
 		select {
+		case <-peerRoutineEndedChan:
+			common.InfoLogger.Println("Reconnecting to Peer")
+			go p2p.StartPeerRoutine(&ph, messageOutChan, doneChan, peerRoutineEndedChan)
 		case <-interrupt:
 			return
 		}

@@ -47,6 +47,10 @@ func StartFetchRoutine(foundTaprootTXChan chan chainhash.Hash, handler *p2p.Peer
 			//log.Println("here")
 			tweakData, err := ComputeTweak(transactionDetails)
 			if err != nil {
+				if err.Error() == "coinbase transaction" {
+					common.DebugLogger.Println("coinbase transaction")
+					continue
+				}
 				common.ErrorLogger.Println(err)
 				continue
 			}

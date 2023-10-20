@@ -11,8 +11,9 @@ import (
 
 // todo implement reconnect
 
-func StartPeerRoutine(ph *PeerHandler, messageOutChan chan wire.Message, doneChan chan struct{}) {
+func StartPeerRoutine(ph *PeerHandler, messageOutChan chan wire.Message, doneChan chan struct{}, endedChan chan struct{}) {
 
+	disconnectedChan := make(chan struct{})
 	peerCfg := &peer.Config{
 		UserAgentName:    "SilentPaymentAppGo", // User agent name to advertise.
 		UserAgentVersion: "0.0.1",              // User agent version to advertise.
@@ -41,7 +42,7 @@ func StartPeerRoutine(ph *PeerHandler, messageOutChan chan wire.Message, doneCha
 	*/
 	//p, err := peer.NewOutboundPeer(peerCfg, "192.168.178.25:8333")  // umbrel mainnet
 	//p, err := peer.NewOutboundPeer(peerCfg, "127.0.0.1:18444")  // regtest
-	p, err := peer.NewOutboundPeer(peerCfg, "103.16.128.63:38333")
+	p, err := peer.NewOutboundPeer(peerCfg, "153.126.143.201:38333")
 	if err != nil {
 		log.Printf("NewOutboundPeer: error %v\n", err)
 		return
@@ -59,8 +60,8 @@ func StartPeerRoutine(ph *PeerHandler, messageOutChan chan wire.Message, doneCha
 		for true {
 			<-time.After(1 * time.Minute)
 			if !p.Connected() {
-				log.Println("Reconnecting to peer")
-				go StartPeerRoutine(ph, messageOutChan, doneChan)
+				log.Println("Disconnected from peer")
+				disconnectedChan <- struct{}{}
 			}
 		}
 	}()
@@ -73,6 +74,9 @@ func StartPeerRoutine(ph *PeerHandler, messageOutChan chan wire.Message, doneCha
 			log.Println("message about to queue")
 			p.QueueMessage(msg, doneChan)
 			log.Println("message queued")
+		case <-disconnectedChan:
+			endedChan <- struct{}{}
+			return
 			//case <-time.After(24 * time.Hour):
 			//	log.Println("Ending program")
 			//	p.Disconnect()

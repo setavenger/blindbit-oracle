@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"SilentPaymentAppBackend/src/common"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 )

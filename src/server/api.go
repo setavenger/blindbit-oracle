@@ -80,7 +80,7 @@ func (h *ApiHandler) GetCFilterByHeightTaproot(c *gin.Context) {
 		return
 	}
 	cFilter := mongodb.RetrieveCFilterByHeightTaproot(uint32(height))
-	log.Println("Filter:", strconv.FormatUint(height, 10), cFilter)
+	common.DebugLogger.Println("Filter:", strconv.FormatUint(height, 10), cFilter)
 	data := gin.H{
 		"filter_type":  cFilter.FilterType,
 		"block_height": cFilter.BlockHeight,

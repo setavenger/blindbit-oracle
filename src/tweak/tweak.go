@@ -13,6 +13,7 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"log"
+	"math/big"
 	"sort"
 	"strings"
 )
@@ -38,20 +39,25 @@ func ComputeTweak(tx *common.Transaction) (*common.TweakData, error) {
 	}
 	curve := btcec.KoblitzCurve{}
 
-	// todo change to 33bytes
-	x, _ := curve.ScalarMult(key.X(), key.Y(), hash[:])
+	x, y := curve.ScalarMult(key.X(), key.Y(), hash[:])
 
 	// sometimes an uneven number hex string is returned, so we have to pad the zeros
 	s := fmt.Sprintf("%x", x)
-	if len(s)%2 != 0 {
-		s = "0" + s
+	s = fmt.Sprintf("%064s", s)
+	mod := y.Mod(y, big.NewInt(2))
+	if mod.Cmp(big.NewInt(0)) == 0 {
+		s = "02" + s
+	} else {
+		s = "03" + s
 	}
+
 	decodedString, err := hex.DecodeString(s)
+
 	if err != nil {
 		common.ErrorLogger.Println(err)
 		return nil, err
 	}
-	tweakBytes := [32]byte{}
+	tweakBytes := [33]byte{}
 	copy(tweakBytes[:], decodedString)
 
 	tweakData := &common.TweakData{
@@ -186,14 +192,12 @@ func sumPublicKeys(pubKeys []string) (*btcec.PublicKey, error) {
 
 			// in case big int omits leading zero
 			sX := fmt.Sprintf("%x", x)
-			if len(sX)%2 != 0 {
-				sX = "0" + sX
-			}
 			sY := fmt.Sprintf("%x", y)
-			if len(sY)%2 != 0 {
-				sY = "0" + sY
-			}
-			log.Println(fmt.Sprintf("04%s%s", sX, sY))
+			sX = fmt.Sprintf("%064s", sX)
+			sY = fmt.Sprintf("%064s", sY)
+			common.DebugLogger.Println(fmt.Sprintf("%s", sX))
+			common.DebugLogger.Println(fmt.Sprintf("%s", sY))
+			common.DebugLogger.Println(fmt.Sprintf("04%s%s", sX, sY))
 			decodeString, err = hex.DecodeString(fmt.Sprintf("04%s%s", sX, sY))
 			if err != nil {
 				common.ErrorLogger.Println(err)

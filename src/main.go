@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
+	"io"
 	"log"
 	"os"
 	"os/signal"
@@ -28,14 +29,16 @@ func init() {
 		log.Fatal(err)
 	}
 
-	common.DebugLogger = log.New(file, "[DEBUG] ", log.Ldate|log.Ltime|log.Lshortfile|log.Lmsgprefix)
-	common.InfoLogger = log.New(file, "[INFO] ", log.Ldate|log.Ltime|log.Lshortfile|log.Lmsgprefix)
-	common.WarningLogger = log.New(file, "[WARNING] ", log.Ldate|log.Ltime|log.Lshortfile|log.Lmsgprefix)
-	common.ErrorLogger = log.New(file, "[ERROR] ", log.Ldate|log.Ltime|log.Lshortfile|log.Lmsgprefix)
+	multi := io.MultiWriter(file, os.Stdout)
+
+	common.DebugLogger = log.New(multi, "[DEBUG] ", log.Ldate|log.Lmicroseconds|log.Lshortfile|log.Lmsgprefix)
+	common.InfoLogger = log.New(multi, "[INFO] ", log.Ldate|log.Lmicroseconds|log.Lshortfile|log.Lmsgprefix)
+	common.WarningLogger = log.New(multi, "[WARNING] ", log.Ldate|log.Lmicroseconds|log.Lshortfile|log.Lmsgprefix)
+	common.ErrorLogger = log.New(multi, "[ERROR] ", log.Ldate|log.Lmicroseconds|log.Lshortfile|log.Lmsgprefix)
 }
 
 func main() {
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
+	log.SetFlags(log.LstdFlags | log.Lshortfile | log.Lmicroseconds)
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 
@@ -74,8 +77,9 @@ func main() {
 
 	// 162458 start of the signet experiments
 	// todo 162591 was error with p2pkh input, use for testing (b9d5c5dceed52098e0aa4529e55f5279b79bd510fce8429d6b0914e10215279f)
+	// first transactions around 163000
 	//for i, header := range ph.Headers {
-	//	if i < 162458 {
+	//	if i < 164994 {
 	//		continue
 	//	}
 	//	bytes, err := hex.DecodeString(header.BlockHash.String())
@@ -89,7 +93,7 @@ func main() {
 	//	}
 	//}
 
-	//bytes, err := hex.DecodeString("000000e76341456b13358d7efb851c33413c122ffaedabea7eef53324f8d7711")
+	//bytes, err := hex.DecodeString("000000f88b466c41306080c0778ed1eea80cb185b4b80a803840a91c79df52c7")
 	//if err != nil {
 	//	panic(err)
 	//}

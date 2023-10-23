@@ -6,7 +6,6 @@ import (
 	"github.com/btcsuite/btcd/btcutil/gcs/builder"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil/gcs"
-	"log"
 )
 
 func BuildTaprootOnlyFilter(block *wire.MsgBlock, ph *PeerHandler) []byte {
@@ -15,7 +14,7 @@ func BuildTaprootOnlyFilter(block *wire.MsgBlock, ph *PeerHandler) []byte {
 
 	// -1 + 1 = 0
 	if thisBlocksHeight == 0 {
-		log.Println("[ERROR]", "got a block ahead of the chain, please re-sync, the headers")
+		common.ErrorLogger.Println("got a block ahead of the chain, please re-sync, the headers")
 		return nil
 	}
 

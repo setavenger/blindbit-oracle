@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"SilentPaymentAppBackend/src/common"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/peer"
 	"github.com/btcsuite/btcd/wire"
@@ -69,11 +70,11 @@ func StartPeerRoutine(ph *PeerHandler, messageOutChan chan wire.Message, doneCha
 	for {
 		select {
 		case <-doneChan:
-			log.Println("message was sent out")
+			common.DebugLogger.Println("message was sent out")
 		case msg := <-messageOutChan:
-			log.Println("message about to queue")
+			common.DebugLogger.Println("message about to queue")
 			p.QueueMessage(msg, doneChan)
-			log.Println("message queued")
+			common.DebugLogger.Println("message queued")
 		case <-disconnectedChan:
 			endedChan <- struct{}{}
 			return

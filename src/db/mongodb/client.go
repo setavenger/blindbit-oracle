@@ -49,7 +49,7 @@ func CreateIndexTransactions() {
 		// will panic because it only runs on startup and should be executed
 		panic(err)
 	}
-	log.Println("Created Index with name:", nameIndex)
+	common.DebugLogger.Println("Created Index with name:", nameIndex)
 }
 
 func CreateIndexCFilters() {
@@ -77,7 +77,7 @@ func CreateIndexCFilters() {
 		// will panic because it only runs on startup and should be executed
 		panic(err)
 	}
-	log.Println("Created Index with name:", nameIndex)
+	common.DebugLogger.Println("Created Index with name:", nameIndex)
 }
 
 func CreateIndexUTXOs() {
@@ -105,7 +105,7 @@ func CreateIndexUTXOs() {
 		// will panic because it only runs on startup and should be executed
 		panic(err)
 	}
-	log.Println("Created Index with name:", nameIndex)
+	common.DebugLogger.Println("Created Index with name:", nameIndex)
 }
 
 func CreateIndexSpentTXOs() {
@@ -133,7 +133,7 @@ func CreateIndexSpentTXOs() {
 		// will panic because it only runs on startup and should be executed
 		panic(err)
 	}
-	log.Println("Created Index with name:", nameIndex)
+	common.DebugLogger.Println("Created Index with name:", nameIndex)
 }
 
 func CreateIndexTweaks() {
@@ -160,7 +160,7 @@ func CreateIndexTweaks() {
 		// will panic because it only runs on startup and should be executed
 		panic(err)
 	}
-	log.Println("Created Index with name:", nameIndex)
+	common.DebugLogger.Println("Created Index with name:", nameIndex)
 }
 
 func CreateIndexHeaders() {
@@ -187,7 +187,7 @@ func CreateIndexHeaders() {
 		// will panic because it only runs on startup and should be executed
 		panic(err)
 	}
-	log.Println("Created Index with name:", nameIndex)
+	common.DebugLogger.Println("Created Index with name:", nameIndex)
 }
 
 func SaveTransactionDetails(transaction *common.Transaction) {
@@ -550,6 +550,7 @@ func RetrieveCFilterByHeightTaproot(blockHeight uint32) *common.Filter {
 	err = result.Decode(&cFilter)
 	if err != nil {
 		common.ErrorLogger.Println(err)
+		return nil
 	}
 
 	return &cFilter
@@ -603,6 +604,40 @@ func DeleteLightUTXOByTxIndex(txId string, vout uint32) {
 		//panic(err)
 		return
 	}
+	common.DebugLogger.Printf("Deleted %d LightUTXOs\n", result.DeletedCount)
 
-	log.Printf("Deleted %d LightUTXOs\n", result.DeletedCount)
+	err = chainedTweakDeletion(client, txId)
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return
+	}
+}
+
+// chained deletion of tweak data if no more utxos with a certain txid are left
+func chainedTweakDeletion(client *mongo.Client, txId string) error {
+	coll := client.Database("tweak_data").Collection("tweaks")
+	filter := bson.D{{"txid", txId}}
+	result := coll.FindOne(context.TODO(), filter)
+
+	var utxo common.LightUTXO
+
+	err := result.Decode(&utxo)
+	if err != nil && err.Error() != "mongo: no documents in result" {
+		common.ErrorLogger.Println(err)
+		return err
+	}
+
+	// if no match was found
+	if utxo.Txid == "" {
+		var resultDelete *mongo.DeleteResult
+		resultDelete, err = coll.DeleteOne(context.TODO(), filter)
+		if err != nil {
+			common.ErrorLogger.Println(err)
+			return err
+		}
+
+		common.DebugLogger.Printf("Deleted %d tweak data for %s\n", resultDelete.DeletedCount, txId)
+		return err
+	}
+	return nil
 }

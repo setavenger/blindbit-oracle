@@ -6,6 +6,7 @@ import (
 	"SilentPaymentAppBackend/src/p2p"
 	"SilentPaymentAppBackend/src/server"
 	"SilentPaymentAppBackend/src/tweak"
+	"encoding/hex"
 	"fmt"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
@@ -13,9 +14,12 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"time"
 )
+
+var catchUp uint64
 
 func init() {
 	err := os.Mkdir("./logs", 0750)
@@ -35,6 +39,14 @@ func init() {
 	common.InfoLogger = log.New(multi, "[INFO] ", log.Ldate|log.Lmicroseconds|log.Lshortfile|log.Lmsgprefix)
 	common.WarningLogger = log.New(multi, "[WARNING] ", log.Ldate|log.Lmicroseconds|log.Lshortfile|log.Lmsgprefix)
 	common.ErrorLogger = log.New(multi, "[ERROR] ", log.Ldate|log.Lmicroseconds|log.Lshortfile|log.Lmsgprefix)
+
+	// load env vars
+	catchUpRaw := os.Getenv("SYNC_CATCH_UP")
+	catchUp, err = strconv.ParseUint(catchUpRaw, 10, 64)
+
+	if os.Getenv("MONGO_DB_CONNECTION") != "" {
+		common.MongoDBURI = os.Getenv("MONGO_DB_CONNECTION")
+	}
 }
 
 func main() {
@@ -78,20 +90,22 @@ func main() {
 	// 162458 start of the signet experiments
 	// todo 162591 was error with p2pkh input, use for testing (b9d5c5dceed52098e0aa4529e55f5279b79bd510fce8429d6b0914e10215279f)
 	// first transactions around 163000
-	//for i, header := range ph.Headers {
-	//	if i < 164994 {
-	//		continue
-	//	}
-	//	bytes, err := hex.DecodeString(header.BlockHash.String())
-	//	if err != nil {
-	//		panic(err)
-	//	}
-	//
-	//	messageOutChan <- p2p.MakeBlockRequest(bytes, wire.InvTypeBlock)
-	//	if i != len(ph.Headers)-1 {
-	//		<-time.After(400 * time.Millisecond)
-	//	}
-	//}
+	if catchUp > 0 {
+		for i, header := range ph.Headers {
+			if uint64(i) < catchUp {
+				continue
+			}
+			bytes, err := hex.DecodeString(header.BlockHash.String())
+			if err != nil {
+				panic(err)
+			}
+
+			messageOutChan <- p2p.MakeBlockRequest(bytes, wire.InvTypeBlock)
+			if i != len(ph.Headers)-1 {
+				<-time.After(1000 * time.Millisecond)
+			}
+		}
+	}
 
 	//bytes, err := hex.DecodeString("000000f88b466c41306080c0778ed1eea80cb185b4b80a803840a91c79df52c7")
 	//if err != nil {

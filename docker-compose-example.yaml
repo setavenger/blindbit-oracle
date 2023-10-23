@@ -3,10 +3,13 @@ version: '3.1'
 
 services:
   backend:
-    build: .
+    image: IMAGE_LINK
     restart: always
     ports:
       - "32504:8000"
+    environment:
+      SYNC_CATCH_UP: 163000
+      MONGO_DB_CONNECTION: mongodb://root:example@mongo:27017/
 
   mongo:
     image: mongo

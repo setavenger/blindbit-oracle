@@ -9,8 +9,6 @@ import (
 	"log"
 )
 
-const mongoDBURI = "mongodb://root:example@localhost:27017/"
-
 // todo add unique lock
 //  db.members.createIndex( { groupNumber: 1, lastname: 1, firstname: 1 }, { unique: true } )
 
@@ -26,7 +24,7 @@ func CreateIndices() {
 }
 
 func CreateIndexTransactions() {
-	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(mongoDBURI))
+	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(common.MongoDBURI))
 	if err != nil {
 		panic(err)
 	}
@@ -53,7 +51,7 @@ func CreateIndexTransactions() {
 }
 
 func CreateIndexCFilters() {
-	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(mongoDBURI))
+	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(common.MongoDBURI))
 	if err != nil {
 		panic(err)
 	}
@@ -81,7 +79,7 @@ func CreateIndexCFilters() {
 }
 
 func CreateIndexUTXOs() {
-	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(mongoDBURI))
+	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(common.MongoDBURI))
 	if err != nil {
 		panic(err)
 	}
@@ -109,7 +107,7 @@ func CreateIndexUTXOs() {
 }
 
 func CreateIndexSpentTXOs() {
-	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(mongoDBURI))
+	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(common.MongoDBURI))
 	if err != nil {
 		panic(err)
 	}
@@ -137,7 +135,7 @@ func CreateIndexSpentTXOs() {
 }
 
 func CreateIndexTweaks() {
-	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(mongoDBURI))
+	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(common.MongoDBURI))
 	if err != nil {
 		panic(err)
 	}
@@ -164,7 +162,7 @@ func CreateIndexTweaks() {
 }
 
 func CreateIndexHeaders() {
-	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(mongoDBURI))
+	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(common.MongoDBURI))
 	if err != nil {
 		panic(err)
 	}
@@ -191,7 +189,7 @@ func CreateIndexHeaders() {
 }
 
 func SaveTransactionDetails(transaction *common.Transaction) {
-	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(mongoDBURI))
+	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(common.MongoDBURI))
 	if err != nil {
 		panic(err)
 	}
@@ -215,7 +213,7 @@ func SaveTransactionDetails(transaction *common.Transaction) {
 }
 
 func SaveFilter(filter *common.Filter) {
-	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(mongoDBURI))
+	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(common.MongoDBURI))
 	if err != nil {
 		common.ErrorLogger.Println(err)
 		return
@@ -241,7 +239,7 @@ func SaveFilter(filter *common.Filter) {
 }
 
 func SaveFilterTaproot(filter *common.Filter) {
-	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(mongoDBURI))
+	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(common.MongoDBURI))
 	if err != nil {
 		common.ErrorLogger.Println(err)
 		return
@@ -267,7 +265,7 @@ func SaveFilterTaproot(filter *common.Filter) {
 }
 
 func SaveLightUTXO(utxo *common.LightUTXO) {
-	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(mongoDBURI))
+	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(common.MongoDBURI))
 	if err != nil {
 		panic(err)
 	}
@@ -291,7 +289,7 @@ func SaveLightUTXO(utxo *common.LightUTXO) {
 }
 
 func SaveTweakData(tweak *common.TweakData) {
-	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(mongoDBURI))
+	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(common.MongoDBURI))
 	if err != nil {
 		panic(err)
 	}
@@ -315,7 +313,7 @@ func SaveTweakData(tweak *common.TweakData) {
 }
 
 func SaveSpentUTXO(utxo *common.SpentUTXO) {
-	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(mongoDBURI))
+	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(common.MongoDBURI))
 	if err != nil {
 		panic(err)
 	}
@@ -338,7 +336,7 @@ func SaveSpentUTXO(utxo *common.SpentUTXO) {
 }
 
 func SaveBulkHeaders(headers []*common.Header) {
-	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(mongoDBURI))
+	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(common.MongoDBURI))
 	if err != nil {
 		panic(err)
 	}
@@ -367,7 +365,7 @@ func SaveBulkHeaders(headers []*common.Header) {
 }
 
 func RetrieveLastHeader() *common.Header {
-	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(mongoDBURI))
+	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(common.MongoDBURI))
 	if err != nil {
 		panic(err)
 	}
@@ -395,7 +393,7 @@ func RetrieveLastHeader() *common.Header {
 }
 
 func RetrieveAllHeaders() []*common.Header {
-	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(mongoDBURI))
+	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(common.MongoDBURI))
 	if err != nil {
 		panic(err)
 	}
@@ -424,7 +422,7 @@ func RetrieveAllHeaders() []*common.Header {
 }
 
 func RetrieveTransactionsByHeight(blockHeight uint32) []*common.Transaction {
-	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(mongoDBURI))
+	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(common.MongoDBURI))
 	if err != nil {
 		panic(err)
 	}
@@ -452,7 +450,7 @@ func RetrieveTransactionsByHeight(blockHeight uint32) []*common.Transaction {
 }
 
 func RetrieveLightUTXOsByHeight(blockHeight uint32) []*common.LightUTXO {
-	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(mongoDBURI))
+	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(common.MongoDBURI))
 	if err != nil {
 		panic(err)
 	}
@@ -479,7 +477,7 @@ func RetrieveLightUTXOsByHeight(blockHeight uint32) []*common.LightUTXO {
 }
 
 func RetrieveSpentUTXOsByHeight(blockHeight uint32) []*common.SpentUTXO {
-	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(mongoDBURI))
+	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(common.MongoDBURI))
 	if err != nil {
 		panic(err)
 	}
@@ -506,7 +504,7 @@ func RetrieveSpentUTXOsByHeight(blockHeight uint32) []*common.SpentUTXO {
 }
 
 func RetrieveCFilterByHeight(blockHeight uint32) *common.Filter {
-	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(mongoDBURI))
+	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(common.MongoDBURI))
 	if err != nil {
 		panic(err)
 	}
@@ -531,7 +529,7 @@ func RetrieveCFilterByHeight(blockHeight uint32) *common.Filter {
 }
 
 func RetrieveCFilterByHeightTaproot(blockHeight uint32) *common.Filter {
-	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(mongoDBURI))
+	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(common.MongoDBURI))
 	if err != nil {
 		panic(err)
 	}
@@ -557,7 +555,7 @@ func RetrieveCFilterByHeightTaproot(blockHeight uint32) *common.Filter {
 }
 
 func RetrieveTweakDataByHeight(blockHeight uint32) []*common.TweakData {
-	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(mongoDBURI))
+	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(common.MongoDBURI))
 	if err != nil {
 		panic(err)
 	}
@@ -584,7 +582,7 @@ func RetrieveTweakDataByHeight(blockHeight uint32) []*common.TweakData {
 }
 
 func DeleteLightUTXOByTxIndex(txId string, vout uint32) {
-	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(mongoDBURI))
+	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(common.MongoDBURI))
 	if err != nil {
 		panic(err)
 	}

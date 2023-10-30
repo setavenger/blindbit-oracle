@@ -43,7 +43,9 @@ func init() {
 	// load env vars
 	catchUpRaw := os.Getenv("SYNC_CATCH_UP")
 	catchUp, err = strconv.ParseUint(catchUpRaw, 10, 64)
-
+	if err != nil {
+		common.ErrorLogger.Println(err)
+	}
 	if os.Getenv("MONGO_DB_CONNECTION") != "" {
 		common.MongoDBURI = os.Getenv("MONGO_DB_CONNECTION")
 	}

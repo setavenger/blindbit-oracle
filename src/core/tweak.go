@@ -1,8 +1,7 @@
-package tweak
+package core
 
 import (
 	"SilentPaymentAppBackend/src/common"
-	"SilentPaymentAppBackend/src/p2p"
 	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
@@ -10,22 +9,46 @@ import (
 	"errors"
 	"fmt"
 	"github.com/btcsuite/btcd/btcec/v2"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
-	"log"
 	"math/big"
 	"sort"
 	"strings"
 )
 
-func ComputeTweak(tx *common.Transaction) (*common.TweakData, error) {
+func ComputeTweaksForBlock(block *common.Block) (common.TweakIndex, error) {
+	var tweakIndex common.TweakIndex
+	tweakIndex.BlockHeight = block.Height
+	tweakIndex.BlockHash = block.Hash
+	for _, tx := range block.Txs {
+		common.DebugLogger.Printf("Processing transaction block: %s - tx: %s\n", block.Hash, tx.Hash)
+		for _, vout := range tx.Vout {
+			if vout.ScriptPubKey.Type == "witness_v1_taproot" {
+				tweakPerTx, err := ComputeTweakPerTx(&tx)
+				if err != nil {
+					common.ErrorLogger.Println(err)
+					return common.TweakIndex{}, nil
+				}
+				// we do this check for the coinbase transactions which are not supposed to throw an error
+				// but also don't have a tweak that can be computed
+				if tweakPerTx != nil {
+					tweakIndex.Data = append(tweakIndex.Data, *tweakPerTx)
+				}
+				break
+			}
+		}
+	}
+	return tweakIndex, nil
+}
+
+func ComputeTweakPerTx(tx *common.Transaction) (*[33]byte, error) {
 	pubKeys := extractPubKeys(tx)
 	if pubKeys == nil {
-		// mainly relevant for test environments, unlikely on mainnet
-		if len(tx.Vin) == 1 && tx.Vin[0].IsCoinbase {
-			return nil, errors.New("coinbase transaction")
+		// if the coinbase key exists and is not empty it's a coinbase transaction
+		if tx.Vin[0].Coinbase != "" {
+			common.DebugLogger.Printf("%s was coinbase\n", tx.Hash)
+			return nil, nil
 		}
-		log.Printf("%+v\n", tx)
+		common.DebugLogger.Printf("%+v\n", tx)
 		return nil, errors.New("no pub keys were extracted")
 	}
 	key, err := sumPublicKeys(pubKeys)
@@ -60,27 +83,29 @@ func ComputeTweak(tx *common.Transaction) (*common.TweakData, error) {
 	tweakBytes := [33]byte{}
 	copy(tweakBytes[:], decodedString)
 
-	tweakData := &common.TweakData{
-		TxId:        tx.Txid,
-		BlockHeight: tx.Status.BlockHeight,
-		Data:        tweakBytes,
-	}
-	return tweakData, nil
+	return &tweakBytes, nil
 }
 
 func extractPubKeys(tx *common.Transaction) []string {
 	var pubKeys []string
 
 	for _, vin := range tx.Vin {
-		switch strings.ToUpper(vin.Prevout.ScriptpubkeyType) {
-		case "V1_P2TR":
-			pubKeys = append(pubKeys, vin.Prevout.Scriptpubkey[4:])
-		case "V0_P2WPKH":
-			pubKeys = append(pubKeys, vin.Witness[1])
-		case "P2SH-P2WPKH":
-			pubKeys = append(pubKeys, vin.Witness[1])
-		case "P2PKH":
-			p2PKH, err := extractFromP2PKH(vin.Scriptsig)
+		switch vin.Prevout.ScriptPubKey.Type {
+		case "witness_v1_taproot":
+			// todo needs some extra parsing see reference implementation and bitcoin core wallet
+			pubKeys = append(pubKeys, vin.Prevout.ScriptPubKey.Hex[4:])
+		case "witness_v0_keyhash":
+			// last element in the witness data is public key
+			pubKeys = append(pubKeys, vin.Txinwitness[len(vin.Txinwitness)-1])
+		case "scripthash":
+			if len(vin.ScriptSig.ASM) == 44 {
+				if vin.ScriptSig.ASM[:4] == "0014" {
+					pubKeys = append(pubKeys, vin.Txinwitness[len(vin.Txinwitness)-1])
+				}
+				common.WarningLogger.Printf("Found a vin that is 22 bytes but does not match p2wpkh signature")
+			}
+		case "pubkeyhash":
+			p2PKH, err := extractFromP2PKH(vin.Prevout.ScriptPubKey.Hex)
 			if err != nil {
 				common.ErrorLogger.Println(err)
 				continue
@@ -112,55 +137,19 @@ func extractFromP2PKH(scriptSig string) ([]byte, error) {
 	// Split the disassembled string by space to get individual operations
 	ops := strings.Split(disassembled, " ")
 
+	// todo not enough, still possible to have errors
 	for _, op := range ops {
 		// The byte sequence might represent a public key if it has the right length
-		data, err := hex.DecodeString(op)
 		if err != nil {
 			common.ErrorLogger.Println(err)
 			return nil, err
 		}
-		if len(data) == 33 || len(data) == 65 {
-			return data, nil
+		if len(op) == 66 {
+			return hex.DecodeString(op)
 		}
 	}
 
 	return nil, errors.New("no public key found in scriptSig")
-}
-
-func extractSpentTaprootPubKeys(tx *common.Transaction, ph *p2p.PeerHandler) []common.SpentUTXO {
-	var vins []common.SpentUTXO
-
-	for _, vin := range tx.Vin {
-		switch strings.ToUpper(vin.Prevout.ScriptpubkeyType) {
-
-		case "V1_P2TR":
-			// todo what to do in cases of errors, for robustness they should be collected somewhere
-			blockHashBytes, err := hex.DecodeString(tx.Status.BlockHash)
-			if err != nil {
-				common.ErrorLogger.Println(err)
-				continue
-			}
-			hash := chainhash.Hash{}
-			err = hash.SetBytes(common.ReverseBytes(blockHashBytes))
-			if err != nil {
-				common.ErrorLogger.Println(err)
-				continue
-			}
-			vins = append(vins, common.SpentUTXO{
-				SpentIn:     tx.Txid,
-				Txid:        vin.Txid,
-				Vout:        vin.Vout,
-				Value:       vin.Prevout.Value,
-				BlockHeight: tx.Status.BlockHeight,
-				BlockHeader: tx.Status.BlockHash,
-				Timestamp:   ph.GetTimestampByHeader(&hash),
-			})
-		default:
-			continue
-		}
-	}
-
-	return vins
 }
 
 func sumPublicKeys(pubKeys []string) (*btcec.PublicKey, error) {

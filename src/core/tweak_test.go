@@ -1,4 +1,4 @@
-package tweak
+package core
 
 import (
 	"SilentPaymentAppBackend/src/common"
@@ -202,7 +202,7 @@ func TestFullTweak(t *testing.T) {
 		Status: common.TransactionStatus{},
 	}
 
-	tweak, err := ComputeTweak(tx)
+	tweak, err := ComputeTweakPerTx(tx)
 	if err != nil {
 		t.Error("error:", err)
 	}
@@ -269,7 +269,7 @@ func TestFullTweak2(t *testing.T) {
 		Status: common.TransactionStatus{},
 	}
 
-	tweak, err := ComputeTweak(tx)
+	tweak, err := ComputeTweakPerTx(tx)
 	if err != nil {
 		t.Error("error:", err)
 	}

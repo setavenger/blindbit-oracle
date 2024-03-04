@@ -3,6 +3,7 @@ package common
 import (
 	"encoding/hex"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/shopspring/decimal"
 )
 
 func ReverseBytes(bytes []byte) []byte {
@@ -39,4 +40,20 @@ func IndexOfHashInHeaderList(element *chainhash.Hash, data []*Header) int32 {
 		}
 	}
 	return -1 // return -1 if the element is not found
+}
+
+func ConvertFloatBTCtoSats(value float64) uint64 {
+	valueBTC := decimal.NewFromFloat(value)
+	satsConstant := decimal.NewFromInt(100_000_000)
+	// Multiply the BTC value by the number of Satoshis per Bitcoin
+	resultInDecimal := valueBTC.Mul(satsConstant)
+	// Get the integer part of the result
+	resultInInt := resultInDecimal.IntPart()
+	// Convert the integer result to uint64 and return
+	if resultInInt < 0 {
+		DebugLogger.Println("value:", value, "result:", resultInInt)
+		ErrorLogger.Fatalln("value was converted to negative value")
+	}
+
+	return uint64(resultInInt)
 }

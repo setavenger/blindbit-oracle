@@ -7,7 +7,6 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"log"
 )
 
 // todo add unique lock
@@ -279,7 +278,7 @@ func SaveTweakIndex(tweak common.TweakIndex) error {
 		return nil
 	}
 
-	log.Printf("Tweak inserted with ID: %s\n", result.InsertedID)
+	common.InfoLogger.Printf("Tweak inserted with ID: %s\n", result.InsertedID)
 	return nil
 }
 
@@ -303,7 +302,7 @@ func SaveSpentUTXO(utxo common.SpentUTXO) {
 		return
 	}
 
-	log.Printf("Spent Transaction output inserted with ID: %s\n", result.InsertedID)
+	common.InfoLogger.Printf("Spent Transaction output inserted with ID: %s\n", result.InsertedID)
 }
 
 func BulkInsertSpentUTXOs(utxos []common.SpentUTXO) error {
@@ -484,7 +483,7 @@ func RetrieveHeader(blockHash string) (*common.BlockHeader, error) {
 	err = coll.FindOne(context.TODO(), filter).Decode(&result)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			log.Println("No documents found!")
+			common.DebugLogger.Println("header not found in db")
 			return nil, errors.New("no documents found")
 		}
 		common.ErrorLogger.Println(err)
@@ -726,7 +725,7 @@ func CheckHeaderExists(blockHash string) (bool, error) {
 	err = coll.FindOne(context.TODO(), filter).Decode(&result)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			common.InfoLogger.Println("no headers in db yet")
+			common.DebugLogger.Println("header not in db yet")
 			return false, nil
 		}
 		common.ErrorLogger.Println(err)

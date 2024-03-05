@@ -1,8 +1,8 @@
 package server
 
 import (
+	"SilentPaymentAppBackend/src/common"
 	"github.com/gin-gonic/gin"
-	"log"
 )
 
 func RunServer(api *ApiHandler) {
@@ -19,6 +19,6 @@ func RunServer(api *ApiHandler) {
 	router.POST("/forward-tx", api.ForwardRawTX)
 
 	if err := router.Run(":8000"); err != nil {
-		log.Fatal(err)
+		common.ErrorLogger.Fatal(err)
 	}
 }

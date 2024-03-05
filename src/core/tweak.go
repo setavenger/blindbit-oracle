@@ -18,7 +18,10 @@ func ComputeTweaksForBlock(block *common.Block) (common.TweakIndex, error) {
 	tweakIndex.BlockHeight = block.Height
 	tweakIndex.BlockHash = block.Hash
 	for _, tx := range block.Txs {
-		common.DebugLogger.Printf("Processing transaction block: %s - tx: %s\n", block.Hash, tx.Hash)
+		if tx.Hash == "609e1214d499ca2a69f360cb6c829d25672b0d84937ae8f8052961d76514e05f" {
+			fmt.Println("pause")
+		}
+		common.DebugLogger.Printf("Processing transaction block: %s - tx: %s\n", block.Hash, tx.Txid)
 		for _, vout := range tx.Vout {
 			if vout.ScriptPubKey.Type == "witness_v1_taproot" { // only compute tweak for txs with a taproot output
 				tweakPerTx, err := ComputeTweakPerTx(&tx)
@@ -39,6 +42,7 @@ func ComputeTweaksForBlock(block *common.Block) (common.TweakIndex, error) {
 }
 
 func ComputeTweakPerTx(tx *common.Transaction) (*[33]byte, error) {
+	common.DebugLogger.Println("computing tweak for:", tx.Txid)
 	pubKeys := extractPubKeys(tx)
 	if pubKeys == nil {
 
@@ -48,7 +52,7 @@ func ComputeTweakPerTx(tx *common.Transaction) (*[33]byte, error) {
 		/*
 			// if the coinbase key exists and is not empty it's a coinbase transaction
 			if tx.Vin[0].Coinbase != "" {
-				common.DebugLogger.Printf("%s was coinbase\n", tx.Hash)
+				common.DebugLogger.Printf("%s was coinbase\n", tx.Txid)
 				return nil, nil
 			}
 			common.DebugLogger.Printf("%+v\n", tx)
@@ -58,6 +62,7 @@ func ComputeTweakPerTx(tx *common.Transaction) (*[33]byte, error) {
 	}
 	summedKey, err := sumPublicKeys(pubKeys)
 	if err != nil {
+		common.DebugLogger.Println("tx:", tx.Txid)
 		common.ErrorLogger.Println(err)
 		return nil, err
 	}
@@ -100,7 +105,7 @@ func extractPubKeys(tx *common.Transaction) []string {
 			// todo needs some extra parsing see reference implementation and bitcoin core wallet
 			pubKey, err := extractPubKeyHashFromP2TR(vin)
 			if err != nil {
-				common.DebugLogger.Println("txid:", tx.Hash)
+				common.DebugLogger.Println("txid:", tx.Txid)
 				common.DebugLogger.Println("Could not extract public key")
 				common.ErrorLogger.Println(err)
 				continue
@@ -122,13 +127,13 @@ func extractPubKeys(tx *common.Transaction) []string {
 						pubKeys = append(pubKeys, vin.Txinwitness[len(vin.Txinwitness)-1])
 					}
 				}
-				//common.DebugLogger.Println("txid:", tx.Hash)
+				//common.DebugLogger.Println("txid:", tx.Txid)
 				//common.WarningLogger.Printf("Found a vin that is 22 bytes but does not match p2wpkh signature")
 			}
 		case "pubkeyhash":
 			pubKey, err := extractFromP2PKH(vin)
 			if err != nil {
-				common.DebugLogger.Println("txid:", tx.Hash)
+				common.DebugLogger.Println("txid:", tx.Txid)
 				common.DebugLogger.Println("Could not extract public key")
 				common.ErrorLogger.Println(err)
 				continue
@@ -227,7 +232,13 @@ func sumPublicKeys(pubKeys []string) (*btcec.PublicKey, error) {
 			return nil, err
 		}
 		if len(bytesPubKey) == 32 {
-			bytesPubKey = bytes.Join([][]byte{{0x02}, bytesPubKey}, []byte{})
+			bytesPubKey, err = common.Get33PubKeyFrom32(bytesPubKey)
+			if err != nil {
+				common.ErrorLogger.Println(err)
+				// todo remove panics
+				panic(err)
+				return nil, err
+			}
 		}
 		publicKey, err := btcec.ParsePubKey(bytesPubKey)
 		if err != nil {

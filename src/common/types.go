@@ -58,13 +58,8 @@ type Transaction struct {
 	Txid    string `json:"txid"`
 	Hash    string `json:"hash"`
 	Version int    `json:"version"`
-	//Size     int    `json:"size"`
-	//Vsize    int    `json:"vsize"`
-	//Weight   int    `json:"weight"`
-	//Locktime int    `json:"locktime"`
-	Vin  []Vin  `json:"vin"`
-	Vout []Vout `json:"vout"`
-	//Hex      string `json:"hex"`  // not used to cut down on data
+	Vin     []Vin  `json:"vin"`
+	Vout    []Vout `json:"vout"`
 }
 
 // Vin represents a transaction input

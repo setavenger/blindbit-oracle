@@ -2,14 +2,10 @@ package main
 
 import (
 	"SilentPaymentAppBackend/src/common"
+	"SilentPaymentAppBackend/src/core"
 	"SilentPaymentAppBackend/src/db/mongodb"
-	"SilentPaymentAppBackend/src/p2p"
 	"SilentPaymentAppBackend/src/server"
-	"SilentPaymentAppBackend/src/tweak"
-	"encoding/hex"
 	"fmt"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcd/wire"
 	"io"
 	"log"
 	"os"
@@ -18,8 +14,6 @@ import (
 	"strings"
 	"time"
 )
-
-var catchUp uint64
 
 func init() {
 	err := os.Mkdir("./logs", 0750)
@@ -42,15 +36,35 @@ func init() {
 
 	// load env vars
 	catchUpRaw := os.Getenv("SYNC_CATCH_UP")
-	catchUp, err = strconv.ParseUint(catchUpRaw, 10, 64)
-	if err != nil {
-		common.ErrorLogger.Println(err)
+	if catchUpRaw != "" {
+		catchUpRawConv, err := strconv.ParseUint(catchUpRaw, 10, 32)
+		common.CatchUp = uint32(catchUpRawConv)
+		if err != nil {
+			common.ErrorLogger.Println(err)
+		}
 	}
-	if os.Getenv("MONGO_DB_CONNECTION") != "" {
-		common.MongoDBURI = os.Getenv("MONGO_DB_CONNECTION")
+
+	mongoDBConnection := os.Getenv("MONGO_DB_CONNECTION")
+	if mongoDBConnection != "" {
+		common.MongoDBURI = mongoDBConnection
+	}
+
+	rpcUser := os.Getenv("RPC_USER")
+	if rpcUser != "" {
+		common.RpcUser = rpcUser
+	} else {
+		panic("rpc user not set")
+	}
+
+	rpcPass := os.Getenv("RPC_PASS")
+	if rpcPass != "" {
+		common.RpcPass = rpcPass
+	} else {
+		panic("rpc pass not set")
 	}
 }
 
+// todo remove unnecessary panics
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile | log.Lmicroseconds)
 	interrupt := make(chan os.Signal, 1)
@@ -60,67 +74,12 @@ func main() {
 	// make sure everything is ready before we receive data
 	mongodb.CreateIndices()
 
-	messageOutChan := make(chan wire.Message, 100)
-	foundTaprootTxChan := make(chan chainhash.Hash, 300)
-	bestHeightChan := make(chan uint32)
-
-	doneChan := make(chan struct{})
-	fullySyncedChan := make(chan struct{})
-	peerRoutineEndedChan := make(chan struct{})
-
-	ph := p2p.PeerHandler{
-		DoneChan:           doneChan,
-		FoundTaprootTXChan: foundTaprootTxChan,
-		MessageOutChan:     messageOutChan,
-		SyncChan:           make(chan *wire.MsgHeaders),
-		BestHeightChan:     bestHeightChan,
-		FullySyncedChan:    fullySyncedChan,
-	}
-	go p2p.StartPeerRoutine(&ph, messageOutChan, doneChan, peerRoutineEndedChan)
-
-	go tweak.StartFetchRoutine(foundTaprootTxChan, &ph)
-	api := server.ApiHandler{
-		BestHeightChan: bestHeightChan,
-	}
-	go api.HandleBestHeightUpdate()
-	go server.RunServer(&api)
-	//<-time.After(1 * time.Second)
-
-	// wait for initial sync to be concluded
-	<-fullySyncedChan
-
-	// 162458 start of the signet experiments
-	// todo 162591 was error with p2pkh input, use for testing (b9d5c5dceed52098e0aa4529e55f5279b79bd510fce8429d6b0914e10215279f)
-	// first transactions around 163000
-	if catchUp > 0 {
-		for i, header := range ph.Headers {
-			if uint64(i) < catchUp {
-				continue
-			}
-			bytes, err := hex.DecodeString(header.BlockHash.String())
-			if err != nil {
-				panic(err)
-			}
-
-			messageOutChan <- p2p.MakeBlockRequest(bytes, wire.InvTypeBlock)
-			if i != len(ph.Headers)-1 {
-				<-time.After(1000 * time.Millisecond)
-			}
-		}
-	}
-
-	//bytes, err := hex.DecodeString("000000f88b466c41306080c0778ed1eea80cb185b4b80a803840a91c79df52c7")
-	//if err != nil {
-	//	panic(err)
-	//}
-	//messageOutChan <- p2p.MakeBlockRequest(bytes, wire.InvTypeBlock)
+	core.SyncChain()
+	core.CheckForNewBlockRoutine()
+	go server.RunServer(&server.ApiHandler{})
 
 	for true {
-
 		select {
-		case <-peerRoutineEndedChan:
-			common.InfoLogger.Println("Reconnecting to Peer")
-			go p2p.StartPeerRoutine(&ph, messageOutChan, doneChan, peerRoutineEndedChan)
 		case <-interrupt:
 			return
 		}

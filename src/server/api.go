@@ -7,37 +7,29 @@ import (
 	"encoding/hex"
 	"github.com/gin-gonic/gin"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"strconv"
 )
 
-type ApiHandler struct {
-	BestHeight     uint32
-	BestHeightChan chan uint32
-}
+// todo might not need ApiHandler struct if no data is stored within.
+//  Will keep for now just in case, so I don't have to refactor twice
+type ApiHandler struct{}
 
 type TxRequest struct {
 	Data string `form:"data" json:"data" binding:"required"`
 }
 
-func (h *ApiHandler) HandleBestHeightUpdate() {
-	for {
-		select {
-		case height := <-h.BestHeightChan:
-			if height < h.BestHeight {
-				continue
-			} else {
-				h.BestHeight = height
-				log.Println("new height", h.BestHeight)
-			}
-		}
-	}
-}
-
 func (h *ApiHandler) GetBestBlockHeight(c *gin.Context) {
+	lastHeader, err := mongodb.RetrieveLastHeader()
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "could could not retrieve data from database",
+		})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{
-		"block_height": h.BestHeight,
+		"block_height": lastHeader.Height,
 	})
 }
 
@@ -49,13 +41,21 @@ func (h *ApiHandler) GetCFilterByHeight(c *gin.Context) {
 	}
 	height, err := strconv.ParseUint(heightStr, 10, 32)
 	if err != nil {
+		common.ErrorLogger.Println(err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "could not parse height",
 		})
 		return
 	}
-	cFilter := mongodb.RetrieveCFilterByHeight(uint32(height))
-	//log.Println("Filter:", strconv.FormatUint(height, 10), cFilter)
+	cFilter, err := mongodb.RetrieveCFilterByHeight(uint32(height))
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "could could not retrieve data from database",
+		})
+		return
+	}
+
 	data := gin.H{
 		"filter_type":  cFilter.FilterType,
 		"block_height": cFilter.BlockHeight,
@@ -74,15 +74,16 @@ func (h *ApiHandler) GetCFilterByHeightTaproot(c *gin.Context) {
 	}
 	height, err := strconv.ParseUint(heightStr, 10, 32)
 	if err != nil {
+		common.ErrorLogger.Println(err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "could not parse height",
 		})
 		return
 	}
-	cFilter := mongodb.RetrieveCFilterByHeightTaproot(uint32(height))
-	common.DebugLogger.Println("Filter:", strconv.FormatUint(height, 10), cFilter)
+	cFilter, err := mongodb.RetrieveCFilterByHeight(uint32(height))
+
 	var data gin.H
-	if cFilter == nil {
+	if cFilter != nil {
 		data = gin.H{
 			"filter_type":  cFilter.FilterType,
 			"block_height": cFilter.BlockHeight,
@@ -109,12 +110,20 @@ func (h *ApiHandler) GetLightUTXOsByHeight(c *gin.Context) {
 	}
 	height, err := strconv.ParseUint(heightStr, 10, 32)
 	if err != nil {
+		common.ErrorLogger.Println(err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "could not parse height",
 		})
 		return
 	}
-	utxos := mongodb.RetrieveLightUTXOsByHeight(uint32(height))
+	utxos, err := mongodb.RetrieveLightUTXOsByHeight(uint32(height))
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "could could not retrieve data from database",
+		})
+		return
+	}
 	if utxos != nil {
 		c.JSON(200, utxos)
 	} else {
@@ -130,13 +139,21 @@ func (h *ApiHandler) GetSpentUTXOsByHeight(c *gin.Context) {
 	}
 	height, err := strconv.ParseUint(heightStr, 10, 32)
 	if err != nil {
+		common.ErrorLogger.Println(err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "could not parse height",
 		})
 		return
 	}
 
-	utxos := mongodb.RetrieveSpentUTXOsByHeight(uint32(height))
+	utxos, err := mongodb.RetrieveSpentUTXOsByHeight(uint32(height))
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "could could not retrieve data from database",
+		})
+		return
+	}
 	if utxos != nil {
 		c.JSON(200, utxos)
 	} else {
@@ -152,28 +169,38 @@ func (h *ApiHandler) GetTweakDataByHeight(c *gin.Context) {
 	}
 	height, err := strconv.ParseUint(heightStr, 10, 32)
 	if err != nil {
+		common.ErrorLogger.Println(err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "could not parse height",
 		})
 		return
 	}
-	tweakData := mongodb.RetrieveTweakDataByHeight(uint32(height))
-	serveTweakData := []string{}
-	for _, data := range tweakData {
-		serveTweakData = append(serveTweakData, hex.EncodeToString(data.Data[:]))
+	tweakIndex, err := mongodb.RetrieveTweakIndexByHeight(uint32(height))
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "could could not retrieve data from database",
+		})
+		return
 	}
+	//serveTweakData := []string{}
+	//for _, data := range tweakIndex.Data {
+	//	serveTweakData = append(serveTweakData, hex.EncodeToString(data[:]))
+	//}
 
-	c.JSON(200, serveTweakData)
+	c.JSON(200, tweakIndex)
 }
 
 func (h *ApiHandler) ForwardRawTX(c *gin.Context) {
 	var txRequest TxRequest
 	if err := c.ShouldBind(&txRequest); err != nil {
+		common.ErrorLogger.Println(err)
 		c.Status(http.StatusBadRequest)
 		return
 	}
 	err := forwardTxToMemPool(txRequest.Data)
 	if err != nil {
+		common.ErrorLogger.Println(err)
 		c.Status(http.StatusInternalServerError)
 		return
 	}
@@ -185,17 +212,17 @@ func forwardTxToMemPool(txHex string) error {
 
 	resp, err := http.Post(common.MempoolEndpoint, "application/x-www-form-urlencoded", bytes.NewBufferString(txHex))
 	if err != nil {
-		log.Printf("Failed to make request: %s\n", err)
+		common.ErrorLogger.Printf("Failed to make request: %s\n", err)
 		return err
 	}
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		log.Printf("Failed to read response: %s\n", err)
+		common.ErrorLogger.Printf("Failed to read response: %s\n", err)
 		return err
 	}
 
-	log.Println("Response:", string(body))
+	common.DebugLogger.Println("Response:", string(body))
 	return nil
 }

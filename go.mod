@@ -9,6 +9,7 @@ require (
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.0.1
 	github.com/btcsuite/btcutil v0.0.0-20190425235716-9e5f4b9a998d
 	github.com/gin-gonic/gin v1.9.1
+	github.com/shopspring/decimal v1.3.1
 	go.mongodb.org/mongo-driver v1.12.1
 )
 

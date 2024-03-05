@@ -7,37 +7,29 @@ import (
 	"encoding/hex"
 	"github.com/gin-gonic/gin"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"strconv"
 )
 
-type ApiHandler struct {
-	BestHeight     uint32
-	BestHeightChan chan uint32
-}
+// todo might not need ApiHandler struct if no data is stored within.
+//  Will keep for now just in case, so I don't have to refactor twice
+type ApiHandler struct{}
 
 type TxRequest struct {
 	Data string `form:"data" json:"data" binding:"required"`
 }
 
-func (h *ApiHandler) HandleBestHeightUpdate() {
-	for {
-		select {
-		case height := <-h.BestHeightChan:
-			if height < h.BestHeight {
-				continue
-			} else {
-				h.BestHeight = height
-				log.Println("new height", h.BestHeight)
-			}
-		}
-	}
-}
-
 func (h *ApiHandler) GetBestBlockHeight(c *gin.Context) {
+	lastHeader, err := mongodb.RetrieveLastHeader()
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "could could not retrieve data from database",
+		})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{
-		"block_height": h.BestHeight,
+		"block_height": lastHeader.Height,
 	})
 }
 

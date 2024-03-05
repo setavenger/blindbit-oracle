@@ -61,11 +61,11 @@ type RPCResponseBlockchainInfo struct {
 
 // BlockchainInfo represents the structure of the blockchain information
 type BlockchainInfo struct {
-	Chain         string  `json:"chain"`
-	Blocks        int     `json:"blocks"` // The current number of blocks processed in the server
-	Headers       int     `json:"headers"`
-	BestBlockHash string  `json:"bestblockhash"`
-	Difficulty    float64 `json:"difficulty"`
+	Chain         string `json:"chain"`
+	Blocks        uint32 `json:"blocks"` // The current number of blocks processed in the server
+	Headers       uint32 `json:"headers"`
+	BestBlockHash string `json:"bestblockhash"`
+	//Difficulty    float64 `json:"difficulty"`
 }
 
 func makeRPCRequest(rpcData interface{}, result interface{}) error {
@@ -108,6 +108,7 @@ func makeRPCRequest(rpcData interface{}, result interface{}) error {
 }
 
 func GetFullBlockPerBlockHash(blockHash string) (*common.Block, error) {
+	common.InfoLogger.Println("Fetching block:", blockHash)
 	rpcData := RPCRequest{
 		JSONRPC: "1.0",
 		ID:      "blindbit-silent-payment-backend-v0",
@@ -158,13 +159,13 @@ func GetBestBlockHash() (string, error) {
 	return rpcResponse.Result, nil
 }
 
-func GetBlockHeadersBatch(startHeight, count int) ([]BlockHeader, error) {
+func GetBlockHeadersBatch(startHeight, count uint32) ([]BlockHeader, error) {
 	// Prepare the batch request
 	batch := make([]RPCRequest, count)
 	headers := make([]BlockHeader, count)
 
 	// Initialize the batch with `getblockhash` requests
-	for i := 0; i < count; i++ {
+	for i := uint32(0); i < count; i++ {
 		batch[i] = RPCRequest{
 			JSONRPC: "1.0",
 			ID:      "blindbit-silent-payment-backend-v0",

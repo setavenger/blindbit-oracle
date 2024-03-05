@@ -1,7 +1,6 @@
 package common
 
 import (
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 )
 
@@ -11,8 +10,8 @@ type LightUTXO struct {
 	Value        uint64 `json:"value"`
 	ScriptPubKey string `json:"scriptpubkey"`
 	BlockHeight  uint32 `json:"block_height"`
-	BlockHeader  string `json:"block_header"`
-	Timestamp    uint32 `json:"timestamp"`
+	BlockHash    string `json:"block_hash"`
+	Timestamp    uint64 `json:"timestamp"`
 }
 
 type SpentUTXO struct {
@@ -22,7 +21,7 @@ type SpentUTXO struct {
 	Value       uint64 `json:"value"`
 	BlockHeight uint32 `json:"block_height"`
 	BlockHash   string `json:"block_header"`
-	Timestamp   uint32 `json:"timestamp"`
+	Timestamp   uint64 `json:"timestamp"`
 }
 
 type Filter struct {
@@ -38,18 +37,10 @@ type TweakIndex struct {
 	Data        [][33]byte `json:"data"`
 }
 
-// Header
-// Deprecated: old format
-type Header struct {
-	BlockHash *chainhash.Hash `bson:"block_hash"`
-	PrevBlock *chainhash.Hash `bson:"prev_block"`
-	Timestamp uint32          `bson:"timestamp"`
-}
-
 type BlockHeader struct {
 	Hash          string `bson:"hash"`
 	PrevBlockHash string `bson:"previousblockhash"`
-	Timestamp     uint32 `bson:"timestamp"`
+	Timestamp     uint64 `bson:"timestamp"`
 	Height        uint32 `bson:"height"`
 }
 
@@ -58,7 +49,7 @@ type Block struct {
 	Hash              string        `json:"hash"`
 	Height            uint32        `json:"height"`
 	PreviousBlockHash string        `json:"previousblockhash"`
-	Timestamp         uint32        `json:"time"`
+	Timestamp         uint64        `json:"time"`
 	Txs               []Transaction `json:"tx"`
 }
 

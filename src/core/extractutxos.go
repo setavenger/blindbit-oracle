@@ -16,6 +16,7 @@ func CreateLightUTXOs(block *common.Block) []*common.LightUTXO {
 					Value:        common.ConvertFloatBTCtoSats(vout.Value),
 					ScriptPubKey: vout.ScriptPubKey.Hex,
 					BlockHeight:  block.Height,
+					BlockHash:    block.Hash,
 					Timestamp:    block.Timestamp,
 				})
 			}
@@ -38,6 +39,9 @@ func extractSpentTaprootPubKeysFromTx(tx *common.Transaction, block *common.Bloc
 	var spentUTXOs []common.SpentUTXO
 
 	for _, vin := range tx.Vin {
+		if vin.Coinbase != "" {
+			continue
+		}
 		switch vin.Prevout.ScriptPubKey.Type {
 
 		case "witness_v1_taproot":

@@ -26,10 +26,16 @@ func BuildTaprootOnlyFilter(block *common.Block) []byte {
 		}
 	}
 
-	c := chainhash.Hash{}
-	err := c.SetBytes([]byte(block.Hash))
+	blockHashBytes, err := hex.DecodeString(block.Hash)
 	if err != nil {
-		common.DebugLogger.Println(block.Hash)
+		common.DebugLogger.Println("blockHash", block.Hash)
+		common.ErrorLogger.Fatalln(err)
+		return nil
+	}
+	c := chainhash.Hash{}
+	err = c.SetBytes(blockHashBytes)
+	if err != nil {
+		common.DebugLogger.Println("blockHash", block.Hash)
 		common.ErrorLogger.Fatalln(err)
 		return nil
 	}

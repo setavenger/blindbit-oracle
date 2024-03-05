@@ -1,9 +1,9 @@
 package common
 
 import (
-	"encoding/hex"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"crypto/sha256"
 	"github.com/shopspring/decimal"
+	"golang.org/x/crypto/ripemd160"
 )
 
 func ReverseBytes(bytes []byte) []byte {
@@ -11,35 +11,6 @@ func ReverseBytes(bytes []byte) []byte {
 		bytes[i], bytes[j] = bytes[j], bytes[i]
 	}
 	return bytes
-}
-
-func GetChainHash(hash chainhash.Hash) *chainhash.Hash {
-	bytes, err := hex.DecodeString(hash.String())
-	if err != nil {
-		panic(err)
-	}
-	bytes = bytes[:32]
-	//log.Println("Before reversing:", bytes)
-	//for i, j := 0, len(bytes)-1; i < j; i, j = i+1, j-1 {
-	//	bytes[i], bytes[j] = bytes[j], bytes[i]
-	//}
-	//log.Println("After reversing:", bytes)
-
-	newHash, err := chainhash.NewHash(bytes[:32])
-	if err != nil {
-		panic(err)
-	}
-	return newHash
-
-}
-
-func IndexOfHashInHeaderList(element *chainhash.Hash, data []*Header) int32 {
-	for i, v := range data {
-		if *element == *v.BlockHash {
-			return int32(i)
-		}
-	}
-	return -1 // return -1 if the element is not found
 }
 
 func ConvertFloatBTCtoSats(value float64) uint64 {
@@ -56,4 +27,19 @@ func ConvertFloatBTCtoSats(value float64) uint64 {
 	}
 
 	return uint64(resultInInt)
+}
+
+func HashTagged(tag string, msg []byte) [32]byte {
+	tagHash := sha256.Sum256([]byte(tag))
+	data := append(tagHash[:], tagHash[:]...)
+	data = append(data, msg...)
+	return sha256.Sum256(data)
+}
+
+// Hash160 performs a RIPEMD160(SHA256(data)) hash on the given data
+func Hash160(data []byte) []byte {
+	sha256Hash := sha256.Sum256(data)
+	ripemd160Hasher := ripemd160.New()
+	ripemd160Hasher.Write(sha256Hash[:]) // Hash the SHA256 hash
+	return ripemd160Hasher.Sum(nil)
 }

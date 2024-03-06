@@ -69,8 +69,9 @@ func init() {
 	}
 }
 
+// todo restructure tweak data storage to allow transaction cut-through
 // todo remove unnecessary panics
-// todo create test vector based on this type of transaction https://mempool.space/tx/1f2da66be5967c3a9e2670444daf0683a6ad47691b63298401440f3d9ff8c7e4
+// todo cut down on debug logging or find a more suitable solution for large logs
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile | log.Lmicroseconds)
 	interrupt := make(chan os.Signal, 1)

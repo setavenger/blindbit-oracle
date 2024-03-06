@@ -20,7 +20,7 @@ func SyncChain() {
 		common.ErrorLogger.Fatalln(err)
 		return
 	}
-	common.DebugLogger.Printf("blockchain info: %+v", blockchainInfo)
+	common.InfoLogger.Printf("blockchain info: %+v", blockchainInfo)
 
 	syncFromHeight := lastHeader.Height
 	if syncFromHeight < common.CatchUp {
@@ -48,6 +48,18 @@ func SyncChain() {
 
 		// Increment 'i' by 'step' after processing the headers
 		i += step
+
+		// this keeps the syncing process up to date with the chain tip
+		// if syncing takes longer we avoid querying too many previous blocks in `HandleBlock`
+		previousHeight := blockchainInfo.Blocks
+		blockchainInfo, err = GetBlockchainInfo()
+		if err != nil {
+			common.ErrorLogger.Println(err)
+			return
+		}
+		if previousHeight > blockchainInfo.Blocks {
+			common.InfoLogger.Println("increasing block height to:", blockchainInfo.Blocks)
+		}
 	}
 
 }

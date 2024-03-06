@@ -14,6 +14,7 @@ func CheckForNewBlockRoutine() {
 			hash, err := GetBestBlockHash()
 			if err != nil {
 				common.ErrorLogger.Println(err)
+				continue
 			}
 			CheckBlockHash(hash)
 		}
@@ -22,6 +23,10 @@ func CheckForNewBlockRoutine() {
 
 // CheckBlockHash checks whether the block hash has already been processed and will process the block if needed
 func CheckBlockHash(blockHash string) {
+	if len(blockHash) != 64 {
+		common.DebugLogger.Println()
+		return
+	}
 	// this method is preferred over lastHeader because then this function can be called for PreviousBlockHash
 	found, err := mongodb.CheckHeaderExists(blockHash)
 	if err != nil {
@@ -48,6 +53,7 @@ func CheckBlockHash(blockHash string) {
 		Timestamp:     block.Timestamp,
 		Height:        block.Height,
 	}})
+	common.InfoLogger.Println("successfully processed block:", block.Height)
 	if err != nil {
 		common.DebugLogger.Println(blockHash, "could not be handled")
 		return

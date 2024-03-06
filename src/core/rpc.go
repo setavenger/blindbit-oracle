@@ -89,6 +89,7 @@ func makeRPCRequest(rpcData interface{}, result interface{}) error {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
+		common.DebugLogger.Println("status code:", resp.Status)
 		return fmt.Errorf("error performing request: %v", err)
 	}
 	defer resp.Body.Close()
@@ -96,11 +97,14 @@ func makeRPCRequest(rpcData interface{}, result interface{}) error {
 	// Read and unmarshal the response...
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
+		common.DebugLogger.Println("status code:", resp.Status)
 		return fmt.Errorf("error reading response body: %v", err)
 	}
 
 	err = json.Unmarshal(body, result)
 	if err != nil {
+		common.DebugLogger.Println("status code:", resp.Status)
+		common.DebugLogger.Println("data:", string(body))
 		return fmt.Errorf("error unmarshaling response: %v", err)
 	}
 

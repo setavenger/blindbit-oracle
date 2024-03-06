@@ -3,7 +3,6 @@ package core
 import (
 	"SilentPaymentAppBackend/src/common"
 	"bytes"
-	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -18,10 +17,10 @@ func ComputeTweaksForBlock(block *common.Block) (common.TweakIndex, error) {
 	tweakIndex.BlockHeight = block.Height
 	tweakIndex.BlockHash = block.Hash
 	for _, tx := range block.Txs {
-		if tx.Hash == "609e1214d499ca2a69f360cb6c829d25672b0d84937ae8f8052961d76514e05f" {
+		if tx.Txid == "4ae6bdd31d43686ac27d58514d7936160ddbc1891295479ddd93980b4bb7cd6a" {
 			fmt.Println("pause")
 		}
-		common.DebugLogger.Printf("Processing transaction block: %s - tx: %s\n", block.Hash, tx.Txid)
+		//common.DebugLogger.Printf("Processing transaction block: %s - tx: %s\n", block.Hash, tx.Txid)
 		for _, vout := range tx.Vout {
 			if vout.ScriptPubKey.Type == "witness_v1_taproot" { // only compute tweak for txs with a taproot output
 				tweakPerTx, err := ComputeTweakPerTx(&tx)
@@ -208,8 +207,8 @@ func extractPubKeyHashFromP2TR(vin common.Vin) (string, error) {
 					// Skip if internal key is NUMS_H
 					return "", nil
 				}
-				// The internal key is the public key hash for P2TR
-				return hex.EncodeToString(internalKey), nil
+
+				return vin.Prevout.ScriptPubKey.Hex[4:], nil
 			}
 		}
 
@@ -347,37 +346,4 @@ func findSmallestOutpoint(tx *common.Transaction) ([]byte, error) {
 	}
 
 	return nil, errors.New("no valid outpoints found in transaction inputs")
-}
-
-// Deprecated: not used
-func computeOutpointsHash(tx *common.Transaction) ([32]byte, error) {
-	var completeBuffer [][]byte
-	for _, vin := range tx.Vin {
-		nBuf := new(bytes.Buffer)
-		err := binary.Write(nBuf, binary.LittleEndian, vin.Vout)
-		if err != nil {
-			common.ErrorLogger.Println(err)
-			return [32]byte{}, err
-		}
-		txIdBytes, err := hex.DecodeString(vin.Txid)
-		if err != nil {
-			return [32]byte{}, err
-		}
-		out := txIdBytes
-		out = common.ReverseBytes(out)
-		out = append(out, nBuf.Bytes()...)
-		completeBuffer = append(completeBuffer, out)
-	}
-
-	sort.Slice(completeBuffer, func(i, j int) bool {
-		return bytes.Compare(completeBuffer[i], completeBuffer[j]) < 0
-	})
-
-	// Join the byte slices together
-	var combined []byte
-	for _, d := range completeBuffer {
-		combined = append(combined, d...)
-	}
-
-	return sha256.Sum256(combined), nil
 }

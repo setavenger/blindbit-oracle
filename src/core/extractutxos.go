@@ -7,7 +7,6 @@ import (
 func CreateLightUTXOs(block *common.Block) []*common.LightUTXO {
 	var lightUTXOs []*common.LightUTXO
 	for _, tx := range block.Txs {
-		common.DebugLogger.Printf("Processing transaction block: %s - tx: %s\n", block.Hash, tx.Txid)
 		for _, vout := range tx.Vout {
 			if vout.ScriptPubKey.Type == "witness_v1_taproot" {
 				lightUTXOs = append(lightUTXOs, &common.LightUTXO{

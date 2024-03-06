@@ -12,32 +12,38 @@ import (
 	"sort"
 )
 
-func ComputeTweaksForBlock(block *common.Block) (common.TweakIndex, error) {
-	var tweakIndex common.TweakIndex
-	tweakIndex.BlockHeight = block.Height
-	tweakIndex.BlockHash = block.Hash
+func ComputeTweaksForBlock(block *common.Block) ([]common.Tweak, error) {
+	var tweaks []common.Tweak
+
 	for _, tx := range block.Txs {
 		if tx.Txid == "4ae6bdd31d43686ac27d58514d7936160ddbc1891295479ddd93980b4bb7cd6a" {
 			fmt.Println("pause")
 		}
 		//common.DebugLogger.Printf("Processing transaction block: %s - tx: %s\n", block.Hash, tx.Txid)
 		for _, vout := range tx.Vout {
-			if vout.ScriptPubKey.Type == "witness_v1_taproot" { // only compute tweak for txs with a taproot output
+			// only compute tweak for txs with a taproot output
+			if vout.ScriptPubKey.Type == "witness_v1_taproot" {
 				tweakPerTx, err := ComputeTweakPerTx(&tx)
 				if err != nil {
 					common.ErrorLogger.Println(err)
-					return common.TweakIndex{}, nil
+					return []common.Tweak{}, nil
 				}
-				// we do this check for the coinbase transactions which are not supposed to throw an error
+				// we do this check for not eligible transactions like coinbase transactions
+				// they are not supposed to throw an error
 				// but also don't have a tweak that can be computed
 				if tweakPerTx != nil {
-					tweakIndex.Data = append(tweakIndex.Data, *tweakPerTx)
+					tweaks = append(tweaks, common.Tweak{
+						BlockHash:   block.Hash,
+						BlockHeight: block.Height,
+						Txid:        tx.Txid,
+						Data:        *tweakPerTx,
+					})
 				}
 				break
 			}
 		}
 	}
-	return tweakIndex, nil
+	return tweaks, nil
 }
 
 func ComputeTweakPerTx(tx *common.Transaction) (*[33]byte, error) {
@@ -230,14 +236,11 @@ func sumPublicKeys(pubKeys []string) (*btcec.PublicKey, error) {
 			panic(err)
 			return nil, err
 		}
+
+		// for extracted keys which are only 32 bytes (taproot) we assume even parity
+		// as we don't need the y-coordinate for any computation we can simply prepend 0x02
 		if len(bytesPubKey) == 32 {
-			bytesPubKey, err = common.Get33PubKeyFrom32(bytesPubKey)
-			if err != nil {
-				common.ErrorLogger.Println(err)
-				// todo remove panics
-				panic(err)
-				return nil, err
-			}
+			bytesPubKey = bytes.Join([][]byte{{0x02}, bytesPubKey}, []byte{})
 		}
 		publicKey, err := btcec.ParsePubKey(bytesPubKey)
 		if err != nil {
@@ -257,9 +260,6 @@ func sumPublicKeys(pubKeys []string) (*btcec.PublicKey, error) {
 			sY := fmt.Sprintf("%x", y)
 			sX = fmt.Sprintf("%064s", sX)
 			sY = fmt.Sprintf("%064s", sY)
-			common.DebugLogger.Println(fmt.Sprintf("%s", sX))
-			common.DebugLogger.Println(fmt.Sprintf("%s", sY))
-			common.DebugLogger.Println(fmt.Sprintf("04%s%s", sX, sY))
 			decodeString, err = hex.DecodeString(fmt.Sprintf("04%s%s", sX, sY))
 			if err != nil {
 				common.ErrorLogger.Println(err)

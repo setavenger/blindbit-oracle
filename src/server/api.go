@@ -59,7 +59,7 @@ func (h *ApiHandler) GetCFilterByHeight(c *gin.Context) {
 	data := gin.H{
 		"filter_type":  cFilter.FilterType,
 		"block_height": cFilter.BlockHeight,
-		"block_header": cFilter.BlockHeader,
+		"block_header": cFilter.BlockHash,
 		"data":         hex.EncodeToString(cFilter.Data),
 	}
 
@@ -87,7 +87,7 @@ func (h *ApiHandler) GetCFilterByHeightTaproot(c *gin.Context) {
 		data = gin.H{
 			"filter_type":  cFilter.FilterType,
 			"block_height": cFilter.BlockHeight,
-			"block_header": cFilter.BlockHeader,
+			"block_header": cFilter.BlockHash,
 			"data":         hex.EncodeToString(cFilter.Data),
 		}
 	} else {
@@ -161,6 +161,8 @@ func (h *ApiHandler) GetSpentUTXOsByHeight(c *gin.Context) {
 	}
 }
 
+// GetTweakDataByHeight serves tweak data as json array of tweaks (33 byte as hex-formatted)
+// todo can be changed to serve with verbosity aka serve with txid or even block data (height, hash)
 func (h *ApiHandler) GetTweakDataByHeight(c *gin.Context) {
 	heightStr := c.Param("blockheight")
 	if heightStr == "" {
@@ -175,7 +177,7 @@ func (h *ApiHandler) GetTweakDataByHeight(c *gin.Context) {
 		})
 		return
 	}
-	tweakIndex, err := mongodb.RetrieveTweakIndexByHeight(uint32(height))
+	tweaks, err := mongodb.RetrieveTweakDataByHeight(uint32(height))
 	if err != nil {
 		common.ErrorLogger.Println(err)
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -183,12 +185,12 @@ func (h *ApiHandler) GetTweakDataByHeight(c *gin.Context) {
 		})
 		return
 	}
-	//serveTweakData := []string{}
-	//for _, data := range tweakIndex.Data {
-	//	serveTweakData = append(serveTweakData, hex.EncodeToString(data[:]))
-	//}
+	var serveTweakData []string
+	for _, tweak := range tweaks {
+		serveTweakData = append(serveTweakData, hex.EncodeToString(tweak.Data[:]))
+	}
 
-	c.JSON(200, tweakIndex)
+	c.JSON(200, serveTweakData)
 }
 
 func (h *ApiHandler) ForwardRawTX(c *gin.Context) {

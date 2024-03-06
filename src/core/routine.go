@@ -110,7 +110,7 @@ func HandleBlock(blockHash string) (*common.Block, error) {
 		FilterType:  4,
 		BlockHeight: block.Height,
 		Data:        cFilterTaproot,
-		BlockHeader: block.Hash,
+		BlockHash:   block.Hash,
 	})
 	if err != nil {
 		common.ErrorLogger.Println(err)
@@ -122,7 +122,7 @@ func HandleBlock(blockHash string) (*common.Block, error) {
 		common.ErrorLogger.Println(err)
 		return nil, err
 	}
-	err = mongodb.SaveTweakIndex(tweaksForBlock)
+	err = mongodb.BulkInsertTweaks(tweaksForBlock)
 	if err != nil {
 		common.ErrorLogger.Println(err)
 		return nil, err

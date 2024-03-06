@@ -5,38 +5,41 @@ import (
 )
 
 type LightUTXO struct {
-	TxId         string `json:"txid"`
-	Vout         uint32 `json:"vout"`
-	Value        uint64 `json:"value"`
-	ScriptPubKey string `json:"scriptpubkey"`
-	BlockHeight  uint32 `json:"block_height"`
-	BlockHash    string `json:"block_hash"`
-	Timestamp    uint64 `json:"timestamp"`
+	TxId         string `json:"txid" bson:"txid"`
+	Vout         uint32 `json:"vout" bson:"vout"`
+	Value        uint64 `json:"value" bson:"value"`
+	ScriptPubKey string `json:"scriptpubkey" bson:"scriptpubkey"`
+	BlockHeight  uint32 `json:"block_height" bson:"block_height"`
+	BlockHash    string `json:"block_hash" bson:"block_hash"`
+	Timestamp    uint64 `json:"timestamp" bson:"timestamp"`
 }
 
 type SpentUTXO struct {
-	SpentIn     string `json:"spent_in"`
-	Txid        string `json:"txid"`
-	Vout        uint32 `json:"vout"`
-	Value       uint64 `json:"value"`
-	BlockHeight uint32 `json:"block_height"`
-	BlockHash   string `json:"block_header"`
-	Timestamp   uint64 `json:"timestamp"`
+	SpentIn     string `json:"spent_in" bson:"spentin"`
+	Txid        string `json:"txid" bson:"txid"`
+	Vout        uint32 `json:"vout" bson:"vout"`
+	Value       uint64 `json:"value" bson:"value"`
+	BlockHeight uint32 `json:"block_height" bson:"block_height"`
+	BlockHash   string `json:"block_hash" bson:"block_hash"`
+	Timestamp   uint64 `json:"timestamp" bson:"timestamp"`
 }
 
 type Filter struct {
-	FilterType  wire.FilterType `json:"filter_type"`
-	BlockHeight uint32          `json:"block_height"`
+	FilterType  wire.FilterType `json:"filter_type" bson:"filter_type"`
+	BlockHeight uint32          `json:"block_height" bson:"block_height"`
 	Data        []byte          `json:"data" bson:"data"`
-	BlockHeader string          `json:"block_header"`
+	BlockHash   string          `json:"block_hash" bson:"block_hash"`
 }
 
-type TweakIndex struct {
-	BlockHash   string     `json:"blockHash" bson:"block_hash"`
-	BlockHeight uint32     `json:"block_height" bson:"block_height"`
-	Data        [][33]byte `json:"data"`
+type Tweak struct {
+	BlockHash   string   `json:"block_hash" bson:"block_hash"`
+	BlockHeight uint32   `json:"block_height" bson:"block_height"`
+	Txid        string   `json:"txid" bson:"txid"`
+	Data        [33]byte `json:"data"`
 }
 
+// BlockHeader struct to hold relevant BlockHeader data
+// todo change naming to be consistent?
 type BlockHeader struct {
 	Hash          string `bson:"hash"`
 	PrevBlockHash string `bson:"previousblockhash"`

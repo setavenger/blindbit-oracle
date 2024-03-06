@@ -185,7 +185,7 @@ func extractFromP2PKH(vin common.Vin) ([]byte, error) {
 
 func extractPubKeyHashFromP2TR(vin common.Vin) (string, error) {
 	witnessStack := vin.Txinwitness
-	common.DebugLogger.Printf("%s:%d - %+v", vin.Txid, vin.Vout, witnessStack)
+	//common.DebugLogger.Printf("%s:%d - %+v", vin.Txid, vin.Vout, witnessStack)
 
 	if len(witnessStack) >= 1 {
 		// Remove annex if present
@@ -193,7 +193,7 @@ func extractPubKeyHashFromP2TR(vin common.Vin) (string, error) {
 			witnessStack = witnessStack[:len(witnessStack)-1]
 		}
 
-		common.DebugLogger.Printf("%s:%d - %+v", vin.Txid, vin.Vout, witnessStack)
+		//common.DebugLogger.Printf("%s:%d - %+v", vin.Txid, vin.Vout, witnessStack)
 
 		if len(witnessStack) > 1 {
 			// Script-path spend

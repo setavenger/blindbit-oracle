@@ -69,6 +69,7 @@ func init() {
 	}
 }
 
+// todo include redundancy for when rpc calls are failing (probably due to networking issues in testing home environment)
 // todo review all duplicate key error exemptions and raise to error/warn from debug
 // todo explore how many indices are too many,
 //  in order to speed up queries I'm adding several indices

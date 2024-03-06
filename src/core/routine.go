@@ -67,6 +67,7 @@ func HandleBlock(blockHash string) (*common.Block, error) {
 		common.ErrorLogger.Println(err)
 		return nil, err
 	}
+	common.InfoLogger.Println("Received block:", blockHash)
 
 	// check whether previous block has already been processed
 	// we do the check before so that we can subsequently delete spent UTXOs

@@ -141,6 +141,19 @@ func CreateIndexTweaks() {
 		panic(err)
 	}
 	common.DebugLogger.Println("Created Index with name:", nameIndex)
+
+	coll = client.Database("tweak_data").Collection("tweaks")
+	indexModel = mongo.IndexModel{
+		Keys: bson.D{
+			{Key: "txid", Value: 1},
+		},
+	}
+	nameIndex, err = coll.Indexes().CreateOne(context.TODO(), indexModel)
+	if err != nil {
+		// will panic because it only runs on startup and should be executed
+		panic(err)
+	}
+	common.DebugLogger.Println("Created Index with name:", nameIndex)
 }
 
 // CreateIndexHeaders will panic because it only runs on startup and should be executed
@@ -541,6 +554,8 @@ func RetrieveTweakDataByHeight(blockHeight uint32) ([]common.Tweak, error) {
 }
 
 func DeleteLightUTXOsBatch(spentUTXOs []common.SpentUTXO) error {
+	common.InfoLogger.Println("Deleting LightUTXOs")
+
 	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(common.MongoDBURI))
 	if err != nil {
 		common.ErrorLogger.Println(err)
@@ -554,8 +569,10 @@ func DeleteLightUTXOsBatch(spentUTXOs []common.SpentUTXO) error {
 
 	coll := client.Database("transaction_outputs").Collection("unspent")
 
+	var txIds []string
 	var writes []mongo.WriteModel
-	for _, spentUTXO := range spentUTXOs {
+	for _, spentUTXO := range spentUTXOs { // todo might need to be changed to deleteMany
+		txIds = append(txIds, spentUTXO.Txid)
 		filter := bson.D{{"txid", spentUTXO.Txid}, {"vout", spentUTXO.Vout}}
 		model := mongo.NewDeleteOneModel().SetFilter(filter)
 		writes = append(writes, model)
@@ -573,13 +590,14 @@ func DeleteLightUTXOsBatch(spentUTXOs []common.SpentUTXO) error {
 	common.InfoLogger.Println("Attempting cut through")
 	// todo can this be outsourced into a go routine
 	//  does this take too long?
-	for _, spentUTXO := range spentUTXOs {
-		err = chainedTweakDeletion(client, spentUTXO.Txid)
-		if err != nil {
-			common.DebugLogger.Printf("Failed on: %+v\n", spentUTXO)
-			common.ErrorLogger.Println(err)
-			return err
+	err = chainedTweakDeletion(client, txIds)
+	if err != nil {
+		if len(spentUTXOs) > 0 {
+			// just in case we see a block with no taproot outputs, unlikely, but you never know
+			common.DebugLogger.Printf("Deletion failed on block: %s\n", spentUTXOs[0].BlockHash)
 		}
+		common.ErrorLogger.Println(err)
+		return err
 	}
 
 	return nil
@@ -587,41 +605,74 @@ func DeleteLightUTXOsBatch(spentUTXOs []common.SpentUTXO) error {
 
 // chainedTweakDeletion chained deletion of tweak data if no more utxos with a certain txid are left
 // runs whenever a light UTXO is deleted in order to keep the database lean and remove unneeded tweaks
-func chainedTweakDeletion(client *mongo.Client, txId string) error {
+func chainedTweakDeletion(client *mongo.Client, txIds []string) error {
 	// check whether we still have a light utxo for that txid
 	coll := client.Database("transaction_outputs").Collection("unspent")
-	filter := bson.D{{"txid", txId}}
-	result := coll.FindOne(context.TODO(), filter)
+	// Define your array of txids you want to query
 
-	var utxo common.LightUTXO
+	// Create a filter to match documents with txid in the txids array
+	filter := bson.M{"txid": bson.M{"$in": txIds}}
 
-	err := result.Decode(&utxo)
-	// "no documents" means none was found and is
-	if err != nil && err.Error() != "mongo: no documents in result" {
-		common.ErrorLogger.Println(err)
-		return err
-	}
-
-	// we exit because we found an UTXO if none was found it wouldn't have a txid
-	if utxo.TxId != "" {
-		return err
-	}
-
-	// no match was found, so we delete the tweak data based on the txid
-	var resultDelete *mongo.DeleteResult
-	coll = client.Database("tweak_data").Collection("tweaks")
-	resultDelete, err = coll.DeleteOne(context.TODO(), filter)
+	common.InfoLogger.Println("looking for light utxos...")
+	cursor, err := coll.Find(context.TODO(), filter)
 	if err != nil {
 		common.ErrorLogger.Println(err)
 		return err
 	}
 
-	if resultDelete.DeletedCount == 1 {
-		common.DebugLogger.Printf("Deleted tweak data for %s\n", txId)
-	} else if resultDelete.DeletedCount > 1 {
-		common.DebugLogger.Printf("Deleted %d tweak data for %s\n", resultDelete.DeletedCount, txId)
-		common.WarningLogger.Println("this should not happen")
+	var results []common.LightUTXO
+	if err = cursor.All(context.TODO(), &results); err != nil {
+		common.ErrorLogger.Println(err)
+		return err
 	}
+	common.InfoLogger.Println("processed light utxos...")
+
+	foundTxIds := make(map[string]bool)
+
+	for _, lightUTXO := range results {
+		// Mark the txid as found
+		foundTxIds[lightUTXO.TxId] = true
+	}
+
+	// we exit because we found an UTXO if none was found it wouldn't have a txid
+	// List for txids that were not found
+	var notFoundTxIds []string
+	// Check which txids were not found
+	for _, txid := range txIds {
+		if !foundTxIds[txid] {
+			notFoundTxIds = append(notFoundTxIds, txid)
+		}
+	}
+
+	// remove duplicates
+	// notFoundTxIdsClean can contain many more possible txids to delete than will be deleted in the end
+	// reason: because we don't index the chain from genesis there will be spent utxos
+	// for which we don't have an entry in the DB both light UTXOs and tweaks
+	uniqueTxIdsMap := make(map[string]struct{}) // Use a map to hold unique txIds
+	var notFoundTxIdsClean []string             // This will hold your deduplicated slice
+
+	for _, txId := range notFoundTxIds {
+		if _, exists := uniqueTxIdsMap[txId]; !exists {
+			uniqueTxIdsMap[txId] = struct{}{}                     // Mark the txId as seen
+			notFoundTxIdsClean = append(notFoundTxIdsClean, txId) // Add to the deduplicated slice
+		}
+	}
+
+	common.InfoLogger.Println("determined obsolete txids...")
+
+	// no match was found, so we delete the tweak data based on the txid
+	coll = client.Database("tweak_data").Collection("tweaks")
+
+	filterD := bson.M{"txid": bson.M{"$in": notFoundTxIdsClean}}
+
+	result, err := coll.DeleteMany(context.TODO(), filterD)
+
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return err
+	}
+
+	common.InfoLogger.Printf("Deleted %d tweaks from db\n", result.DeletedCount)
 
 	return err
 }

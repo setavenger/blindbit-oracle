@@ -69,6 +69,12 @@ func init() {
 	}
 }
 
+// todo fix that chained deletion can only happen in combination with light utxo deletion
+//  if light utxos are deleted and program is stopped tweaks won't be deleted on next attempt
+//  because all light utxos are already gone
+// todo make a move to postgres instead of MongoDB
+//  after revamp we do not need any nested structs
+//  hence we can show everything in simple tables in postgres
 // todo restructure tweak data storage to allow transaction cut-through
 // todo remove unnecessary panics
 // todo cut down on debug logging or find a more suitable solution for large logs

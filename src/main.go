@@ -69,9 +69,10 @@ func init() {
 	}
 }
 
-// todo fix that chained deletion can only happen in combination with light utxo deletion
-//  if light utxos are deleted and program is stopped tweaks won't be deleted on next attempt
-//  because all light utxos are already gone
+// todo review all duplicate key error exemptions and raise to error/warn from debug
+// todo explore how many indices are too many,
+//  in order to speed up queries I'm adding several indices
+//  brings us back to potentially switching DB stack
 // todo make a move to postgres instead of MongoDB
 //  after revamp we do not need any nested structs
 //  hence we can show everything in simple tables in postgres

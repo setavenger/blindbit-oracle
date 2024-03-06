@@ -3,6 +3,7 @@ package mongodb
 import (
 	"SilentPaymentAppBackend/src/common"
 	"context"
+	"fmt"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -18,7 +19,7 @@ func CreateIndices() {
 	//CreateIndexTransactions()
 	CreateIndexCFilters()
 	CreateIndexTweaks()
-	CreateIndexUTXOs()
+	CreateIndexLightUTXOs()
 	CreateIndexSpentTXOs()
 	CreateIndexHeaders()
 	common.InfoLogger.Println("created database indices")
@@ -42,7 +43,7 @@ func CreateIndexCFilters() {
 	indexModel := mongo.IndexModel{
 		Keys: bson.M{
 			// in rare case counting is off we can then reindex from local DB data
-			"blockheader": 1,
+			"block_hash": 1, // todo is it enough to just check the blockHash?
 		},
 		Options: options.Index().SetUnique(true),
 	}
@@ -55,8 +56,8 @@ func CreateIndexCFilters() {
 	common.DebugLogger.Println("Created Index with name:", nameIndex)
 }
 
-// CreateIndexUTXOs will panic because it only runs on startup and should be executed
-func CreateIndexUTXOs() {
+// CreateIndexLightUTXOs will panic because it only runs on startup and should be executed
+func CreateIndexLightUTXOs() {
 	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(common.MongoDBURI))
 	if err != nil {
 		panic(err)
@@ -81,7 +82,33 @@ func CreateIndexUTXOs() {
 		// will panic because it only runs on startup and should be executed
 		panic(err)
 	}
+
 	common.DebugLogger.Println("Created Index with name:", nameIndex)
+
+	indexModel = mongo.IndexModel{
+		Keys: bson.D{
+			{Key: "txid", Value: 1},
+		},
+	}
+	nameIndex, err = coll.Indexes().CreateOne(context.TODO(), indexModel)
+	if err != nil {
+		// will panic because it only runs on startup and should be executed
+		panic(err)
+	}
+	common.DebugLogger.Println("Created Index with name:", nameIndex)
+
+	indexModel = mongo.IndexModel{
+		Keys: bson.D{
+			{Key: "tx_id_vout", Value: 1},
+		},
+	}
+	nameIndex, err = coll.Indexes().CreateOne(context.TODO(), indexModel)
+	if err != nil {
+		// will panic because it only runs on startup and should be executed
+		panic(err)
+	}
+	common.DebugLogger.Println("Created Index with name:", nameIndex)
+
 }
 
 // CreateIndexSpentTXOs will panic because it only runs on startup and should be executed
@@ -142,7 +169,6 @@ func CreateIndexTweaks() {
 	}
 	common.DebugLogger.Println("Created Index with name:", nameIndex)
 
-	coll = client.Database("tweak_data").Collection("tweaks")
 	indexModel = mongo.IndexModel{
 		Keys: bson.D{
 			{Key: "txid", Value: 1},
@@ -222,7 +248,7 @@ func SaveFilterTaproot(filter *common.Filter) error {
 	if result == nil {
 		return nil
 	}
-	common.InfoLogger.Println("Taproot Filter inserted", "ID", result.InsertedID)
+	common.InfoLogger.Println("Taproot Filter inserted")
 	return nil
 }
 
@@ -270,7 +296,7 @@ func BulkInsertSpentUTXOs(utxos []common.SpentUTXO) error {
 		}
 	}
 
-	common.DebugLogger.Printf("Bulk inserted %d new spent utxos\n", len(result.InsertedIDs))
+	common.InfoLogger.Printf("Bulk inserted %d new spent utxos\n", len(result.InsertedIDs))
 	return nil
 }
 
@@ -354,6 +380,7 @@ func BulkInsertLightUTXOs(utxos []*common.LightUTXO) error {
 }
 
 func BulkInsertTweaks(tweaks []common.Tweak) error {
+	common.InfoLogger.Println("Inserting tweaks...")
 	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(common.MongoDBURI))
 	if err != nil {
 		common.ErrorLogger.Println(err)
@@ -569,17 +596,14 @@ func DeleteLightUTXOsBatch(spentUTXOs []common.SpentUTXO) error {
 
 	coll := client.Database("transaction_outputs").Collection("unspent")
 
-	var txIds []string
-	var writes []mongo.WriteModel
-	for _, spentUTXO := range spentUTXOs { // todo might need to be changed to deleteMany
-		txIds = append(txIds, spentUTXO.Txid)
-		filter := bson.D{{"txid", spentUTXO.Txid}, {"vout", spentUTXO.Vout}}
-		model := mongo.NewDeleteOneModel().SetFilter(filter)
-		writes = append(writes, model)
+	var txidVouts []string
+	for _, spentUTXO := range spentUTXOs {
+		txidVouts = append(txidVouts, fmt.Sprintf("%s:%d", spentUTXO.Txid, spentUTXO.Vout))
 	}
 
-	opts := options.BulkWrite().SetOrdered(false) // SetOrdered(false) allows operations to be executed in parallel, improving performance
-	result, err := coll.BulkWrite(context.TODO(), writes, opts)
+	filter := bson.M{"tx_id_vout": bson.M{"$in": txidVouts}}
+
+	result, err := coll.DeleteMany(context.TODO(), filter)
 	if err != nil {
 		common.ErrorLogger.Println(err)
 		return err
@@ -588,6 +612,10 @@ func DeleteLightUTXOsBatch(spentUTXOs []common.SpentUTXO) error {
 	common.InfoLogger.Printf("Deleted %d LightUTXOs\n", result.DeletedCount)
 
 	common.InfoLogger.Println("Attempting cut through")
+	var txIds []string
+	for _, spentUTXO := range spentUTXOs { // todo might need to be changed to deleteMany
+		txIds = append(txIds, spentUTXO.Txid)
+	}
 	// todo can this be outsourced into a go routine
 	//  does this take too long?
 	err = chainedTweakDeletion(client, txIds)
@@ -627,34 +655,34 @@ func chainedTweakDeletion(client *mongo.Client, txIds []string) error {
 	}
 	common.InfoLogger.Println("processed light utxos...")
 
-	foundTxIds := make(map[string]bool)
+	foundTxids := make(map[string]bool)
 
 	for _, lightUTXO := range results {
 		// Mark the txid as found
-		foundTxIds[lightUTXO.TxId] = true
+		foundTxids[lightUTXO.Txid] = true
 	}
 
 	// we exit because we found an UTXO if none was found it wouldn't have a txid
 	// List for txids that were not found
-	var notFoundTxIds []string
+	var notFoundTxids []string
 	// Check which txids were not found
 	for _, txid := range txIds {
-		if !foundTxIds[txid] {
-			notFoundTxIds = append(notFoundTxIds, txid)
+		if !foundTxids[txid] {
+			notFoundTxids = append(notFoundTxids, txid)
 		}
 	}
 
 	// remove duplicates
-	// notFoundTxIdsClean can contain many more possible txids to delete than will be deleted in the end
+	// notFoundTxidsClean can contain many more possible txids to delete than will be deleted in the end
 	// reason: because we don't index the chain from genesis there will be spent utxos
 	// for which we don't have an entry in the DB both light UTXOs and tweaks
-	uniqueTxIdsMap := make(map[string]struct{}) // Use a map to hold unique txIds
-	var notFoundTxIdsClean []string             // This will hold your deduplicated slice
+	uniqueTxidsMap := make(map[string]struct{}) // Use a map to hold unique txIds
+	var notFoundTxidsClean []string             // This will hold your deduplicated slice
 
-	for _, txId := range notFoundTxIds {
-		if _, exists := uniqueTxIdsMap[txId]; !exists {
-			uniqueTxIdsMap[txId] = struct{}{}                     // Mark the txId as seen
-			notFoundTxIdsClean = append(notFoundTxIdsClean, txId) // Add to the deduplicated slice
+	for _, txId := range notFoundTxids {
+		if _, exists := uniqueTxidsMap[txId]; !exists {
+			uniqueTxidsMap[txId] = struct{}{}                     // Mark the txId as seen
+			notFoundTxidsClean = append(notFoundTxidsClean, txId) // Add to the deduplicated slice
 		}
 	}
 
@@ -663,10 +691,9 @@ func chainedTweakDeletion(client *mongo.Client, txIds []string) error {
 	// no match was found, so we delete the tweak data based on the txid
 	coll = client.Database("tweak_data").Collection("tweaks")
 
-	filterD := bson.M{"txid": bson.M{"$in": notFoundTxIdsClean}}
+	filterD := bson.M{"txid": bson.M{"$in": notFoundTxidsClean}}
 
 	result, err := coll.DeleteMany(context.TODO(), filterD)
-
 	if err != nil {
 		common.ErrorLogger.Println(err)
 		return err

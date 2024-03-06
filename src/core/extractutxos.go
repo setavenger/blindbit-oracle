@@ -2,6 +2,7 @@ package core
 
 import (
 	"SilentPaymentAppBackend/src/common"
+	"fmt"
 )
 
 func CreateLightUTXOs(block *common.Block) []*common.LightUTXO {
@@ -10,13 +11,14 @@ func CreateLightUTXOs(block *common.Block) []*common.LightUTXO {
 		for _, vout := range tx.Vout {
 			if vout.ScriptPubKey.Type == "witness_v1_taproot" {
 				lightUTXOs = append(lightUTXOs, &common.LightUTXO{
-					TxId:         tx.Txid,
+					Txid:         tx.Txid,
 					Vout:         vout.N,
 					Value:        common.ConvertFloatBTCtoSats(vout.Value),
 					ScriptPubKey: vout.ScriptPubKey.Hex,
 					BlockHeight:  block.Height,
 					BlockHash:    block.Hash,
 					Timestamp:    block.Timestamp,
+					TxidVout:     fmt.Sprintf("%s:%d", tx.Txid, vout.N),
 				})
 			}
 		}

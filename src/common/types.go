@@ -5,13 +5,14 @@ import (
 )
 
 type LightUTXO struct {
-	TxId         string `json:"txid" bson:"txid"`
+	Txid         string `json:"txid" bson:"txid"`
 	Vout         uint32 `json:"vout" bson:"vout"`
 	Value        uint64 `json:"value" bson:"value"`
 	ScriptPubKey string `json:"scriptpubkey" bson:"scriptpubkey"`
 	BlockHeight  uint32 `json:"block_height" bson:"block_height"`
 	BlockHash    string `json:"block_hash" bson:"block_hash"`
 	Timestamp    uint64 `json:"timestamp" bson:"timestamp"`
+	TxidVout     string `json:"tx_id_vout" bson:"tx_id_vout"` // todo port to SpentUTXO if successfull
 }
 
 type SpentUTXO struct {

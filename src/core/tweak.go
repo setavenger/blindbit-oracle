@@ -16,9 +16,6 @@ func ComputeTweaksForBlock(block *common.Block) ([]common.Tweak, error) {
 	var tweaks []common.Tweak
 
 	for _, tx := range block.Txs {
-		if tx.Txid == "4ae6bdd31d43686ac27d58514d7936160ddbc1891295479ddd93980b4bb7cd6a" {
-			fmt.Println("pause")
-		}
 		//common.DebugLogger.Printf("Processing transaction block: %s - tx: %s\n", block.Hash, tx.Txid)
 		for _, vout := range tx.Vout {
 			// only compute tweak for txs with a taproot output
@@ -26,7 +23,7 @@ func ComputeTweaksForBlock(block *common.Block) ([]common.Tweak, error) {
 				tweakPerTx, err := ComputeTweakPerTx(&tx)
 				if err != nil {
 					common.ErrorLogger.Println(err)
-					return []common.Tweak{}, nil
+					return []common.Tweak{}, err
 				}
 				// we do this check for not eligible transactions like coinbase transactions
 				// they are not supposed to throw an error

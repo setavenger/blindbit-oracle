@@ -57,7 +57,7 @@ func SyncChain() {
 			common.ErrorLogger.Println(err)
 			return
 		}
-		if previousHeight > blockchainInfo.Blocks {
+		if previousHeight < blockchainInfo.Blocks {
 			common.InfoLogger.Println("increasing block height to:", blockchainInfo.Blocks)
 		}
 	}

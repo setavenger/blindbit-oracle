@@ -12,7 +12,7 @@ type LightUTXO struct {
 	BlockHeight  uint32 `json:"block_height" bson:"block_height"`
 	BlockHash    string `json:"block_hash" bson:"block_hash"`
 	Timestamp    uint64 `json:"timestamp" bson:"timestamp"`
-	TxidVout     string `json:"tx_id_vout" bson:"tx_id_vout"` // todo port to SpentUTXO if successfull
+	TxidVout     string `json:"tx_id_vout" bson:"tx_id_vout"`
 }
 
 type SpentUTXO struct {

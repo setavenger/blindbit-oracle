@@ -397,7 +397,7 @@ func BulkInsertTweaks(tweaks []common.Tweak) error {
 	common.InfoLogger.Println("Inserting tweaks...")
 	// empty blocks happen
 	if len(tweaks) == 0 {
-		common.WarningLogger.Println("no light utxos")
+		common.WarningLogger.Println("no tweaks to insert")
 		return nil
 	}
 	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(common.MongoDBURI))
@@ -657,6 +657,10 @@ func DeleteLightUTXOsBatch(spentUTXOs []common.SpentUTXO) error {
 // chainedTweakDeletion chained deletion of tweak data if no more utxos with a certain txid are left
 // runs whenever a light UTXO is deleted in order to keep the database lean and remove unneeded tweaks
 func chainedTweakDeletion(client *mongo.Client, txIds []string) error {
+	if len(txIds) == 0 {
+		common.WarningLogger.Println("no txids to delete")
+		return nil
+	}
 	// check whether we still have a light utxo for that txid
 	coll := client.Database("transaction_outputs").Collection("unspent")
 	// Define your array of txids you want to query
@@ -707,6 +711,10 @@ func chainedTweakDeletion(client *mongo.Client, txIds []string) error {
 			uniqueTxidsMap[txId] = struct{}{}                     // Mark the txId as seen
 			notFoundTxidsClean = append(notFoundTxidsClean, txId) // Add to the deduplicated slice
 		}
+	}
+	if len(notFoundTxidsClean) == 0 {
+		common.DebugLogger.Println("all txids cleared")
+		return nil
 	}
 
 	common.InfoLogger.Println("determined obsolete txids...")

@@ -154,27 +154,28 @@ func CreateIndexTweaks() {
 	}()
 
 	coll := client.Database("tweak_data").Collection("tweaks")
+	//indexModel := mongo.IndexModel{
+	//	Keys: bson.D{
+	//		{Key: "block_hash", Value: 1},
+	//		{Key: "block_height", Value: 1},
+	//		{Key: "txid", Value: 1},
+	//	},
+	//	Options: options.Index().SetUnique(true),
+	//}
+	//nameIndex, err := coll.Indexes().CreateOne(context.TODO(), indexModel)
+	//if err != nil {
+	//	// will panic because it only runs on startup and should be executed
+	//	panic(err)
+	//}
+	//common.DebugLogger.Println("Created Index with name:", nameIndex)
+
 	indexModel := mongo.IndexModel{
 		Keys: bson.D{
-			{Key: "block_hash", Value: 1},
-			{Key: "block_height", Value: 1},
 			{Key: "txid", Value: 1},
 		},
 		Options: options.Index().SetUnique(true),
 	}
 	nameIndex, err := coll.Indexes().CreateOne(context.TODO(), indexModel)
-	if err != nil {
-		// will panic because it only runs on startup and should be executed
-		panic(err)
-	}
-	common.DebugLogger.Println("Created Index with name:", nameIndex)
-
-	indexModel = mongo.IndexModel{
-		Keys: bson.D{
-			{Key: "txid", Value: 1},
-		},
-	}
-	nameIndex, err = coll.Indexes().CreateOne(context.TODO(), indexModel)
 	if err != nil {
 		// will panic because it only runs on startup and should be executed
 		panic(err)
@@ -253,6 +254,13 @@ func SaveFilterTaproot(filter *common.Filter) error {
 }
 
 func BulkInsertSpentUTXOs(utxos []common.SpentUTXO) error {
+	common.InfoLogger.Println("Inserting spent utxos")
+
+	// empty blocks
+	if len(utxos) == 0 {
+		common.WarningLogger.Println("no spent utxos to insert")
+		return nil
+	}
 	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(common.MongoDBURI))
 	if err != nil {
 		common.ErrorLogger.Println(err)
@@ -332,6 +340,12 @@ func BulkInsertHeaders(headers []common.BlockHeader) error {
 }
 
 func BulkInsertLightUTXOs(utxos []*common.LightUTXO) error {
+	common.InfoLogger.Println("Inserting light utxos")
+	// empty blocks happen
+	if len(utxos) == 0 {
+		common.WarningLogger.Println("no light utxos")
+		return nil
+	}
 	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(common.MongoDBURI))
 	if err != nil {
 		common.ErrorLogger.Println(err)
@@ -381,6 +395,11 @@ func BulkInsertLightUTXOs(utxos []*common.LightUTXO) error {
 
 func BulkInsertTweaks(tweaks []common.Tweak) error {
 	common.InfoLogger.Println("Inserting tweaks...")
+	// empty blocks happen
+	if len(tweaks) == 0 {
+		common.WarningLogger.Println("no light utxos")
+		return nil
+	}
 	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(common.MongoDBURI))
 	if err != nil {
 		common.ErrorLogger.Println(err)
@@ -582,7 +601,11 @@ func RetrieveTweakDataByHeight(blockHeight uint32) ([]common.Tweak, error) {
 
 func DeleteLightUTXOsBatch(spentUTXOs []common.SpentUTXO) error {
 	common.InfoLogger.Println("Deleting LightUTXOs")
-
+	// empty blocks happen
+	if len(spentUTXOs) == 0 {
+		common.WarningLogger.Println("no spent utxos")
+		return nil
+	}
 	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(common.MongoDBURI))
 	if err != nil {
 		common.ErrorLogger.Println(err)
@@ -612,7 +635,7 @@ func DeleteLightUTXOsBatch(spentUTXOs []common.SpentUTXO) error {
 	common.InfoLogger.Printf("Deleted %d LightUTXOs\n", result.DeletedCount)
 
 	common.InfoLogger.Println("Attempting cut through")
-	var txIds []string
+	var txIds []string                     // todo combine with txidVout slice population
 	for _, spentUTXO := range spentUTXOs { // todo might need to be changed to deleteMany
 		txIds = append(txIds, spentUTXO.Txid)
 	}

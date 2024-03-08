@@ -44,7 +44,7 @@ func ComputeTweaksForBlock(block *common.Block) ([]common.Tweak, error) {
 }
 
 func ComputeTweakPerTx(tx *common.Transaction) (*[33]byte, error) {
-	common.DebugLogger.Println("computing tweak for:", tx.Txid)
+	//common.DebugLogger.Println("computing tweak for:", tx.Txid)
 	pubKeys := extractPubKeys(tx)
 	if pubKeys == nil {
 

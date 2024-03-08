@@ -23,10 +23,11 @@ func SyncChain() {
 	common.InfoLogger.Printf("blockchain info: %+v", blockchainInfo)
 
 	syncFromHeight := lastHeader.Height
-	if syncFromHeight < common.CatchUp {
+	if syncFromHeight > common.CatchUp {
 		syncFromHeight = common.CatchUp
 	}
 
+	// todo might need to change flow control to use break
 	// how many headers are supposed to be fetched at once
 	step := common.SyncHeadersMaxPerCall
 	for i := syncFromHeight; i < blockchainInfo.Blocks; {

@@ -91,6 +91,7 @@ func HandleBlock(blockHash string) (*common.Block, error) {
 	}
 
 	// save spent utxos to db
+	common.InfoLogger.Println("Saving Spent UTXOs")
 	err = mongodb.BulkInsertSpentUTXOs(taprootSpent)
 	if err != nil {
 		common.ErrorLogger.Println(err)
@@ -98,7 +99,9 @@ func HandleBlock(blockHash string) (*common.Block, error) {
 	}
 
 	// build light UTXOs
+	common.InfoLogger.Println("Processing Light UTXOs")
 	lightUTXOs := CreateLightUTXOs(block)
+	common.InfoLogger.Println("Light UTXOs processed")
 	err = mongodb.BulkInsertLightUTXOs(lightUTXOs)
 	if err != nil {
 		common.ErrorLogger.Println(err)

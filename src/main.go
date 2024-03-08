@@ -69,6 +69,12 @@ func init() {
 	}
 }
 
+// todo redo the storage system,
+//  after syncing ~5_500 blocks the estimated storage at 100_000 blocks for tweaks alone,
+//  will be somewhere around 40Gb
+//  Additionally performance is getting worse
+// todo investigate whether rpc parallel calls can speed up syncing
+//  caution: currently the flow is synchronous and hence there is less complexity making parallel calls will change that
 // todo include redundancy for when rpc calls are failing (probably due to networking issues in testing home environment)
 // todo review all duplicate key error exemptions and raise to error/warn from debug
 // todo explore how many indices are too many,
@@ -89,8 +95,12 @@ func main() {
 	// make sure everything is ready before we receive data
 	mongodb.CreateIndices()
 
-	core.SyncChain()
-	core.CheckForNewBlockRoutine()
+	// moved into go routine such that the interrupt signal will apply properly
+	go func() {
+		core.SyncChain()
+		core.CheckForNewBlockRoutine()
+	}()
+
 	go server.RunServer(&server.ApiHandler{})
 
 	for true {

@@ -1,7 +1,7 @@
 package common
 
 var (
-	MongoDBURI  = "mongodb://root:example@localhost:27017/"
+	MongoDBURI  = "mongodb://root:example@127.0.0.1:27017/"
 	RpcEndpoint = "http://umbrel.local:8332/"
 	RpcUser     = ""
 	RpcPass     = ""
@@ -16,7 +16,8 @@ var (
 	//MinHeightToProcess uint32 = 833_000
 
 	// SyncHeadersMaxPerCall how many headers will maximally be requested in one batched RPC call
-	SyncHeadersMaxPerCall uint32 = 20000
+	SyncHeadersMaxPerCall uint32 = 2_000
+	MaxParallelRequests   uint8  = 6
 )
 
 var GenesisBlock = BlockHeader{

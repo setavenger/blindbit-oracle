@@ -10,63 +10,7 @@ import (
 	"net/http"
 )
 
-/*
-curl --user umbrel:pass --data-binary '{"jsonrpc": "1.0", "id": "blindbit-silent-payment-backend-v0", "method": "getblock", "params": ["0000000000000000000146a4e732d45ca7f8f4c2262f8a7694a34ff6924b150b", 3]}' -H 'content-type: text/plain;' http://umbrel.local:8332/
-*/
-
-type RPCRequest struct {
-	JSONRPC string        `json:"jsonrpc"`
-	ID      string        `json:"id"`
-	Method  string        `json:"method"`
-	Params  []interface{} `json:"params"`
-}
-
-// RPCResponseBlock represents a JSON RPC response for GetBlock
-type RPCResponseBlock struct {
-	ID    string       `json:"id"`
-	Block common.Block `json:"result,omitempty"`
-	Error interface{}  `json:"error,omitempty"`
-}
-
-// RPCResponseHeader represents a JSON RPC response for getblockheader
-type RPCResponseHeader struct {
-	ID     string      `json:"id"`
-	Result BlockHeader `json:"result,omitempty"`
-	Error  interface{} `json:"error,omitempty"`
-}
-
-// BlockHeader represents the structure of a block header in the response
-type BlockHeader struct {
-	Hash string `json:"hash"`
-	//Confirmations     int     `json:"confirmations"`
-	Height int `json:"height"`
-	//Version           int     `json:"version"`
-	//VersionHex        string  `json:"versionHex"`
-	//MerkleRoot        string  `json:"merkleroot"`
-	Time int `json:"time"`
-	//MedianTime        int     `json:"mediantime"`
-	//Nonce             int     `json:"nonce"`
-	//Bits              string  `json:"bits"`
-	//Difficulty        float64 `json:"difficulty"`
-	//ChainWork         string  `json:"chainwork"`
-	PreviousBlockHash string `json:"previousblockhash"`
-	NextBlockHash     string `json:"nextblockhash"`
-}
-
-type RPCResponseBlockchainInfo struct {
-	ID     string         `json:"id"`
-	Result BlockchainInfo `json:"result,omitempty"`
-	Error  interface{}    `json:"error,omitempty"`
-}
-
-// BlockchainInfo represents the structure of the blockchain information
-type BlockchainInfo struct {
-	Chain         string `json:"chain"`
-	Blocks        uint32 `json:"blocks"` // The current number of blocks processed in the server
-	Headers       uint32 `json:"headers"`
-	BestBlockHash string `json:"bestblockhash"`
-	//Difficulty    float64 `json:"difficulty"`
-}
+// todo might need to unify common.types and the types here for consistency
 
 func makeRPCRequest(rpcData interface{}, result interface{}) error {
 	payload, err := json.Marshal(rpcData)
@@ -89,7 +33,7 @@ func makeRPCRequest(rpcData interface{}, result interface{}) error {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		common.DebugLogger.Println("status code:", resp.Status)
+		common.DebugLogger.Printf("response %+v\n", resp)
 		return fmt.Errorf("error performing request: %v", err)
 	}
 	defer resp.Body.Close()
@@ -113,14 +57,14 @@ func makeRPCRequest(rpcData interface{}, result interface{}) error {
 
 func GetFullBlockPerBlockHash(blockHash string) (*common.Block, error) {
 	common.InfoLogger.Println("Fetching block:", blockHash)
-	rpcData := RPCRequest{
+	rpcData := common.RPCRequest{
 		JSONRPC: "1.0",
 		ID:      "blindbit-silent-payment-backend-v0",
 		Method:  "getblock",
 		Params:  []interface{}{blockHash, 3}, // 3 for maximum verbosity such that we easily get the prevouts for tweaking
 	}
 
-	var rpcResponse RPCResponseBlock
+	var rpcResponse common.RPCResponseBlock
 	err := makeRPCRequest(rpcData, &rpcResponse)
 	if err != nil {
 		common.ErrorLogger.Printf("%v\n", err)
@@ -136,7 +80,7 @@ func GetFullBlockPerBlockHash(blockHash string) (*common.Block, error) {
 }
 
 func GetBestBlockHash() (string, error) {
-	rpcData := RPCRequest{
+	rpcData := common.RPCRequest{
 		JSONRPC: "1.0",
 		ID:      "blindbit-silent-payment-backend-v0",
 		Method:  "getbestblockhash",
@@ -163,14 +107,14 @@ func GetBestBlockHash() (string, error) {
 	return rpcResponse.Result, nil
 }
 
-func GetBlockHeadersBatch(startHeight, count uint32) ([]BlockHeader, error) {
+func GetBlockHeadersBatch(startHeight, count uint32) ([]common.BlockHeader, error) {
 	// Prepare the batch request
-	batch := make([]RPCRequest, count)
-	headers := make([]BlockHeader, count)
+	batch := make([]common.RPCRequest, count)
+	headers := make([]common.BlockHeader, count)
 
 	// Initialize the batch with `getblockhash` requests
 	for i := uint32(0); i < count; i++ {
-		batch[i] = RPCRequest{
+		batch[i] = common.RPCRequest{
 			JSONRPC: "1.0",
 			ID:      "blindbit-silent-payment-backend-v0",
 			Method:  "getblockhash",
@@ -196,7 +140,7 @@ func GetBlockHeadersBatch(startHeight, count uint32) ([]BlockHeader, error) {
 			return nil, fmt.Errorf("error in hash response: %v", hashResponse.Error)
 		}
 
-		batch[i] = RPCRequest{
+		batch[i] = common.RPCRequest{
 			JSONRPC: "1.0",
 			ID:      "blindbit-silent-payment-backend-v0",
 			Method:  "getblockheader",
@@ -205,7 +149,7 @@ func GetBlockHeadersBatch(startHeight, count uint32) ([]BlockHeader, error) {
 	}
 
 	// Perform the batched `getblockheader` requests
-	headerResponses := make([]RPCResponseHeader, count)
+	headerResponses := make([]common.RPCResponseHeader, count)
 
 	err = makeRPCRequest(batch, &headerResponses)
 	if err != nil {
@@ -217,21 +161,26 @@ func GetBlockHeadersBatch(startHeight, count uint32) ([]BlockHeader, error) {
 		if headerResponse.Error != nil {
 			return nil, fmt.Errorf("error in header response: %v", headerResponse.Error)
 		}
-		headers[i] = headerResponse.Result
+		headers[i] = common.BlockHeader{
+			Hash:          headerResponse.Result.Hash,
+			PrevBlockHash: headerResponse.Result.PreviousBlockHash,
+			Timestamp:     headerResponse.Result.Timestamp,
+			Height:        headerResponse.Result.Height,
+		}
 	}
 
 	return headers, nil
 }
 
-func GetBlockchainInfo() (*BlockchainInfo, error) {
-	rpcData := RPCRequest{
+func GetBlockchainInfo() (*common.BlockchainInfo, error) {
+	rpcData := common.RPCRequest{
 		JSONRPC: "1.0",
 		ID:      "blindbit-silent-payment-backend-v0",
 		Method:  "getblockchaininfo",
 		Params:  []interface{}{},
 	}
 
-	var rpcResponse RPCResponseBlockchainInfo
+	var rpcResponse common.RPCResponseBlockchainInfo
 
 	err := makeRPCRequest(rpcData, &rpcResponse)
 	if err != nil {

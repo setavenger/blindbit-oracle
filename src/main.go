@@ -4,7 +4,6 @@ import (
 	"SilentPaymentAppBackend/src/common"
 	"SilentPaymentAppBackend/src/core"
 	"SilentPaymentAppBackend/src/db/mongodb"
-	"SilentPaymentAppBackend/src/server"
 	"fmt"
 	"io"
 	"log"
@@ -97,11 +96,15 @@ func main() {
 
 	// moved into go routine such that the interrupt signal will apply properly
 	go func() {
-		core.SyncChain()
+		err := core.SyncChain()
+		if err != nil {
+			common.ErrorLogger.Fatalln(err)
+			return
+		}
 		core.CheckForNewBlockRoutine()
 	}()
 
-	go server.RunServer(&server.ApiHandler{})
+	//go server.RunServer(&server.ApiHandler{})
 
 	for true {
 		select {

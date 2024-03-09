@@ -105,3 +105,49 @@ type ScriptSig struct {
 	ASM string `json:"asm"`
 	Hex string `json:"hex"`
 }
+
+// RPC Types
+
+type RPCRequest struct {
+	JSONRPC string        `json:"jsonrpc"`
+	ID      string        `json:"id"`
+	Method  string        `json:"method"`
+	Params  []interface{} `json:"params"`
+}
+
+// RPCResponseBlock represents a JSON RPC response for GetBlock
+type RPCResponseBlock struct {
+	ID    string      `json:"id"`
+	Block Block       `json:"result,omitempty"`
+	Error interface{} `json:"error,omitempty"`
+}
+
+// RPCResponseHeader represents a JSON RPC response for getblockheader
+type RPCResponseHeader struct {
+	ID     string         `json:"id"`
+	Result BlockHeaderRPC `json:"result,omitempty"`
+	Error  interface{}    `json:"error,omitempty"`
+}
+
+// BlockHeaderRPC represents the structure of a block header in the response
+type BlockHeaderRPC struct {
+	Hash              string `json:"hash"`
+	Height            uint32 `json:"height"`
+	Timestamp         uint64 `json:"time"`
+	PreviousBlockHash string `json:"previousblockhash"`
+	NextBlockHash     string `json:"nextblockhash"`
+}
+
+type RPCResponseBlockchainInfo struct {
+	ID     string         `json:"id"`
+	Result BlockchainInfo `json:"result,omitempty"`
+	Error  interface{}    `json:"error,omitempty"`
+}
+
+// BlockchainInfo represents the structure of the blockchain information
+type BlockchainInfo struct {
+	Chain         string `json:"chain"`
+	Blocks        uint32 `json:"blocks"` // The current number of blocks processed in the server
+	Headers       uint32 `json:"headers"`
+	BestBlockHash string `json:"bestblockhash"`
+}

@@ -3,6 +3,7 @@ package mongodb
 import (
 	"SilentPaymentAppBackend/src/common"
 	"context"
+	"errors"
 	"fmt"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -16,7 +17,6 @@ func CreateIndices() {
 	// todo might be possible to remove the _id_ indexes to save on memory
 	//  as there is no plan to query based on the mongodb assigned id
 	common.InfoLogger.Println("creating database indices")
-	//CreateIndexTransactions()
 	CreateIndexCFilters()
 	CreateIndexTweaks()
 	CreateIndexLightUTXOs()
@@ -200,7 +200,7 @@ func CreateIndexHeaders() {
 	indexModel := mongo.IndexModel{
 		Keys: bson.D{
 			{Key: "hash", Value: 1},
-			{Key: "height", Value: 1},
+			//{Key: "height", Value: 1},
 		},
 		Options: options.Index().SetUnique(true),
 	}
@@ -389,7 +389,7 @@ func BulkInsertLightUTXOs(utxos []*common.LightUTXO) error {
 		}
 	}
 
-	common.InfoLogger.Printf("bulk inserted %d new light utxos\n", len(result.InsertedIDs))
+	common.InfoLogger.Printf("Bulk inserted %d new light utxos\n", len(result.InsertedIDs))
 	return nil
 }
 
@@ -443,7 +443,7 @@ func BulkInsertTweaks(tweaks []common.Tweak) error {
 		}
 	}
 
-	common.InfoLogger.Printf("bulk inserted %d new tweaks\n", len(result.InsertedIDs))
+	common.InfoLogger.Printf("Bulk inserted %d new tweaks\n", len(result.InsertedIDs))
 	return nil
 }
 
@@ -766,4 +766,74 @@ func CheckHeaderExists(blockHash string) (bool, error) {
 
 	// A document with the given hash exists
 	return true, nil
+}
+
+// BulkCheckHeadersExist returns nil if all blockHashes are in the database.
+// If not all blockHashes are in the db it returns the highest height found.
+func BulkCheckHeadersExist(blockHeaders []common.BlockHeader) (*uint32, error) {
+	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(common.MongoDBURI))
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return nil, err
+	}
+
+	defer func() {
+		if err = client.Disconnect(context.TODO()); err != nil {
+			common.ErrorLogger.Println(err)
+		}
+	}()
+
+	if len(blockHeaders) == 0 {
+		common.WarningLogger.Println("no block_hashes were given")
+		return nil, err
+	}
+	// check whether we still have a light utxo for that txid
+	coll := client.Database("headers").Collection("headers")
+	// Define your array of txids you want to query
+
+	var blockHashes []string
+	for _, header := range blockHeaders {
+		blockHashes = append(blockHashes, header.Hash)
+	}
+
+	// Create a filter to match documents with txid in the txids array
+	filter := bson.M{"hash": bson.M{"$in": blockHashes}}
+
+	common.InfoLogger.Println("Checking for block_hashes...")
+	cursor, err := coll.Find(context.TODO(), filter)
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return nil, err
+	}
+
+	var results []common.BlockHeader
+	if err = cursor.All(context.TODO(), &results); err != nil {
+		common.ErrorLogger.Println(err)
+		return nil, err
+	}
+
+	if len(results) == len(blockHashes) {
+		// we return nil as no continuation is necessary and all blocks wer processed
+		return nil, nil
+	}
+
+	var highestHeight uint32
+	for i := 0; i < len(results)-1; i++ {
+		// Check if the next number is more than 1 greater than the current number
+		if results[i+1].Height-results[i].Height > 1 {
+			// Return the first number in the gap
+			highestHeight = results[i].Height + 1
+			break
+		}
+	}
+
+	// double check that highest height was actually set
+	if highestHeight == 0 {
+		errMsg := "height could not be properly determined. should not happen"
+		common.ErrorLogger.Println(errMsg)
+		return nil, errors.New(errMsg)
+	}
+
+	return &highestHeight, nil
+
 }

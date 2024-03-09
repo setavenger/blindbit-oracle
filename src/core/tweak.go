@@ -16,7 +16,6 @@ func ComputeTweaksForBlock(block *common.Block) ([]common.Tweak, error) {
 	var tweaks []common.Tweak
 
 	for _, tx := range block.Txs {
-		//common.DebugLogger.Printf("Processing transaction block: %s - tx: %s\n", block.Hash, tx.Txid)
 		for _, vout := range tx.Vout {
 			// only compute tweak for txs with a taproot output
 			if vout.ScriptPubKey.Type == "witness_v1_taproot" {
@@ -47,19 +46,6 @@ func ComputeTweakPerTx(tx *common.Transaction) (*[33]byte, error) {
 	//common.DebugLogger.Println("computing tweak for:", tx.Txid)
 	pubKeys := extractPubKeys(tx)
 	if pubKeys == nil {
-
-		// no need for all that if no pubkeys were extracted it means that the transaction does not have any eligible inputs
-
-		// todo optimize light/spent utxo extraction to only store utxos that were validated through here
-		/*
-			// if the coinbase key exists and is not empty it's a coinbase transaction
-			if tx.Vin[0].Coinbase != "" {
-				common.DebugLogger.Printf("%s was coinbase\n", tx.Txid)
-				return nil, nil
-			}
-			common.DebugLogger.Printf("%+v\n", tx)
-			return nil, errors.New("no pub keys were extracted")
-		*/
 		return nil, nil
 	}
 	summedKey, err := sumPublicKeys(pubKeys)
@@ -129,8 +115,6 @@ func extractPubKeys(tx *common.Transaction) []string {
 						pubKeys = append(pubKeys, vin.Txinwitness[len(vin.Txinwitness)-1])
 					}
 				}
-				//common.DebugLogger.Println("txid:", tx.Txid)
-				//common.WarningLogger.Printf("Found a vin that is 22 bytes but does not match p2wpkh signature")
 			}
 		case "pubkeyhash":
 			pubKey, err := extractFromP2PKH(vin)
@@ -185,15 +169,12 @@ func extractFromP2PKH(vin common.Vin) ([]byte, error) {
 
 func extractPubKeyHashFromP2TR(vin common.Vin) (string, error) {
 	witnessStack := vin.Txinwitness
-	//common.DebugLogger.Printf("%s:%d - %+v", vin.Txid, vin.Vout, witnessStack)
 
 	if len(witnessStack) >= 1 {
 		// Remove annex if present
 		if len(witnessStack) > 1 && witnessStack[len(witnessStack)-1] == "50" {
 			witnessStack = witnessStack[:len(witnessStack)-1]
 		}
-
-		//common.DebugLogger.Printf("%s:%d - %+v", vin.Txid, vin.Vout, witnessStack)
 
 		if len(witnessStack) > 1 {
 			// Script-path spend

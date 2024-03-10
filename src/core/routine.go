@@ -64,11 +64,13 @@ func PullBlock(blockHash string) (*common.Block, error) {
 		common.ErrorLogger.Println(err)
 		return nil, err
 	}
+
 	if found {
 		common.DebugLogger.Printf("Block: %s has already been processed\n", blockHash)
 		// if we already processed the header into our DB don't do anything
 		return nil, errors.New("block already processed")
 	}
+
 	block, err := GetFullBlockPerBlockHash(blockHash)
 	if err != nil {
 		common.ErrorLogger.Println(err)
@@ -121,12 +123,13 @@ func HandleBlock(block *common.Block) error {
 	}
 
 	// save spent utxos to db
-	common.InfoLogger.Println("Saving Spent UTXOs")
-	err = mongodb.BulkInsertSpentUTXOs(taprootSpent)
-	if err != nil {
-		common.ErrorLogger.Println(err)
-		return err
-	}
+	// Skipping this as determined in NOTES.md
+	//common.InfoLogger.Println("Saving Spent UTXOs")
+	//err = mongodb.BulkInsertSpentUTXOs(taprootSpent)
+	//if err != nil {
+	//	common.ErrorLogger.Println(err)
+	//	return err
+	//}
 
 	// build light UTXOs
 	common.InfoLogger.Println("Processing Light UTXOs")

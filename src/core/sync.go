@@ -3,17 +3,19 @@ package core
 import (
 	"SilentPaymentAppBackend/src/common"
 	"SilentPaymentAppBackend/src/db/mongodb"
+	"sync"
+	"time"
 )
 
 func SyncChain() error {
 	common.InfoLogger.Println("starting sync")
 
-	lastHeader, err := mongodb.RetrieveLastHeader()
-	if err != nil {
-		// fatal due to startup condition
-		common.ErrorLogger.Fatalln(err)
-		return err
-	}
+	//lastHeader, err := mongodb.RetrieveLastHeader()
+	//if err != nil {
+	//	// fatal due to startup condition
+	//	common.ErrorLogger.Fatalln(err)
+	//	return err
+	//}
 
 	blockchainInfo, err := GetBlockchainInfo()
 	if err != nil {
@@ -22,10 +24,12 @@ func SyncChain() error {
 	}
 	common.InfoLogger.Printf("blockchain info: %+v\n", blockchainInfo)
 
-	syncFromHeight := lastHeader.Height
-	if syncFromHeight > common.CatchUp {
-		syncFromHeight = common.CatchUp
-	}
+	// Current logic is that we always just sync from where the user wants us to sync.
+	// We won't sync below the height
+	syncFromHeight := common.CatchUp
+	//if syncFromHeight > common.CatchUp {
+	//	syncFromHeight = common.CatchUp
+	//}
 
 	// todo might need to change flow control to use break
 	// how many headers are supposed to be fetched at once
@@ -113,62 +117,63 @@ func processHeaders(headers []common.BlockHeader, lastHeight uint32) error {
 		common.InfoLogger.Println("No headers were passed")
 		return nil
 	}
-	// Define a channel to receive fetched block headers
 	fetchedBlocks := make(chan *common.Block, common.MaxParallelRequests)
-	fetchedBlocksConf := make(chan struct{})
-	// Create a buffered channel to control the number of concurrent goroutines
 	semaphore := make(chan struct{}, common.MaxParallelRequests)
-	nextExpectedBlock := headers[0].Height
 
 	var errG error
+	var mu sync.Mutex // Mutex to protect shared resources
+
+	// block fetcher routine
 	go func() {
-		// Start fetching block headers in parallel
 		for _, header := range headers {
-			if header.Height <= lastHeight {
-				// we skip all headers which have been processed already as determined by prior db check
+			if header.Height < lastHeight {
+				// Skip already processed headers
+				// last height is the first block that has to be processed
 				continue
 			}
-			semaphore <- struct{}{} // Acquire a slot
+			if errG != nil {
+				common.ErrorLogger.Println(errG)
+				break // If an error occurred, break the loop
+			}
 
+			semaphore <- struct{}{} // Acquire a slot
 			go func(_header common.BlockHeader) {
-				defer func() { <-semaphore }() // Release the slot
+				start := time.Now()
+				defer func() {
+					<-semaphore // Release the slot
+				}()
 
 				block, err := PullBlock(_header.Hash)
-				fetchedBlocksConf <- struct{}{} // always send in just to confirm pull
-				if err != nil && err.Error() != "block already processed" {
-					errG = err
-					common.ErrorLogger.Println(err)
-					return
-				} else if err == nil {
-					// todo make sure that there is no scenario where this logic chain breaks
-					fetchedBlocks <- block
-				} else if err.Error() == "block already processed" {
-					if header.Height >= nextExpectedBlock {
-						nextExpectedBlock = header.Height + 1
+				if err != nil {
+					if err.Error() == "block already processed" {
+						// Log and skip this block since it's already been processed
+						// send empty block to signal it was processed will be skipped
+						fetchedBlocks <- &common.Block{Height: _header.Height}
+						//common.InfoLogger.Printf("Block %d already processed\n", _header.Height)
+					} else {
+						// For other errors, log and store the first occurrence, then exit
+						common.ErrorLogger.Println(err)
+						mu.Lock()
+						if errG == nil {
+							errG = err // Store the first error that occurs
+						}
+						mu.Unlock()
+						return
 					}
 				} else {
-					common.DebugLogger.Println("err:", err)
-					common.DebugLogger.Println("block:", block)
-					common.WarningLogger.Println("check out this case")
+					fetchedBlocks <- block // Send the fetched block to the channel
 				}
-				return
+				common.InfoLogger.Printf("It took %d ms to pull block %d\n", time.Now().Sub(start).Milliseconds(), _header.Height)
 			}(header)
-			if errG != nil {
-				common.DebugLogger.Println("Failed processing:", header.Hash)
-				common.ErrorLogger.Println(errG)
-				break
-			}
-		}
-		// Wait for all goroutines to finish
-		for i := 0; i < cap(semaphore); i++ {
-			semaphore <- struct{}{}
 		}
 	}()
 
-	// Define a map to temporarily hold out-of-order block headers keyed by height
+	// Process block headers in order
+	nextExpectedBlock := lastHeight
+
 	outOfOrderBlocks := make(map[uint32]*common.Block)
 
-	// Process block headers in order
+	// block processor
 	for {
 		if errG != nil {
 			close(fetchedBlocks) // Close the channel to terminate the fetching goroutine
@@ -181,28 +186,36 @@ func processHeaders(headers []common.BlockHeader, lastHeight uint32) error {
 		}
 		select {
 		case block := <-fetchedBlocks:
-			if block.Height == nextExpectedBlock {
-				// Process block using its hash
-				CheckBlock(block)
-
-				// Update next expected block
-				if nextExpectedBlock < block.Height {
-					nextExpectedBlock = block.Height + 1
-				}
-				nextExpectedBlock++
-			} else {
+			//common.InfoLogger.Println("Got block:", block.Height)
+			// check whether the block is a filler block with only the height
+			if block.Height != nextExpectedBlock {
 				// Temporarily store out-of-order block header
 				outOfOrderBlocks[block.Height] = block
-			}
-		case <-fetchedBlocksConf:
-			if block, ok := outOfOrderBlocks[nextExpectedBlock]; ok {
+			} else {
+				if block.Hash == "" {
+					nextExpectedBlock++
+					continue
+				}
+				// Process block using its hash
 				CheckBlock(block)
-				delete(outOfOrderBlocks, nextExpectedBlock)
-				// Update next expected block
-				if nextExpectedBlock < block.Height {
-					nextExpectedBlock = block.Height + 1
+				nextExpectedBlock++
+			}
+
+			var ok = true
+			for ok {
+				if block, ok = outOfOrderBlocks[nextExpectedBlock]; ok {
+					if block.Hash == "" {
+						delete(outOfOrderBlocks, nextExpectedBlock)
+						nextExpectedBlock++
+						continue
+					}
+					CheckBlock(block)
+					delete(outOfOrderBlocks, nextExpectedBlock)
+					// Update next expected block
+					nextExpectedBlock++
 				}
 			}
+
 		}
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"sort"
 )
 
 // todo add unique lock
@@ -769,7 +770,7 @@ func CheckHeaderExists(blockHash string) (bool, error) {
 }
 
 // BulkCheckHeadersExist returns nil if all blockHashes are in the database.
-// If not all blockHashes are in the db it returns the highest height found.
+// If not all blockHashes are in the db it returns the next notfound height.
 func BulkCheckHeadersExist(blockHeaders []common.BlockHeader) (*uint32, error) {
 	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(common.MongoDBURI))
 	if err != nil {
@@ -817,23 +818,49 @@ func BulkCheckHeadersExist(blockHeaders []common.BlockHeader) (*uint32, error) {
 		return nil, nil
 	}
 
-	var highestHeight uint32
-	for i := 0; i < len(results)-1; i++ {
-		// Check if the next number is more than 1 greater than the current number
-		if results[i+1].Height-results[i].Height > 1 {
-			// Return the first number in the gap
-			highestHeight = results[i].Height + 1
-			break
+	var startingPoint uint32
+
+	if len(results) == 0 {
+		startingPoint = blockHeaders[0].Height // just to start from somewhere
+
+		// find the lowest possible block that we checked
+		// todo can this be omitted if we can guarantee that blockHeaders will always be in order
+		for _, header := range blockHeaders {
+			if header.Height < startingPoint {
+				startingPoint = header.Height
+			}
+		}
+	} else {
+
+		// Sorting the slice by height
+		sort.Slice(results, func(i, j int) bool {
+			return results[i].Height < results[j].Height
+		})
+
+		for i := 0; i < len(results)-1; i++ {
+			//common.InfoLogger.Println(i)
+			// Check if the next number is more than 1 greater than the current number
+			if results[i+1].Height-results[i].Height > 1 {
+				// Return the first number in the gap
+				startingPoint = results[i].Height + 1
+				break
+			}
+			if i == len(results)-2 {
+				// if no header has been found there was no gap, and we just return based on the last element
+				// add 2 to skip last element and reach the actual missing height
+				startingPoint = results[i].Height + 2
+			}
+
 		}
 	}
 
 	// double check that highest height was actually set
-	if highestHeight == 0 {
+	if startingPoint == 0 {
 		errMsg := "height could not be properly determined. should not happen"
 		common.ErrorLogger.Println(errMsg)
 		return nil, errors.New(errMsg)
 	}
 
-	return &highestHeight, nil
+	return &startingPoint, nil
 
 }

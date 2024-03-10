@@ -2,6 +2,7 @@ package mongodb
 
 import (
 	"SilentPaymentAppBackend/src/common"
+	"SilentPaymentAppBackend/src/common/types"
 	"context"
 	"errors"
 	"fmt"
@@ -213,7 +214,7 @@ func CreateIndexHeaders() {
 	common.DebugLogger.Println("Created Index with name:", nameIndex)
 }
 
-func SaveFilterTaproot(filter *common.Filter) error {
+func SaveFilterTaproot(filter *types.Filter) error {
 	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(common.MongoDBURI))
 	if err != nil {
 		common.ErrorLogger.Println(err)
@@ -254,7 +255,7 @@ func SaveFilterTaproot(filter *common.Filter) error {
 	return nil
 }
 
-func BulkInsertSpentUTXOs(utxos []common.SpentUTXO) error {
+func BulkInsertSpentUTXOs(utxos []types.SpentUTXO) error {
 	common.InfoLogger.Println("Inserting spent utxos")
 
 	// empty blocks
@@ -276,7 +277,7 @@ func BulkInsertSpentUTXOs(utxos []common.SpentUTXO) error {
 
 	coll := client.Database("transaction_outputs").Collection("spent")
 
-	// Convert []*common.SpentUTXO to []interface{}
+	// Convert []*types.SpentUTXO to []interface{}
 	var interfaceSlice []interface{}
 	for _, utxo := range utxos {
 		interfaceSlice = append(interfaceSlice, utxo)
@@ -309,7 +310,7 @@ func BulkInsertSpentUTXOs(utxos []common.SpentUTXO) error {
 	return nil
 }
 
-func BulkInsertHeaders(headers []common.BlockHeader) error {
+func BulkInsertHeaders(headers []types.BlockHeader) error {
 	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(common.MongoDBURI))
 	if err != nil {
 		common.ErrorLogger.Println(err)
@@ -340,7 +341,7 @@ func BulkInsertHeaders(headers []common.BlockHeader) error {
 	return nil
 }
 
-func BulkInsertLightUTXOs(utxos []*common.LightUTXO) error {
+func BulkInsertLightUTXOs(utxos []*types.LightUTXO) error {
 	common.InfoLogger.Println("Inserting light utxos")
 	// empty blocks happen
 	if len(utxos) == 0 {
@@ -361,7 +362,7 @@ func BulkInsertLightUTXOs(utxos []*common.LightUTXO) error {
 
 	coll := client.Database("transaction_outputs").Collection("unspent")
 
-	// Convert []*common.LightUTXO to []interface{}
+	// Convert []*types.LightUTXO to []interface{}
 	var interfaceSlice []interface{}
 	for _, utxo := range utxos {
 		interfaceSlice = append(interfaceSlice, utxo)
@@ -394,7 +395,7 @@ func BulkInsertLightUTXOs(utxos []*common.LightUTXO) error {
 	return nil
 }
 
-func BulkInsertTweaks(tweaks []common.Tweak) error {
+func BulkInsertTweaks(tweaks []types.Tweak) error {
 	common.InfoLogger.Println("Inserting tweaks...")
 	// empty blocks happen
 	if len(tweaks) == 0 {
@@ -415,7 +416,7 @@ func BulkInsertTweaks(tweaks []common.Tweak) error {
 
 	coll := client.Database("tweak_data").Collection("tweaks")
 
-	// Convert []*common.LightUTXO to []interface{}
+	// Convert []*types.LightUTXO to []interface{}
 	var interfaceSlice []interface{}
 	for _, tweak := range tweaks {
 		interfaceSlice = append(interfaceSlice, tweak)
@@ -448,7 +449,7 @@ func BulkInsertTweaks(tweaks []common.Tweak) error {
 	return nil
 }
 
-func RetrieveLastHeader() (*common.BlockHeader, error) {
+func RetrieveLastHeader() (*types.BlockHeader, error) {
 	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(common.MongoDBURI))
 	if err != nil {
 		common.ErrorLogger.Println(err)
@@ -461,7 +462,7 @@ func RetrieveLastHeader() (*common.BlockHeader, error) {
 		}
 	}()
 	coll := client.Database("headers").Collection("headers")
-	var result common.BlockHeader
+	var result types.BlockHeader
 	filter := bson.D{}                                                // no filter, get all documents
 	optionsQuery := options.FindOne().SetSort(bson.D{{"height", -1}}) // sort by height in descending order
 
@@ -480,7 +481,7 @@ func RetrieveLastHeader() (*common.BlockHeader, error) {
 	return &result, nil
 }
 
-func RetrieveLightUTXOsByHeight(blockHeight uint32) ([]*common.LightUTXO, error) {
+func RetrieveLightUTXOsByHeight(blockHeight uint32) ([]*types.LightUTXO, error) {
 	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(common.MongoDBURI))
 	if err != nil {
 		common.ErrorLogger.Println(err)
@@ -501,7 +502,7 @@ func RetrieveLightUTXOsByHeight(blockHeight uint32) ([]*common.LightUTXO, error)
 		return nil, err
 	}
 
-	var results []*common.LightUTXO
+	var results []*types.LightUTXO
 	if err = cursor.All(context.TODO(), &results); err != nil {
 		common.ErrorLogger.Println(err)
 		return nil, err
@@ -510,7 +511,7 @@ func RetrieveLightUTXOsByHeight(blockHeight uint32) ([]*common.LightUTXO, error)
 	return results, err
 }
 
-func RetrieveSpentUTXOsByHeight(blockHeight uint32) ([]*common.SpentUTXO, error) {
+func RetrieveSpentUTXOsByHeight(blockHeight uint32) ([]*types.SpentUTXO, error) {
 	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(common.MongoDBURI))
 	if err != nil {
 		common.ErrorLogger.Println(err)
@@ -531,7 +532,7 @@ func RetrieveSpentUTXOsByHeight(blockHeight uint32) ([]*common.SpentUTXO, error)
 		return nil, err
 	}
 
-	var results []*common.SpentUTXO
+	var results []*types.SpentUTXO
 	if err = cursor.All(context.TODO(), &results); err != nil {
 		common.ErrorLogger.Println(err)
 		return nil, err
@@ -540,7 +541,7 @@ func RetrieveSpentUTXOsByHeight(blockHeight uint32) ([]*common.SpentUTXO, error)
 	return results, nil
 }
 
-func RetrieveCFilterByHeight(blockHeight uint32) (*common.Filter, error) {
+func RetrieveCFilterByHeight(blockHeight uint32) (*types.Filter, error) {
 	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(common.MongoDBURI))
 	if err != nil {
 		common.ErrorLogger.Println(err)
@@ -556,7 +557,7 @@ func RetrieveCFilterByHeight(blockHeight uint32) (*common.Filter, error) {
 	filter := bson.D{{"block_height", blockHeight}}
 
 	result := coll.FindOne(context.TODO(), filter)
-	var cFilter common.Filter
+	var cFilter types.Filter
 
 	err = result.Decode(&cFilter)
 	if err != nil {
@@ -567,7 +568,7 @@ func RetrieveCFilterByHeight(blockHeight uint32) (*common.Filter, error) {
 	return &cFilter, nil
 }
 
-func RetrieveTweakDataByHeight(blockHeight uint32) ([]common.Tweak, error) {
+func RetrieveTweakDataByHeight(blockHeight uint32) ([]types.Tweak, error) {
 	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(common.MongoDBURI))
 	if err != nil {
 		common.DebugLogger.Println("height:", blockHeight)
@@ -590,7 +591,7 @@ func RetrieveTweakDataByHeight(blockHeight uint32) ([]common.Tweak, error) {
 		return nil, err
 	}
 
-	var results []common.Tweak
+	var results []types.Tweak
 	if err = cursor.All(context.TODO(), &results); err != nil {
 		common.DebugLogger.Println("height:", blockHeight)
 		common.ErrorLogger.Println(err)
@@ -600,7 +601,7 @@ func RetrieveTweakDataByHeight(blockHeight uint32) ([]common.Tweak, error) {
 	return results, err
 }
 
-func DeleteLightUTXOsBatch(spentUTXOs []common.SpentUTXO) error {
+func DeleteLightUTXOsBatch(spentUTXOs []types.SpentUTXO) error {
 	common.InfoLogger.Println("Deleting LightUTXOs")
 	// empty blocks happen
 	if len(spentUTXOs) == 0 {
@@ -676,7 +677,7 @@ func chainedTweakDeletion(client *mongo.Client, txIds []string) error {
 		return err
 	}
 
-	var results []common.LightUTXO
+	var results []types.LightUTXO
 	if err = cursor.All(context.TODO(), &results); err != nil {
 		common.ErrorLogger.Println(err)
 		return err
@@ -750,7 +751,7 @@ func CheckHeaderExists(blockHash string) (bool, error) {
 	}()
 
 	coll := client.Database("headers").Collection("headers")
-	var result common.BlockHeader
+	var result types.BlockHeader
 
 	// Use the hash to filter the documents
 	filter := bson.D{{"hash", blockHash}}
@@ -771,7 +772,7 @@ func CheckHeaderExists(blockHash string) (bool, error) {
 
 // BulkCheckHeadersExist returns nil if all blockHashes are in the database.
 // If not all blockHashes are in the db it returns the next notfound height.
-func BulkCheckHeadersExist(blockHeaders []common.BlockHeader) (*uint32, error) {
+func BulkCheckHeadersExist(blockHeaders []types.BlockHeader) (*uint32, error) {
 	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(common.MongoDBURI))
 	if err != nil {
 		common.ErrorLogger.Println(err)
@@ -807,7 +808,7 @@ func BulkCheckHeadersExist(blockHeaders []common.BlockHeader) (*uint32, error) {
 		return nil, err
 	}
 
-	var results []common.BlockHeader
+	var results []types.BlockHeader
 	if err = cursor.All(context.TODO(), &results); err != nil {
 		common.ErrorLogger.Println(err)
 		return nil, err

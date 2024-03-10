@@ -2,6 +2,7 @@ package core
 
 import (
 	"SilentPaymentAppBackend/src/common"
+	"SilentPaymentAppBackend/src/common/types"
 	"encoding/hex"
 	"github.com/btcsuite/btcd/btcutil/gcs/builder"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -9,7 +10,7 @@ import (
 )
 
 // BuildTaprootOnlyFilter creates the taproot only filter
-func BuildTaprootOnlyFilter(block *common.Block) []byte {
+func BuildTaprootOnlyFilter(block *types.Block) []byte {
 	var taprootOutput [][]byte
 
 	for _, tx := range block.Txs {

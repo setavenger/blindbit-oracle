@@ -2,6 +2,7 @@ package core
 
 import (
 	"SilentPaymentAppBackend/src/common"
+	"SilentPaymentAppBackend/src/common/types"
 	"SilentPaymentAppBackend/src/db/mongodb"
 	"errors"
 	"fmt"
@@ -53,7 +54,7 @@ func fullProcessBlockHash(blockHash string) error {
 	return err
 }
 
-func PullBlock(blockHash string) (*common.Block, error) {
+func PullBlock(blockHash string) (*types.Block, error) {
 	if len(blockHash) != 64 {
 		common.ErrorLogger.Println("block_hash invalid", blockHash)
 		return nil, errors.New(fmt.Sprintf("block_hash invalid: %s", blockHash))
@@ -81,7 +82,7 @@ func PullBlock(blockHash string) (*common.Block, error) {
 }
 
 // CheckBlock checks whether the block hash has already been processed and will process the block if needed
-func CheckBlock(block *common.Block) {
+func CheckBlock(block *types.Block) {
 	// todo this should fail at the highest instance were its wrapped in,
 	//  fatal made sense here while it only had one use,
 	//  but might not want to exit the program if used in other locations
@@ -96,7 +97,7 @@ func CheckBlock(block *common.Block) {
 	}
 
 	// todo maybe optimize with a single insertion
-	err = mongodb.BulkInsertHeaders([]common.BlockHeader{{
+	err = mongodb.BulkInsertHeaders([]types.BlockHeader{{
 		Hash:          block.Hash,
 		PrevBlockHash: block.PreviousBlockHash,
 		Timestamp:     block.Timestamp,
@@ -109,7 +110,7 @@ func CheckBlock(block *common.Block) {
 	}
 }
 
-func HandleBlock(block *common.Block) error {
+func HandleBlock(block *types.Block) error {
 	// todo the next sections can potentially be optimized by combining them into one loop where
 	//  all things are extracted from the blocks transaction data
 
@@ -143,7 +144,7 @@ func HandleBlock(block *common.Block) error {
 
 	// create special block filter
 	cFilterTaproot := BuildTaprootOnlyFilter(block)
-	err = mongodb.SaveFilterTaproot(&common.Filter{
+	err = mongodb.SaveFilterTaproot(&types.Filter{
 		FilterType:  4,
 		BlockHeight: block.Height,
 		Data:        cFilterTaproot,

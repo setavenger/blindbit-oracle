@@ -2,15 +2,16 @@ package core
 
 import (
 	"SilentPaymentAppBackend/src/common"
+	"SilentPaymentAppBackend/src/common/types"
 	"fmt"
 )
 
-func CreateLightUTXOs(block *common.Block) []*common.LightUTXO {
-	var lightUTXOs []*common.LightUTXO
+func CreateLightUTXOs(block *types.Block) []*types.LightUTXO {
+	var lightUTXOs []*types.LightUTXO
 	for _, tx := range block.Txs {
 		for _, vout := range tx.Vout {
 			if vout.ScriptPubKey.Type == "witness_v1_taproot" {
-				lightUTXOs = append(lightUTXOs, &common.LightUTXO{
+				lightUTXOs = append(lightUTXOs, &types.LightUTXO{
 					Txid:         tx.Txid,
 					Vout:         vout.N,
 					Value:        common.ConvertFloatBTCtoSats(vout.Value),
@@ -27,8 +28,8 @@ func CreateLightUTXOs(block *common.Block) []*common.LightUTXO {
 	return lightUTXOs
 }
 
-func extractSpentTaprootPubKeysFromBlock(block *common.Block) []common.SpentUTXO {
-	var spentUTXOs []common.SpentUTXO
+func extractSpentTaprootPubKeysFromBlock(block *types.Block) []types.SpentUTXO {
+	var spentUTXOs []types.SpentUTXO
 	for _, tx := range block.Txs {
 		spentUTXOs = append(spentUTXOs, extractSpentTaprootPubKeysFromTx(&tx, block)...)
 	}
@@ -36,8 +37,8 @@ func extractSpentTaprootPubKeysFromBlock(block *common.Block) []common.SpentUTXO
 	return spentUTXOs
 }
 
-func extractSpentTaprootPubKeysFromTx(tx *common.Transaction, block *common.Block) []common.SpentUTXO {
-	var spentUTXOs []common.SpentUTXO
+func extractSpentTaprootPubKeysFromTx(tx *types.Transaction, block *types.Block) []types.SpentUTXO {
+	var spentUTXOs []types.SpentUTXO
 
 	for _, vin := range tx.Vin {
 		if vin.Coinbase != "" {
@@ -46,7 +47,7 @@ func extractSpentTaprootPubKeysFromTx(tx *common.Transaction, block *common.Bloc
 		switch vin.Prevout.ScriptPubKey.Type {
 
 		case "witness_v1_taproot":
-			spentUTXOs = append(spentUTXOs, common.SpentUTXO{
+			spentUTXOs = append(spentUTXOs, types.SpentUTXO{
 				SpentIn:     tx.Txid,
 				Txid:        vin.Txid,
 				Vout:        vin.Vout,

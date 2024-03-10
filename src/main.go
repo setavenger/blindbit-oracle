@@ -38,6 +38,13 @@ func init() {
 	common.WarningLogger = log.New(multi, "[WARNING] ", log.Ldate|log.Lmicroseconds|log.Lshortfile|log.Lmsgprefix)
 	common.ErrorLogger = log.New(multi, "[ERROR] ", log.Ldate|log.Lmicroseconds|log.Lshortfile|log.Lmsgprefix)
 
+	// create DB path
+	err = os.Mkdir("./data", 0750)
+	if err != nil && !strings.Contains(err.Error(), "file exists") {
+		fmt.Println(err.Error())
+		log.Fatal(err)
+	}
+
 	// load env vars
 	catchUpRaw := os.Getenv("SYNC_CATCH_UP")
 	if catchUpRaw != "" {

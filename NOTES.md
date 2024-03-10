@@ -81,15 +81,18 @@ if they are not tracked within the client or after a rescan.
 
 ### Potential solutions
 
-Switching to something like LevelDB could potentially reduce the required storage by a lot.
+~~Switching to something like LevelDB could potentially reduce the required storage by a lot.~~
+LevelDB does not support nested structures hence the new approach is to use compound keys with level db. 
+This might not be a solution to the storage issue but could still improve performance. This is subject to future testing.
 
 #### Tweak Data
 
-For tweak data we could drop the block_hash and block_height for every row.
+~~For tweak data we could drop the block_hash and block_height for every row.
 I believe the structure could look something what I have outlined below.
 Potentially we might have to change it in such a way that it is easier to query by block_height instead of hash.
-It's probably easier for a light client to check and control with block_height than block_hashes.
+It's probably easier for a light client to check and control with block_height than block_hashes.~~
 
+##### Not applicable anymore
 ```json
 {
   "block_hash_1": [
@@ -115,13 +118,26 @@ It's probably easier for a light client to check and control with block_height t
 }
 ```
 
+##### New structure with compound keys
+
+```json
+{
+   "block_hash_1:txid_1": "tweak_1",
+   "block_hash_1:txid_2": "tweak_2",
+   "block_hash_2:txid_3": "tweak_3",
+   "block_hash_2:txid_4": "tweak_4",
+   "block_hash_2:txid_5": "tweak_5"
+}
+```
+This will not save on storage but has potential to be a lot faster for reads and writes
 #### Light UTXOs
 
 The user just needs the essential data, we can add the metadata on a per-block basis.
 We can store the data as below and then add the metadata by retrieving the block_headers.
 
-```json
+##### Not applicable anymore
 
+```json
 {
   "block_hash_1": {
     "txid_1": [
@@ -160,5 +176,24 @@ We can store the data as below and then add the metadata by retrieving the block
     ]
   }
 }
+```
+##### New structure with compound keys
 
+compound key block_hash:txid:vout:<key>: value (where <key> is either "value" or "scriptPubKey")
+```json
+{
+   "block_hash_1:txid_1:0:value": 100000,
+   "block_hash_1:txid_1:0:scriptPubKey": "5120<x_only_pub_key>",
+   "block_hash_1:txid_1:1:value": 100000,
+   "block_hash_1:txid_1:1:scriptPubKey": "5120<x_only_pub_key>",
+   "block_hash_1:txid_1:10:value": 100000,
+   "block_hash_1:txid_1:10:scriptPubKey": "5120<x_only_pub_key>",
+   "block_hash_1:txid_2:0:value": 100000,
+   "block_hash_1:txid_2:0:scriptPubKey": "5120<x_only_pub_key>",
+   "block_hash_1:txid_2:3:value": 100000,
+   "block_hash_1:txid_2:3:scriptPubKey": "5120<x_only_pub_key>",
+   "block_hash_1:txid_2:6:value": 100000,
+   "block_hash_1:txid_2:6:scriptPubKey": "5120<x_only_pub_key>"
+   
+}
 ```

@@ -2,6 +2,7 @@ package core
 
 import (
 	"SilentPaymentAppBackend/src/common"
+	"SilentPaymentAppBackend/src/common/types"
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
@@ -12,8 +13,8 @@ import (
 	"sort"
 )
 
-func ComputeTweaksForBlock(block *common.Block) ([]common.Tweak, error) {
-	var tweaks []common.Tweak
+func ComputeTweaksForBlock(block *types.Block) ([]types.Tweak, error) {
+	var tweaks []types.Tweak
 
 	for _, tx := range block.Txs {
 		for _, vout := range tx.Vout {
@@ -22,13 +23,13 @@ func ComputeTweaksForBlock(block *common.Block) ([]common.Tweak, error) {
 				tweakPerTx, err := ComputeTweakPerTx(&tx)
 				if err != nil {
 					common.ErrorLogger.Println(err)
-					return []common.Tweak{}, err
+					return []types.Tweak{}, err
 				}
 				// we do this check for not eligible transactions like coinbase transactions
 				// they are not supposed to throw an error
 				// but also don't have a tweak that can be computed
 				if tweakPerTx != nil {
-					tweaks = append(tweaks, common.Tweak{
+					tweaks = append(tweaks, types.Tweak{
 						BlockHash:   block.Hash,
 						BlockHeight: block.Height,
 						Txid:        tx.Txid,
@@ -42,7 +43,7 @@ func ComputeTweaksForBlock(block *common.Block) ([]common.Tweak, error) {
 	return tweaks, nil
 }
 
-func ComputeTweakPerTx(tx *common.Transaction) (*[33]byte, error) {
+func ComputeTweakPerTx(tx *types.Transaction) (*[33]byte, error) {
 	//common.DebugLogger.Println("computing tweak for:", tx.Txid)
 	pubKeys := extractPubKeys(tx)
 	if pubKeys == nil {
@@ -84,7 +85,7 @@ func ComputeTweakPerTx(tx *common.Transaction) (*[33]byte, error) {
 	return &tweakBytes, nil
 }
 
-func extractPubKeys(tx *common.Transaction) []string {
+func extractPubKeys(tx *types.Transaction) []string {
 	var pubKeys []string
 
 	for _, vin := range tx.Vin {
@@ -139,7 +140,7 @@ func extractPubKeys(tx *common.Transaction) []string {
 }
 
 // extractPublicKey tries to find a public key within the given scriptSig.
-func extractFromP2PKH(vin common.Vin) ([]byte, error) {
+func extractFromP2PKH(vin types.Vin) ([]byte, error) {
 	// Assuming the scriptPubKey's hex starts with the op_codes and then the hash
 	spkHashHex := vin.Prevout.ScriptPubKey.Hex[6:46] // Skip op_codes and grab the hash
 	spkHash, err := hex.DecodeString(spkHashHex)
@@ -167,7 +168,7 @@ func extractFromP2PKH(vin common.Vin) ([]byte, error) {
 	return nil, nil
 }
 
-func extractPubKeyHashFromP2TR(vin common.Vin) (string, error) {
+func extractPubKeyHashFromP2TR(vin types.Vin) (string, error) {
 	witnessStack := vin.Txinwitness
 
 	if len(witnessStack) >= 1 {
@@ -257,7 +258,7 @@ func sumPublicKeys(pubKeys []string) (*btcec.PublicKey, error) {
 }
 
 // ComputeInputHash computes the input_hash for a transaction as per the specification.
-func ComputeInputHash(tx *common.Transaction, sumPublicKeys *btcec.PublicKey) ([32]byte, error) {
+func ComputeInputHash(tx *types.Transaction, sumPublicKeys *btcec.PublicKey) ([32]byte, error) {
 	// Step 1: Aggregate public keys (A)
 
 	// Step 2: Find the lexicographically smallest outpoint (outpointL)
@@ -278,7 +279,7 @@ func ComputeInputHash(tx *common.Transaction, sumPublicKeys *btcec.PublicKey) ([
 	return inputHash, nil
 }
 
-func findSmallestOutpoint(tx *common.Transaction) ([]byte, error) {
+func findSmallestOutpoint(tx *types.Transaction) ([]byte, error) {
 	if len(tx.Vin) == 0 {
 		return nil, errors.New("transaction has no inputs")
 	}

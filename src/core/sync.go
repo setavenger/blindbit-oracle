@@ -2,6 +2,7 @@ package core
 
 import (
 	"SilentPaymentAppBackend/src/common"
+	"SilentPaymentAppBackend/src/common/types"
 	"SilentPaymentAppBackend/src/db/mongodb"
 	"sync"
 	"time"
@@ -40,7 +41,7 @@ func SyncChain() error {
 			step = blockchainInfo.Blocks - i + 1 // needs to be +1 because GetBlockHeadersBatch starts at start height and is hence technically zero indexed
 		}
 
-		var headers []common.BlockHeader
+		var headers []types.BlockHeader
 		common.InfoLogger.Println("Getting next batch of headers from:", i)
 		// todo find a way to skip ahead to the next unprocessed block from the catch up point.
 		//  Maybe iterate over db before querying. Can either do before every query or
@@ -94,7 +95,7 @@ func SyncChain() error {
 	return nil
 }
 
-func updateBlockchainInfo(blockchainInfo *common.BlockchainInfo) error {
+func updateBlockchainInfo(blockchainInfo *types.BlockchainInfo) error {
 	var err error
 	previousHeight := blockchainInfo.Blocks
 	blockchainInfo, err = GetBlockchainInfo()
@@ -111,13 +112,13 @@ func updateBlockchainInfo(blockchainInfo *common.BlockchainInfo) error {
 // todo works most of the times but hangs sometimes.
 //  Blocks are being skipped and not processed in the correct order.
 //  We don't want that -> further debugging and robustness tests needed
-func processHeaders(headers []common.BlockHeader, lastHeight uint32) error {
+func processHeaders(headers []types.BlockHeader, lastHeight uint32) error {
 	common.InfoLogger.Printf("Processing %d headers\n", len(headers))
 	if len(headers) == 0 {
 		common.InfoLogger.Println("No headers were passed")
 		return nil
 	}
-	fetchedBlocks := make(chan *common.Block, common.MaxParallelRequests)
+	fetchedBlocks := make(chan *types.Block, common.MaxParallelRequests)
 	semaphore := make(chan struct{}, common.MaxParallelRequests)
 
 	var errG error
@@ -137,7 +138,7 @@ func processHeaders(headers []common.BlockHeader, lastHeight uint32) error {
 			}
 
 			semaphore <- struct{}{} // Acquire a slot
-			go func(_header common.BlockHeader) {
+			go func(_header types.BlockHeader) {
 				start := time.Now()
 				defer func() {
 					<-semaphore // Release the slot
@@ -148,7 +149,7 @@ func processHeaders(headers []common.BlockHeader, lastHeight uint32) error {
 					if err.Error() == "block already processed" {
 						// Log and skip this block since it's already been processed
 						// send empty block to signal it was processed will be skipped
-						fetchedBlocks <- &common.Block{Height: _header.Height}
+						fetchedBlocks <- &types.Block{Height: _header.Height}
 						//common.InfoLogger.Printf("Block %d already processed\n", _header.Height)
 					} else {
 						// For other errors, log and store the first occurrence, then exit
@@ -171,7 +172,7 @@ func processHeaders(headers []common.BlockHeader, lastHeight uint32) error {
 	// Process block headers in order
 	nextExpectedBlock := lastHeight
 
-	outOfOrderBlocks := make(map[uint32]*common.Block)
+	outOfOrderBlocks := make(map[uint32]*types.Block)
 
 	// block processor
 	for {

@@ -2,6 +2,7 @@ package core
 
 import (
 	"SilentPaymentAppBackend/src/common"
+	"SilentPaymentAppBackend/src/common/types"
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
@@ -55,16 +56,16 @@ func makeRPCRequest(rpcData interface{}, result interface{}) error {
 	return nil
 }
 
-func GetFullBlockPerBlockHash(blockHash string) (*common.Block, error) {
+func GetFullBlockPerBlockHash(blockHash string) (*types.Block, error) {
 	common.InfoLogger.Println("Fetching block:", blockHash)
-	rpcData := common.RPCRequest{
+	rpcData := types.RPCRequest{
 		JSONRPC: "1.0",
 		ID:      "blindbit-silent-payment-backend-v0",
 		Method:  "getblock",
 		Params:  []interface{}{blockHash, 3}, // 3 for maximum verbosity such that we easily get the prevouts for tweaking
 	}
 
-	var rpcResponse common.RPCResponseBlock
+	var rpcResponse types.RPCResponseBlock
 	err := makeRPCRequest(rpcData, &rpcResponse)
 	if err != nil {
 		common.ErrorLogger.Printf("%v\n", err)
@@ -80,7 +81,7 @@ func GetFullBlockPerBlockHash(blockHash string) (*common.Block, error) {
 }
 
 func GetBestBlockHash() (string, error) {
-	rpcData := common.RPCRequest{
+	rpcData := types.RPCRequest{
 		JSONRPC: "1.0",
 		ID:      "blindbit-silent-payment-backend-v0",
 		Method:  "getbestblockhash",
@@ -107,14 +108,14 @@ func GetBestBlockHash() (string, error) {
 	return rpcResponse.Result, nil
 }
 
-func GetBlockHeadersBatch(startHeight, count uint32) ([]common.BlockHeader, error) {
+func GetBlockHeadersBatch(startHeight, count uint32) ([]types.BlockHeader, error) {
 	// Prepare the batch request
-	batch := make([]common.RPCRequest, count)
-	headers := make([]common.BlockHeader, count)
+	batch := make([]types.RPCRequest, count)
+	headers := make([]types.BlockHeader, count)
 
 	// Initialize the batch with `getblockhash` requests
 	for i := uint32(0); i < count; i++ {
-		batch[i] = common.RPCRequest{
+		batch[i] = types.RPCRequest{
 			JSONRPC: "1.0",
 			ID:      "blindbit-silent-payment-backend-v0",
 			Method:  "getblockhash",
@@ -140,7 +141,7 @@ func GetBlockHeadersBatch(startHeight, count uint32) ([]common.BlockHeader, erro
 			return nil, fmt.Errorf("error in hash response: %v", hashResponse.Error)
 		}
 
-		batch[i] = common.RPCRequest{
+		batch[i] = types.RPCRequest{
 			JSONRPC: "1.0",
 			ID:      "blindbit-silent-payment-backend-v0",
 			Method:  "getblockheader",
@@ -149,7 +150,7 @@ func GetBlockHeadersBatch(startHeight, count uint32) ([]common.BlockHeader, erro
 	}
 
 	// Perform the batched `getblockheader` requests
-	headerResponses := make([]common.RPCResponseHeader, count)
+	headerResponses := make([]types.RPCResponseHeader, count)
 
 	err = makeRPCRequest(batch, &headerResponses)
 	if err != nil {
@@ -161,7 +162,7 @@ func GetBlockHeadersBatch(startHeight, count uint32) ([]common.BlockHeader, erro
 		if headerResponse.Error != nil {
 			return nil, fmt.Errorf("error in header response: %v", headerResponse.Error)
 		}
-		headers[i] = common.BlockHeader{
+		headers[i] = types.BlockHeader{
 			Hash:          headerResponse.Result.Hash,
 			PrevBlockHash: headerResponse.Result.PreviousBlockHash,
 			Timestamp:     headerResponse.Result.Timestamp,
@@ -172,15 +173,15 @@ func GetBlockHeadersBatch(startHeight, count uint32) ([]common.BlockHeader, erro
 	return headers, nil
 }
 
-func GetBlockchainInfo() (*common.BlockchainInfo, error) {
-	rpcData := common.RPCRequest{
+func GetBlockchainInfo() (*types.BlockchainInfo, error) {
+	rpcData := types.RPCRequest{
 		JSONRPC: "1.0",
 		ID:      "blindbit-silent-payment-backend-v0",
 		Method:  "getblockchaininfo",
 		Params:  []interface{}{},
 	}
 
-	var rpcResponse common.RPCResponseBlockchainInfo
+	var rpcResponse types.RPCResponseBlockchainInfo
 
 	err := makeRPCRequest(rpcData, &rpcResponse)
 	if err != nil {

@@ -57,7 +57,7 @@ func makeRPCRequest(rpcData interface{}, result interface{}) error {
 }
 
 func GetFullBlockPerBlockHash(blockHash string) (*types.Block, error) {
-	common.InfoLogger.Println("Fetching block:", blockHash)
+	//common.InfoLogger.Println("Fetching block:", blockHash)
 	rpcData := types.RPCRequest{
 		JSONRPC: "1.0",
 		ID:      "blindbit-silent-payment-backend-v0",

@@ -5,7 +5,6 @@ import (
 	"SilentPaymentAppBackend/src/common/types"
 	"SilentPaymentAppBackend/src/db/mongodb"
 	"sync"
-	"time"
 )
 
 func SyncChain() error {
@@ -62,17 +61,18 @@ func SyncChain() error {
 			return err
 		}
 
-		if lastHeight == nil {
-			common.InfoLogger.Println("All headers were processed already. Skipping ahead...")
-			err = updateBlockchainInfo(blockchainInfo)
-			if err != nil {
-				common.WarningLogger.Println(err)
-				return err
-			}
-
-			i += step
-			continue
-		}
+		// todo only quick fix for tests
+		//if lastHeight == nil {
+		//	common.InfoLogger.Println("All headers were processed already. Skipping ahead...")
+		//	err = updateBlockchainInfo(blockchainInfo)
+		//	if err != nil {
+		//		common.WarningLogger.Println(err)
+		//		return err
+		//	}
+		//
+		//	i += step
+		//	continue
+		//}
 
 		// todo needs to return error
 		err = processHeaders(headers, *lastHeight)
@@ -127,7 +127,7 @@ func processHeaders(headers []types.BlockHeader, lastHeight uint32) error {
 	// block fetcher routine
 	go func() {
 		for _, header := range headers {
-			if header.Height < lastHeight {
+			if lastHeight != 0 && header.Height < lastHeight {
 				// Skip already processed headers
 				// last height is the first block that has to be processed
 				continue
@@ -139,7 +139,7 @@ func processHeaders(headers []types.BlockHeader, lastHeight uint32) error {
 
 			semaphore <- struct{}{} // Acquire a slot
 			go func(_header types.BlockHeader) {
-				start := time.Now()
+				//start := time.Now()
 				defer func() {
 					<-semaphore // Release the slot
 				}()
@@ -148,7 +148,7 @@ func processHeaders(headers []types.BlockHeader, lastHeight uint32) error {
 				if err != nil {
 					if err.Error() == "block already processed" {
 						// Log and skip this block since it's already been processed
-						// send empty block to signal it was processed will be skipped
+						// send empty block to signal it was processed, will be skipped in processing loop
 						fetchedBlocks <- &types.Block{Height: _header.Height}
 						//common.InfoLogger.Printf("Block %d already processed\n", _header.Height)
 					} else {
@@ -164,13 +164,19 @@ func processHeaders(headers []types.BlockHeader, lastHeight uint32) error {
 				} else {
 					fetchedBlocks <- block // Send the fetched block to the channel
 				}
-				common.InfoLogger.Printf("It took %d ms to pull block %d\n", time.Now().Sub(start).Milliseconds(), _header.Height)
+				//common.InfoLogger.Printf("It took %d ms to pull block %d\n", time.Now().Sub(start).Milliseconds(), _header.Height)
 			}(header)
 		}
 	}()
 
+	var nextExpectedBlock uint32
 	// Process block headers in order
-	nextExpectedBlock := lastHeight
+	// todo only quick fix for debug
+	if lastHeight != 0 {
+		nextExpectedBlock = lastHeight
+	} else {
+		nextExpectedBlock = headers[0].Height
+	}
 
 	outOfOrderBlocks := make(map[uint32]*types.Block)
 

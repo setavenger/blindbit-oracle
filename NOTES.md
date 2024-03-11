@@ -179,21 +179,17 @@ We can store the data as below and then add the metadata by retrieving the block
 ```
 ##### New structure with compound keys
 
-compound key block_hash:txid:vout:<key>: value (where <key> is either "value" or "scriptPubKey")
+Compound key block_hash:txid:vout: value (where <key> is either "value" or "scriptPubKey"). 
+The serialisation is simple because the scriptPubKey will always have a fixed length of 34 bytes, 
+we can then read in the rest as an uint. Also, all integers and uints are fixed length.
 ```json
 {
-   "block_hash_1:txid_1:0:value": 100000,
-   "block_hash_1:txid_1:0:scriptPubKey": "5120<x_only_pub_key>",
-   "block_hash_1:txid_1:1:value": 100000,
-   "block_hash_1:txid_1:1:scriptPubKey": "5120<x_only_pub_key>",
-   "block_hash_1:txid_1:10:value": 100000,
-   "block_hash_1:txid_1:10:scriptPubKey": "5120<x_only_pub_key>",
-   "block_hash_1:txid_2:0:value": 100000,
-   "block_hash_1:txid_2:0:scriptPubKey": "5120<x_only_pub_key>",
-   "block_hash_1:txid_2:3:value": 100000,
-   "block_hash_1:txid_2:3:scriptPubKey": "5120<x_only_pub_key>",
-   "block_hash_1:txid_2:6:value": 100000,
-   "block_hash_1:txid_2:6:scriptPubKey": "5120<x_only_pub_key>"
+   "block_hash_1:txid_1:0": "5120<x_only_pub_key>:10000",
+   "block_hash_1:txid_1:1": "5120<x_only_pub_key>:560000",
+   "block_hash_1:txid_1:10": "5120<x_only_pub_key>:360000",
+   "block_hash_1:txid_2:0": "5120<x_only_pub_key>:1000000",
+   "block_hash_1:txid_2:3": "5120<x_only_pub_key>:5000",
+   "block_hash_1:txid_2:6": "5120<x_only_pub_key>:10000"
    
 }
 ```

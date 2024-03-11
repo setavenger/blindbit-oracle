@@ -1,6 +1,8 @@
-package common
+package testhelpers
 
 import (
+	"SilentPaymentAppBackend/src/common"
+	"SilentPaymentAppBackend/src/common/types"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -50,28 +52,28 @@ type ScriptPubKeyDetail struct {
 	Type string `json:"type"`
 }
 
-func TransformTestCaseDetailToTransaction(detail TestCaseDetail) (Transaction, error) {
-	transaction := Transaction{
+func TransformTestCaseDetailToTransaction(detail TestCaseDetail) (types.Transaction, error) {
+	transaction := types.Transaction{
 		// Initialize other necessary fields of Transaction if needed
 	}
 	// Iterate over each VinDetail in the Given part of TestCaseDetail
 	for _, vinDetail := range detail.Given.Vin {
 		witnessScript, err := parseWitnessScript(vinDetail.Txinwitness)
 		if err != nil {
-			ErrorLogger.Println(err)
-			return Transaction{}, err
+			common.ErrorLogger.Println(err)
+			return types.Transaction{}, err
 		}
-		vin := Vin{
+		vin := types.Vin{
 			Txinwitness: witnessScript, // txinwitness needs to be parsed due to different witness lengths and format
 			Txid:        vinDetail.Txid,
 			Vout:        vinDetail.Vout,
-			Prevout: &Prevout{
-				ScriptPubKey: ScriptPubKey{
+			Prevout: &types.Prevout{
+				ScriptPubKey: types.ScriptPubKey{
 					Hex:  vinDetail.Prevout.ScriptPubKey.Hex,
 					Type: vinDetail.Prevout.ScriptPubKey.Type,
 				},
 			},
-			ScriptSig: ScriptSig{
+			ScriptSig: types.ScriptSig{
 				Hex: vinDetail.ScriptSig,
 			},
 			// Initialize other necessary fields of Vin if needed
@@ -113,7 +115,7 @@ func parseWitnessScript(script string) ([]string, error) {
 	// Decode the hex-encoded script
 	data, err := hex.DecodeString(script)
 	if err != nil {
-		ErrorLogger.Println(err)
+		common.ErrorLogger.Println(err)
 		return nil, err
 	}
 

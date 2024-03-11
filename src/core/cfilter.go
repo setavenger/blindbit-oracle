@@ -10,7 +10,7 @@ import (
 )
 
 // BuildTaprootOnlyFilter creates the taproot only filter
-func BuildTaprootOnlyFilter(block *types.Block) []byte {
+func BuildTaprootOnlyFilter(block *types.Block) (types.Filter, error) {
 	var taprootOutput [][]byte
 
 	for _, tx := range block.Txs {
@@ -20,7 +20,7 @@ func BuildTaprootOnlyFilter(block *types.Block) []byte {
 				if err != nil {
 					common.DebugLogger.Printf("Failed to build taproot filter for block: %s (%d)\n", block.Hash, block.Height)
 					common.ErrorLogger.Fatalln(err)
-					return nil
+					return types.Filter{}, err
 				}
 				taprootOutput = append(taprootOutput, scriptAsBytes)
 			}
@@ -31,28 +31,35 @@ func BuildTaprootOnlyFilter(block *types.Block) []byte {
 	if err != nil {
 		common.DebugLogger.Println("blockHash", block.Hash)
 		common.ErrorLogger.Fatalln(err)
-		return nil
+		return types.Filter{}, err
 	}
 	c := chainhash.Hash{}
-	err = c.SetBytes(blockHashBytes)
+
+	err = c.SetBytes(common.ReverseBytes(blockHashBytes))
 	if err != nil {
 		common.DebugLogger.Println("blockHash", block.Hash)
 		common.ErrorLogger.Fatalln(err)
-		return nil
+		return types.Filter{}, err
+
 	}
 	key := builder.DeriveKey(&c)
 
 	filter, err := gcs.BuildGCSFilter(builder.DefaultP, builder.DefaultM, key, taprootOutput)
 	if err != nil {
 		common.ErrorLogger.Fatalln(err)
-		return nil
+		return types.Filter{}, err
 	}
 
 	nBytes, err := filter.NBytes()
 	if err != nil {
 		common.ErrorLogger.Fatalln(err)
-		return nil
+		return types.Filter{}, err
 	}
-	return nBytes
 
+	return types.Filter{
+		FilterType:  4,
+		BlockHeight: block.Height,
+		Data:        nBytes,
+		BlockHash:   block.Hash,
+	}, nil
 }

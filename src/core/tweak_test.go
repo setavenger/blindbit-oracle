@@ -2,6 +2,7 @@ package core
 
 import (
 	"SilentPaymentAppBackend/src/common"
+	"SilentPaymentAppBackend/src/testhelpers"
 	"encoding/hex"
 	"log"
 	"os"
@@ -18,13 +19,13 @@ func init() {
 // todo integrate the test vectors into the tests
 func TestSimpleInputHash(t *testing.T) {
 	const controlInputHash = "5bfe5321d759e01a2ac9292f0f396ff9c3d8b58d89ccb21a6922e84bb7ad0668"
-	testCases, err := common.LoadCaseData(t)
+	testCases, err := testhelpers.LoadCaseData(t)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	tx, err := common.TransformTestCaseDetailToTransaction(testCases[0].Receiving[0]) // Example for the first sending case
+	tx, err := testhelpers.TransformTestCaseDetailToTransaction(testCases[0].Receiving[0]) // Example for the first sending case
 	if err != nil {
 		t.Error(err)
 		return
@@ -59,7 +60,7 @@ func TestSimpleInputHash(t *testing.T) {
 }
 
 func TestComputeAllReceivingTweaks(t *testing.T) {
-	testCases, err := common.LoadCaseData(t)
+	testCases, err := testhelpers.LoadCaseData(t)
 	if err != nil {
 		t.Error(err)
 		return
@@ -69,7 +70,7 @@ func TestComputeAllReceivingTweaks(t *testing.T) {
 		common.InfoLogger.Println(testCase.Comment)
 
 		for _, caseDetail := range testCase.Receiving {
-			tx, err := common.TransformTestCaseDetailToTransaction(caseDetail)
+			tx, err := testhelpers.TransformTestCaseDetailToTransaction(caseDetail)
 			if err != nil {
 				t.Error(err)
 				return

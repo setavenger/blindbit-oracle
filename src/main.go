@@ -3,7 +3,8 @@ package main
 import (
 	"SilentPaymentAppBackend/src/common"
 	"SilentPaymentAppBackend/src/core"
-	"SilentPaymentAppBackend/src/db/mongodb"
+	"SilentPaymentAppBackend/src/db/dblevel"
+	"SilentPaymentAppBackend/src/server"
 	"fmt"
 	"io"
 	"log"
@@ -36,7 +37,7 @@ func init() {
 	common.DebugLogger = log.New(fileDebug, "[DEBUG] ", log.Ldate|log.Lmicroseconds|log.Lshortfile|log.Lmsgprefix)
 	common.InfoLogger = log.New(multi, "[INFO] ", log.Ldate|log.Lmicroseconds|log.Lshortfile|log.Lmsgprefix)
 	common.WarningLogger = log.New(multi, "[WARNING] ", log.Ldate|log.Lmicroseconds|log.Lshortfile|log.Lmsgprefix)
-	common.ErrorLogger = log.New(multi, "[ERROR] ", log.Ldate|log.Lmicroseconds|log.Lshortfile|log.Lmsgprefix)
+	common.ErrorLogger = log.New(multi, "[ERROR] ", log.Ldate|log.Lmicroseconds|log.Llongfile|log.Lmsgprefix)
 
 	// create DB path
 	err = os.Mkdir("./data", 0750)
@@ -54,6 +55,9 @@ func init() {
 			common.ErrorLogger.Println(err)
 		}
 	}
+
+	// open levelDB connections
+	openLevelDBConnections()
 
 	mongoDBConnection := os.Getenv("MONGO_DB_CONNECTION")
 	if mongoDBConnection != "" {
@@ -75,6 +79,9 @@ func init() {
 	}
 }
 
+// todo investigate whether we should change the compound keys to use the height instead of the hash.
+//  As keys are sorted this could potentially give a performance boost due to better order across blocks
+// todo document EVERYTHING: especially serialisation patterns to easily look them up later
 // todo redo the storage system,
 //  after syncing ~5_500 blocks the estimated storage at 100_000 blocks for tweaks alone,
 //  will be somewhere around 40Gb
@@ -83,23 +90,38 @@ func init() {
 //  caution: currently the flow is synchronous and hence there is less complexity making parallel calls will change that
 // todo include redundancy for when rpc calls are failing (probably due to networking issues in testing home environment)
 // todo review all duplicate key error exemptions and raise to error/warn from debug
-// todo explore how many indices are too many,
-//  in order to speed up queries I'm adding several indices
-//  brings us back to potentially switching DB stack
-// todo make a move to postgres instead of MongoDB
-//  after revamp we do not need any nested structs
-//  hence we can show everything in simple tables in postgres
-// todo restructure tweak data storage to allow transaction cut-through
 // todo remove unnecessary panics
-// todo cut down on debug logging or find a more suitable solution for large logs
 func main() {
-	log.SetFlags(log.LstdFlags | log.Lshortfile | log.Lmicroseconds)
+	defer func() {
+		err := dblevel.HeadersDB.Close()
+		if err != nil {
+			common.ErrorLogger.Println(err)
+		}
+		err = dblevel.HeadersInvDB.Close()
+		if err != nil {
+			common.ErrorLogger.Println(err)
+		}
+		err = dblevel.FiltersDB.Close()
+		if err != nil {
+			common.ErrorLogger.Println(err)
+		}
+		err = dblevel.TweaksDB.Close()
+		if err != nil {
+			common.ErrorLogger.Println(err)
+		}
+		err = dblevel.UTXOsDB.Close()
+		if err != nil {
+			common.ErrorLogger.Println(err)
+		}
+	}()
+
+	//log.SetFlags(log.LstdFlags | log.Lshortfile | log.Lmicroseconds)
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 
 	common.InfoLogger.Println("Program Started")
+
 	// make sure everything is ready before we receive data
-	mongodb.CreateIndices()
 
 	// moved into go routine such that the interrupt signal will apply properly
 	go func() {
@@ -111,7 +133,7 @@ func main() {
 		core.CheckForNewBlockRoutine()
 	}()
 
-	//go server.RunServer(&server.ApiHandler{})
+	go server.RunServer(&server.ApiHandler{})
 
 	for true {
 		select {
@@ -119,4 +141,12 @@ func main() {
 			return
 		}
 	}
+}
+
+func openLevelDBConnections() {
+	dblevel.HeadersDB = dblevel.OpenDBConnection(dblevel.DBPathHeaders)
+	dblevel.HeadersInvDB = dblevel.OpenDBConnection(dblevel.DBPathHeadersInv)
+	dblevel.FiltersDB = dblevel.OpenDBConnection(dblevel.DBPathFilters)
+	dblevel.TweaksDB = dblevel.OpenDBConnection(dblevel.DBPathTweaks)
+	dblevel.UTXOsDB = dblevel.OpenDBConnection(dblevel.DBPathUTXOs)
 }

@@ -12,9 +12,7 @@ func RunServer(api *ApiHandler) {
 	router.GET("/block-height", api.GetBestBlockHeight)
 	router.GET("/tweak/:blockheight", api.GetTweakDataByHeight)
 	router.GET("/filter/:blockheight", api.GetCFilterByHeight)
-	router.GET("/filter-taproot/:blockheight", api.GetCFilterByHeightTaproot)
 	router.GET("/utxos/:blockheight", api.GetLightUTXOsByHeight)
-	router.GET("/utxos-spent/:blockheight", api.GetSpentUTXOsByHeight)
 
 	router.POST("/forward-tx", api.ForwardRawTX)
 

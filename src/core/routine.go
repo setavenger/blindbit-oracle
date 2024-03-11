@@ -3,7 +3,7 @@ package core
 import (
 	"SilentPaymentAppBackend/src/common"
 	"SilentPaymentAppBackend/src/common/types"
-	"SilentPaymentAppBackend/src/db/mongodb"
+	"SilentPaymentAppBackend/src/db/dblevel"
 	"errors"
 	"fmt"
 	"time"
@@ -60,13 +60,14 @@ func PullBlock(blockHash string) (*types.Block, error) {
 		return nil, errors.New(fmt.Sprintf("block_hash invalid: %s", blockHash))
 	}
 	// this method is preferred over lastHeader because then this function can be called for PreviousBlockHash
-	found, err := mongodb.CheckHeaderExists(blockHash)
-	if err != nil {
+	header, err := dblevel.FetchByBlockHashBlockHeader(blockHash)
+	if err != nil && !errors.Is(err, dblevel.NoEntryErr{}) {
+		// we ignore no entry error
 		common.ErrorLogger.Println(err)
 		return nil, err
 	}
 
-	if found {
+	if header != nil {
 		common.DebugLogger.Printf("Block: %s has already been processed\n", blockHash)
 		// if we already processed the header into our DB don't do anything
 		return nil, errors.New("block already processed")
@@ -77,7 +78,7 @@ func PullBlock(blockHash string) (*types.Block, error) {
 		common.ErrorLogger.Println(err)
 		return nil, err
 	}
-	common.InfoLogger.Println("Received block:", blockHash)
+	//common.InfoLogger.Println("Received block:", blockHash)
 	return block, nil
 }
 
@@ -96,18 +97,29 @@ func CheckBlock(block *types.Block) {
 		return
 	}
 
-	// todo maybe optimize with a single insertion
-	err = mongodb.BulkInsertHeaders([]types.BlockHeader{{
+	// insert normal BlockHeader last as that is the basis on which we pull new blocks
+	err = dblevel.InsertBlockHeaderInv(types.BlockHeaderInv{
+		Hash:   block.Hash,
+		Height: block.Height,
+	})
+	if err != nil {
+		common.DebugLogger.Println("could not insert inverted header for:", block.Height, block.Hash)
+		return
+	}
+
+	err = dblevel.InsertBlockHeader(types.BlockHeader{
 		Hash:          block.Hash,
 		PrevBlockHash: block.PreviousBlockHash,
 		Timestamp:     block.Timestamp,
 		Height:        block.Height,
-	}})
-	common.InfoLogger.Println("successfully processed block:", block.Height)
+	})
 	if err != nil {
 		common.DebugLogger.Println("could not insert header for:", block.Hash)
 		return
 	}
+
+	common.InfoLogger.Println("successfully processed block:", block.Height)
+
 }
 
 func HandleBlock(block *types.Block) error {
@@ -117,39 +129,29 @@ func HandleBlock(block *types.Block) error {
 	// get spent taproot UTXOs
 	taprootSpent := extractSpentTaprootPubKeysFromBlock(block)
 
-	err := mongodb.DeleteLightUTXOsBatch(taprootSpent)
+	err := removeSpentUTXOs(taprootSpent)
 	if err != nil {
 		common.ErrorLogger.Println(err)
 		return err
 	}
 
-	// save spent utxos to db
-	// Skipping this as determined in NOTES.md
-	//common.InfoLogger.Println("Saving Spent UTXOs")
-	//err = mongodb.BulkInsertSpentUTXOs(taprootSpent)
-	//if err != nil {
-	//	common.ErrorLogger.Println(err)
-	//	return err
-	//}
-
 	// build light UTXOs
 	common.InfoLogger.Println("Processing Light UTXOs")
 	lightUTXOs := CreateLightUTXOs(block)
 	common.InfoLogger.Println("Light UTXOs processed")
-	err = mongodb.BulkInsertLightUTXOs(lightUTXOs)
+	err = dblevel.InsertUTXOs(lightUTXOs)
 	if err != nil {
 		common.ErrorLogger.Println(err)
 		return err
 	}
 
 	// create special block filter
-	cFilterTaproot := BuildTaprootOnlyFilter(block)
-	err = mongodb.SaveFilterTaproot(&types.Filter{
-		FilterType:  4,
-		BlockHeight: block.Height,
-		Data:        cFilterTaproot,
-		BlockHash:   block.Hash,
-	})
+	cFilterTaproot, err := BuildTaprootOnlyFilter(block)
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return err
+	}
+	err = dblevel.InsertFilter(cFilterTaproot)
 	if err != nil {
 		common.ErrorLogger.Println(err)
 		return err
@@ -160,7 +162,7 @@ func HandleBlock(block *types.Block) error {
 		common.ErrorLogger.Println(err)
 		return err
 	}
-	err = mongodb.BulkInsertTweaks(tweaksForBlock)
+	err = dblevel.InsertTweaks(tweaksForBlock)
 	if err != nil {
 		common.ErrorLogger.Println(err)
 		return err

@@ -3,15 +3,15 @@ package core
 import (
 	"SilentPaymentAppBackend/src/common"
 	"SilentPaymentAppBackend/src/common/types"
-	"fmt"
+	"SilentPaymentAppBackend/src/db/dblevel"
 )
 
-func CreateLightUTXOs(block *types.Block) []*types.LightUTXO {
-	var lightUTXOs []*types.LightUTXO
+func CreateLightUTXOs(block *types.Block) []types.UTXO {
+	var utxos []types.UTXO
 	for _, tx := range block.Txs {
 		for _, vout := range tx.Vout {
 			if vout.ScriptPubKey.Type == "witness_v1_taproot" {
-				lightUTXOs = append(lightUTXOs, &types.LightUTXO{
+				utxos = append(utxos, types.UTXO{
 					Txid:         tx.Txid,
 					Vout:         vout.N,
 					Value:        common.ConvertFloatBTCtoSats(vout.Value),
@@ -19,26 +19,25 @@ func CreateLightUTXOs(block *types.Block) []*types.LightUTXO {
 					BlockHeight:  block.Height,
 					BlockHash:    block.Hash,
 					Timestamp:    block.Timestamp,
-					TxidVout:     fmt.Sprintf("%s:%d", tx.Txid, vout.N),
 				})
 			}
 		}
 	}
 
-	return lightUTXOs
+	return utxos
 }
 
-func extractSpentTaprootPubKeysFromBlock(block *types.Block) []types.SpentUTXO {
-	var spentUTXOs []types.SpentUTXO
+func extractSpentTaprootPubKeysFromBlock(block *types.Block) []types.UTXO {
+	var spentUTXOs []types.UTXO
 	for _, tx := range block.Txs {
-		spentUTXOs = append(spentUTXOs, extractSpentTaprootPubKeysFromTx(&tx, block)...)
+		spentUTXOs = append(spentUTXOs, extractSpentTaprootPubKeysFromTx(&tx)...)
 	}
 
 	return spentUTXOs
 }
 
-func extractSpentTaprootPubKeysFromTx(tx *types.Transaction, block *types.Block) []types.SpentUTXO {
-	var spentUTXOs []types.SpentUTXO
+func extractSpentTaprootPubKeysFromTx(tx *types.Transaction) []types.UTXO {
+	var spentUTXOs []types.UTXO
 
 	for _, vin := range tx.Vin {
 		if vin.Coinbase != "" {
@@ -47,14 +46,21 @@ func extractSpentTaprootPubKeysFromTx(tx *types.Transaction, block *types.Block)
 		switch vin.Prevout.ScriptPubKey.Type {
 
 		case "witness_v1_taproot":
-			spentUTXOs = append(spentUTXOs, types.SpentUTXO{
-				SpentIn:     tx.Txid,
-				Txid:        vin.Txid,
-				Vout:        vin.Vout,
-				Value:       common.ConvertFloatBTCtoSats(vin.Prevout.Value),
-				BlockHeight: block.Height,
-				BlockHash:   block.Hash,
-				Timestamp:   block.Timestamp,
+			// requires a pre-sync of height from taproot activation 709632 for blockHash mapping,
+			headerInv, err := dblevel.FetchByBlockHeightBlockHeaderInv(vin.Prevout.Height)
+			if err != nil {
+				common.ErrorLogger.Println(err)
+				// panic becuase if this fails it means we have incomplete data which requires a sync
+				common.ErrorLogger.Println("Headers not synced from taproot activation height (709632). Either build complete index or fully sync headers only.")
+				panic(err)
+			}
+
+			spentUTXOs = append(spentUTXOs, types.UTXO{
+				Txid:      vin.Txid,
+				Vout:      vin.Vout,
+				Value:     common.ConvertFloatBTCtoSats(vin.Prevout.Value),
+				BlockHash: headerInv.Hash,
+				Spent:     true,
 			})
 		default:
 			continue

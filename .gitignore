@@ -2,3 +2,5 @@
 .idea
 /logs
 docker-compose.yaml
+/data
+/.run/

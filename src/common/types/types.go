@@ -39,7 +39,7 @@ type Vout struct {
 // Prevout represents the previous output for an input
 type Prevout struct {
 	Generated    bool         `json:"generated"`
-	Height       int          `json:"height"`
+	Height       uint32       `json:"height"`
 	Value        float64      `json:"value"`
 	ScriptPubKey ScriptPubKey `json:"scriptPubKey"`
 }

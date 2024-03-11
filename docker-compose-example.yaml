@@ -3,34 +3,16 @@ version: '3.1'
 
 services:
   backend:
-    image: IMAGE_LINK
+#    image: IMAGE_LINK
+#    build: .
     restart: unless-stopped
     ports:
       - "32504:8000"
     environment:
       SYNC_CATCH_UP: 163000
       MONGO_DB_CONNECTION: mongodb://root:example@mongo:27017/
-
-  mongo:
-    image: mongo
-    restart: unless-stopped
-    ports:
-      - "27017:27017"
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: root
-      MONGO_INITDB_ROOT_PASSWORD: example
     volumes:
-      - mongo_data:/data/db
-
-  mongo-express:
-    image: mongo-express
-    restart: always
-    ports:
-      - "8880:8081"
-    environment:
-      ME_CONFIG_MONGODB_ADMINUSERNAME: root
-      ME_CONFIG_MONGODB_ADMINPASSWORD: example
-      ME_CONFIG_MONGODB_URL: mongodb://root:example@mongo:27017/
+      - leveldb_data:/data
 
 volumes:
-  mongo_data:
+  leveldb_data:

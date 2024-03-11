@@ -54,7 +54,7 @@ func extractSpentTaprootPubKeysFromTx(tx *types.Transaction) []types.UTXO {
 				common.ErrorLogger.Println("Headers not synced from taproot activation height (709632). Either build complete index or fully sync headers only.")
 				panic(err)
 			}
-
+			//832974
 			spentUTXOs = append(spentUTXOs, types.UTXO{
 				Txid:      vin.Txid,
 				Vout:      vin.Vout,

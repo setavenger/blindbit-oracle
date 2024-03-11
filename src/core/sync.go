@@ -3,19 +3,14 @@ package core
 import (
 	"SilentPaymentAppBackend/src/common"
 	"SilentPaymentAppBackend/src/common/types"
-	"SilentPaymentAppBackend/src/db/mongodb"
+	"SilentPaymentAppBackend/src/db/dblevel"
+	"errors"
+	"sort"
 	"sync"
 )
 
 func SyncChain() error {
 	common.InfoLogger.Println("starting sync")
-
-	//lastHeader, err := mongodb.RetrieveLastHeader()
-	//if err != nil {
-	//	// fatal due to startup condition
-	//	common.ErrorLogger.Fatalln(err)
-	//	return err
-	//}
 
 	blockchainInfo, err := GetBlockchainInfo()
 	if err != nil {
@@ -27,12 +22,9 @@ func SyncChain() error {
 	// Current logic is that we always just sync from where the user wants us to sync.
 	// We won't sync below the height
 	syncFromHeight := common.CatchUp
-	//if syncFromHeight > common.CatchUp {
-	//	syncFromHeight = common.CatchUp
-	//}
 
 	// todo might need to change flow control to use break
-	// how many headers are supposed to be fetched at once
+	// number of headers that will maximally be fetched at once
 	step := common.SyncHeadersMaxPerCall
 	for i := syncFromHeight; i < blockchainInfo.Blocks; {
 		// Adjust for the last run when there are fewer headers left than the step; avoids index out of range
@@ -46,42 +38,44 @@ func SyncChain() error {
 		//  Maybe iterate over db before querying. Can either do before every query or
 		//  once to get to a decent height to continue from. Anyways it should not be the case
 		//  that we have a patchy history of processed blocks
-		headers, err = GetBlockHeadersBatch(i, step) // todo verify the blocks always come in the correct order
+
+		var heights []uint32
+		for height := i; height < i+step; height++ {
+			heights = append(heights, i)
+		}
+		var heightsClean []uint32
+		heightsClean, err = dblevel.GetMissingHeadersInv(heights)
 		if err != nil {
 			common.ErrorLogger.Println(err)
 			return err
 		}
 
-		// verify that headers are not already processed.
-		// We pre-check this before it is checked in CheckBlock function, might be redundant
-		var lastHeight *uint32
-		lastHeight, err = mongodb.BulkCheckHeadersExist(headers)
+		if len(heightsClean) == 0 {
+			err = updateBlockchainInfo(blockchainInfo)
+			if err != nil {
+				common.WarningLogger.Println(err)
+				return err
+			}
+			i += step
+			continue
+		}
+
+		headers, err = GetBlockHeadersBatch(heightsClean)
 		if err != nil {
 			common.ErrorLogger.Println(err)
 			return err
 		}
-
-		// todo only quick fix for tests
-		//if lastHeight == nil {
-		//	common.InfoLogger.Println("All headers were processed already. Skipping ahead...")
-		//	err = updateBlockchainInfo(blockchainInfo)
-		//	if err != nil {
-		//		common.WarningLogger.Println(err)
-		//		return err
-		//	}
-		//
-		//	i += step
-		//	continue
-		//}
+		sort.Slice(headers, func(i, j int) bool {
+			return headers[i].Height < headers[j].Height
+		})
 
 		// todo needs to return error
-		err = processHeaders(headers, *lastHeight)
+		err = processHeaders(headers)
 		if err != nil {
 			common.ErrorLogger.Println(err)
 			return err
 		}
 
-		// Increment 'i' by 'step' after processing the headers
 		i += step
 
 		// this keeps the syncing process up to date with the chain tip
@@ -112,7 +106,7 @@ func updateBlockchainInfo(blockchainInfo *types.BlockchainInfo) error {
 // todo works most of the times but hangs sometimes.
 //  Blocks are being skipped and not processed in the correct order.
 //  We don't want that -> further debugging and robustness tests needed
-func processHeaders(headers []types.BlockHeader, lastHeight uint32) error {
+func processHeaders(headers []types.BlockHeader) error {
 	common.InfoLogger.Printf("Processing %d headers\n", len(headers))
 	if len(headers) == 0 {
 		common.InfoLogger.Println("No headers were passed")
@@ -127,11 +121,6 @@ func processHeaders(headers []types.BlockHeader, lastHeight uint32) error {
 	// block fetcher routine
 	go func() {
 		for _, header := range headers {
-			if lastHeight != 0 && header.Height < lastHeight {
-				// Skip already processed headers
-				// last height is the first block that has to be processed
-				continue
-			}
 			if errG != nil {
 				common.ErrorLogger.Println(errG)
 				break // If an error occurred, break the loop
@@ -170,13 +159,12 @@ func processHeaders(headers []types.BlockHeader, lastHeight uint32) error {
 	}()
 
 	var nextExpectedBlock uint32
-	// Process block headers in order
-	// todo only quick fix for debug
-	if lastHeight != 0 {
-		nextExpectedBlock = lastHeight
-	} else {
-		nextExpectedBlock = headers[0].Height
+
+	var nextExpectedBlockMap = map[uint32]uint32{}
+	for i := 0; i < len(headers)-1; i++ {
+		nextExpectedBlockMap[headers[i].Height] = headers[i+1].Height
 	}
+	nextExpectedBlock = headers[0].Height
 
 	outOfOrderBlocks := make(map[uint32]*types.Block)
 
@@ -200,12 +188,12 @@ func processHeaders(headers []types.BlockHeader, lastHeight uint32) error {
 				outOfOrderBlocks[block.Height] = block
 			} else {
 				if block.Hash == "" {
-					nextExpectedBlock++
+					nextExpectedBlock = nextExpectedBlockMap[nextExpectedBlock]
 					continue
 				}
 				// Process block using its hash
 				CheckBlock(block)
-				nextExpectedBlock++
+				nextExpectedBlock = nextExpectedBlockMap[nextExpectedBlock]
 			}
 
 			var ok = true
@@ -213,16 +201,115 @@ func processHeaders(headers []types.BlockHeader, lastHeight uint32) error {
 				if block, ok = outOfOrderBlocks[nextExpectedBlock]; ok {
 					if block.Hash == "" {
 						delete(outOfOrderBlocks, nextExpectedBlock)
-						nextExpectedBlock++
+						nextExpectedBlock = nextExpectedBlockMap[nextExpectedBlock]
 						continue
 					}
 					CheckBlock(block)
 					delete(outOfOrderBlocks, nextExpectedBlock)
 					// Update next expected block
-					nextExpectedBlock++
+					nextExpectedBlock = nextExpectedBlockMap[nextExpectedBlock]
 				}
 			}
-
 		}
 	}
+}
+
+func PreSyncHeaders() error {
+	common.InfoLogger.Println("Syncing headers")
+
+	headerInv, err := dblevel.FetchHighestBlockHeaderInv()
+	if err != nil && !errors.Is(err, dblevel.NoEntryErr{}) {
+		common.ErrorLogger.Println(err)
+		return err
+	}
+
+	var syncFromHeight uint32
+	if err != nil && errors.Is(err, dblevel.NoEntryErr{}) {
+		syncFromHeight = common.TaprootActivation
+	} else {
+		// Sync from where the last header was set
+		syncFromHeight = common.TaprootActivation
+		if syncFromHeight <= headerInv.Height {
+			syncFromHeight = headerInv.Height + 1
+		}
+	}
+
+	blockchainInfo, err := GetBlockchainInfo()
+	if err != nil {
+		common.ErrorLogger.Fatalln(err)
+		return err
+	}
+	common.InfoLogger.Printf("blockchain info: %+v\n", blockchainInfo)
+
+	// todo might need to change flow control to use break
+	// number of headers that will maximally be fetched at once
+	step := common.SyncHeadersMaxPerCall
+	for i := syncFromHeight; i < blockchainInfo.Blocks; {
+		// Adjust for the last run when there are fewer headers left than the step; avoids index out of range
+		if i+step > blockchainInfo.Blocks {
+			step = blockchainInfo.Blocks - i + 1 // needs to be +1 because GetBlockHeadersBatch starts at start height and is hence technically zero indexed
+		}
+
+		var headers []types.BlockHeader
+		common.InfoLogger.Println("Getting next batch of headers from:", i)
+
+		var heights []uint32
+		for height := i; height < i+step; height++ {
+			heights = append(heights, height)
+		}
+		var heightsClean []uint32
+		heightsClean, err = dblevel.GetMissingHeadersInv(heights)
+		if err != nil {
+			common.ErrorLogger.Println(err)
+			return err
+		}
+
+		if len(heightsClean) == 0 {
+			err = updateBlockchainInfo(blockchainInfo)
+			if err != nil {
+				common.WarningLogger.Println(err)
+				return err
+			}
+			i += step
+			continue
+		}
+
+		headers, err = GetBlockHeadersBatch(heightsClean)
+		if err != nil {
+			common.ErrorLogger.Println(err)
+			return err
+		}
+		sort.Slice(headers, func(i, j int) bool {
+			return headers[i].Height < headers[j].Height
+		})
+
+		// convert BlockHeaders to BlockerHeadersInv
+		var headersInv []types.BlockHeaderInv
+		for _, header := range headers {
+			headersInv = append(headersInv, types.BlockHeaderInv{
+				Hash:   header.Hash,
+				Height: header.Height,
+				Flag:   false,
+			})
+		}
+		err = dblevel.InsertBatchBlockHeaderInv(headersInv)
+		if err != nil {
+			common.ErrorLogger.Println(err)
+			return err
+		}
+
+		// verify that headers are not already processed.
+		// We pre-check this before it is checked in CheckBlock function, might be redundant
+
+		i += step
+
+		// this keeps the syncing process up to date with the chain tip
+		// if syncing takes longer we avoid querying too many previous blocks in `HandleBlock`
+		err = updateBlockchainInfo(blockchainInfo)
+		if err != nil {
+			common.WarningLogger.Println(err)
+			return err
+		}
+	}
+	return nil
 }

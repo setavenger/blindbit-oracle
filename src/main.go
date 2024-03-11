@@ -125,19 +125,24 @@ func main() {
 
 	// moved into go routine such that the interrupt signal will apply properly
 	go func() {
-		err := core.SyncChain()
+		err := core.PreSyncHeaders()
 		if err != nil {
 			common.ErrorLogger.Fatalln(err)
 			return
 		}
-		core.CheckForNewBlockRoutine()
+		err = core.SyncChain()
+		if err != nil {
+			common.ErrorLogger.Fatalln(err)
+			return
+		}
+		go core.CheckForNewBlockRoutine()
+		go server.RunServer(&server.ApiHandler{})
 	}()
-
-	go server.RunServer(&server.ApiHandler{})
 
 	for true {
 		select {
 		case <-interrupt:
+			common.InfoLogger.Println("Program interrupted")
 			return
 		}
 	}

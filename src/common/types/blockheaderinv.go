@@ -9,16 +9,13 @@ import (
 	"errors"
 )
 
-// todo we could amend this type to also include a flag on whether this block has already been processed.
-//  We could have a complete list of all heights mapped to the hashes
-//  and then a signaling bit to see whether its been processed or not
-
-// BlockHeaderInv struct to hold the inverse BlockHeader data
-// Needed because we need different Serialisation for Pair interface
+// BlockHeaderInv struct to hold the inverse BlockHeader data.
+// Required because we need different Serialisation for Pair interface
 // todo change naming to be consistent?
 type BlockHeaderInv struct {
-	Hash   string `bson:"hash"`
-	Height uint32 `bson:"height"`
+	Hash   string
+	Height uint32
+	Flag   bool // indicates whether this Block has been processed
 }
 
 func PairFactoryBlockHeaderInv() Pair {
@@ -33,6 +30,11 @@ func (v *BlockHeaderInv) SerialiseKey() ([]byte, error) {
 
 func (v *BlockHeaderInv) SerialiseData() ([]byte, error) {
 	var buf bytes.Buffer
+	err := binary.Write(&buf, binary.BigEndian, v.Flag)
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return nil, err
+	}
 	blockHashBytes, err := hex.DecodeString(v.Hash)
 	if err != nil {
 		common.ErrorLogger.Println(err)
@@ -59,11 +61,16 @@ func (v *BlockHeaderInv) DeSerialiseKey(key []byte) error {
 }
 
 func (v *BlockHeaderInv) DeSerialiseData(data []byte) error {
-	if len(data) != 32 {
+	if len(data) != 1+32 {
 		common.ErrorLogger.Printf("wrong data length: %+v", data)
 		return errors.New("data is wrong length. should not happen")
 	}
-	v.Hash = hex.EncodeToString(data)
+	err := binary.Read(bytes.NewReader(data[:1]), binary.BigEndian, &v.Flag)
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return err
+	}
+	v.Hash = hex.EncodeToString(data[1:])
 	return nil
 }
 

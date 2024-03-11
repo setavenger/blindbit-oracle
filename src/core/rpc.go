@@ -108,18 +108,18 @@ func GetBestBlockHash() (string, error) {
 	return rpcResponse.Result, nil
 }
 
-func GetBlockHeadersBatch(startHeight, count uint32) ([]types.BlockHeader, error) {
+func GetBlockHeadersBatch(heights []uint32) ([]types.BlockHeader, error) {
 	// Prepare the batch request
-	batch := make([]types.RPCRequest, count)
-	headers := make([]types.BlockHeader, count)
+	batch := make([]types.RPCRequest, len(heights))
+	headers := make([]types.BlockHeader, len(heights))
 
 	// Initialize the batch with `getblockhash` requests
-	for i := uint32(0); i < count; i++ {
-		batch[i] = types.RPCRequest{
+	for idx, height := range heights {
+		batch[idx] = types.RPCRequest{
 			JSONRPC: "1.0",
 			ID:      "blindbit-silent-payment-backend-v0",
 			Method:  "getblockhash",
-			Params:  []interface{}{startHeight + i},
+			Params:  []interface{}{height},
 		}
 	}
 
@@ -128,7 +128,7 @@ func GetBlockHeadersBatch(startHeight, count uint32) ([]types.BlockHeader, error
 		ID     string      `json:"id"`
 		Result string      `json:"result,omitempty"`
 		Error  interface{} `json:"error,omitempty"`
-	}, count)
+	}, len(heights))
 
 	err := makeRPCRequest(batch, &hashResponses)
 	if err != nil {
@@ -150,7 +150,7 @@ func GetBlockHeadersBatch(startHeight, count uint32) ([]types.BlockHeader, error
 	}
 
 	// Perform the batched `getblockheader` requests
-	headerResponses := make([]types.RPCResponseHeader, count)
+	headerResponses := make([]types.RPCResponseHeader, len(heights))
 
 	err = makeRPCRequest(batch, &headerResponses)
 	if err != nil {

@@ -101,6 +101,7 @@ func CheckBlock(block *types.Block) {
 	err = dblevel.InsertBlockHeaderInv(types.BlockHeaderInv{
 		Hash:   block.Hash,
 		Height: block.Height,
+		Flag:   true,
 	})
 	if err != nil {
 		common.DebugLogger.Println("could not insert inverted header for:", block.Height, block.Hash)
@@ -162,7 +163,7 @@ func HandleBlock(block *types.Block) error {
 		common.ErrorLogger.Println(err)
 		return err
 	}
-	err = dblevel.InsertTweaks(tweaksForBlock)
+	err = dblevel.InsertBatchTweaks(tweaksForBlock)
 	if err != nil {
 		common.ErrorLogger.Println(err)
 		return err

@@ -20,7 +20,7 @@ type TxRequest struct {
 }
 
 func (h *ApiHandler) GetBestBlockHeight(c *gin.Context) {
-	lastHeader, err := dblevel.FetchHighestBlockHeaderInv()
+	lastHeader, err := dblevel.FetchHighestBlockHeaderInvByFlag(true)
 	if err != nil {
 		common.ErrorLogger.Println(err)
 		c.JSON(http.StatusInternalServerError, gin.H{

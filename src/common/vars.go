@@ -1,5 +1,7 @@
 package common
 
+const TaprootActivation uint32 = 709632
+
 var (
 	MongoDBURI  = "mongodb://root:example@127.0.0.1:27017/"
 	RpcEndpoint = "http://umbrel.local:8332/"
@@ -8,9 +10,8 @@ var (
 )
 
 // control vars
-
 var (
-	CatchUp uint32 = 833_155 // random block where BIP352 was not merged yet. todo change to actual number
+	CatchUp uint32 = 833_000 // random block where BIP352 was not active yet. todo change to actual number
 	// MinHeightToProcess No block below this number will be processed
 	// todo is this actually needed
 	//MinHeightToProcess uint32 = 833_000

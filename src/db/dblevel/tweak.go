@@ -5,7 +5,7 @@ import (
 	"SilentPaymentAppBackend/src/common/types"
 )
 
-func InsertTweaks(tweaks []types.Tweak) error {
+func InsertBatchTweaks(tweaks []types.Tweak) error {
 	common.InfoLogger.Println("Inserting tweaks...")
 	// Create a slice of types.Pair with the same length as pairs
 	pairs := make([]types.Pair, len(tweaks))

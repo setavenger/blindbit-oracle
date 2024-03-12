@@ -174,10 +174,14 @@ func processHeaders(headers []types.BlockHeader) error {
 			close(fetchedBlocks) // Close the channel to terminate the fetching goroutine
 			return errG
 		}
-		// Exit condition: Stop when the expected next block is beyond the end block
-		if nextExpectedBlock > headers[len(headers)-1].Height {
-			close(fetchedBlocks) // Close the channel to terminate the fetching goroutine
-			return errG
+		// todo if last element is processed it should always be 0
+		//// Exit condition: Stop when the expected next block is beyond the end block
+		//if nextExpectedBlock > headers[len(headers)-1].Height {
+		//	close(fetchedBlocks) // Close the channel to terminate the fetching goroutine
+		//	return errG
+		//}
+		if nextExpectedBlock == 0 {
+			break
 		}
 		select {
 		case block := <-fetchedBlocks:
@@ -189,11 +193,11 @@ func processHeaders(headers []types.BlockHeader) error {
 			} else {
 				if block.Hash == "" {
 					nextExpectedBlock = nextExpectedBlockMap[nextExpectedBlock]
-					continue
+				} else {
+					// Process block using its hash
+					CheckBlock(block)
+					nextExpectedBlock = nextExpectedBlockMap[nextExpectedBlock]
 				}
-				// Process block using its hash
-				CheckBlock(block)
-				nextExpectedBlock = nextExpectedBlockMap[nextExpectedBlock]
 			}
 
 			var ok = true
@@ -212,6 +216,7 @@ func processHeaders(headers []types.BlockHeader) error {
 			}
 		}
 	}
+	return nil
 }
 
 func PreSyncHeaders() error {

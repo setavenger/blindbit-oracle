@@ -11,41 +11,71 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2"
 	"math/big"
 	"sort"
+	"sync"
 )
 
 func ComputeTweaksForBlock(block *types.Block) ([]types.Tweak, error) {
 	common.InfoLogger.Println("Computing tweaks...")
 	var tweaks []types.Tweak
 
+	semaphore := make(chan struct{}, common.MaxParallelTweakComputations)
+
+	var errG error
+	var mu sync.Mutex // Mutex to protect shared resources
+
+	var wg sync.WaitGroup
+	// block fetcher routine
 	for _, tx := range block.Txs {
-		for _, vout := range tx.Vout {
-			// only compute tweak for txs with a taproot output
-			if vout.ScriptPubKey.Type == "witness_v1_taproot" {
-				tweakPerTx, err := ComputeTweakPerTx(&tx)
-				if err != nil {
-					common.ErrorLogger.Println(err)
-					return []types.Tweak{}, err
-				}
-				// we do this check for not eligible transactions like coinbase transactions
-				// they are not supposed to throw an error
-				// but also don't have a tweak that can be computed
-				if tweakPerTx != nil {
-					tweaks = append(tweaks, types.Tweak{
-						BlockHash:   block.Hash,
-						BlockHeight: block.Height,
-						Txid:        tx.Txid,
-						Data:        *tweakPerTx,
-					})
-				}
-				break
-			}
+		if errG != nil {
+			common.ErrorLogger.Println(errG)
+			break // If an error occurred, break the loop
 		}
+
+		semaphore <- struct{}{} // Acquire a slot
+		wg.Add(1)               // make the function wait for this slot
+		go func(_tx types.Transaction) {
+			//start := time.Now()
+			defer func() {
+				<-semaphore // Release the slot
+			}()
+
+			for _, vout := range _tx.Vout {
+				// only compute tweak for txs with a taproot output
+				if vout.ScriptPubKey.Type == "witness_v1_taproot" {
+					tweakPerTx, err := ComputeTweakPerTx(_tx)
+					if err != nil {
+						common.ErrorLogger.Println(err)
+						mu.Lock()
+						if errG == nil {
+							errG = err // Store the first error that occurs
+						}
+						mu.Unlock()
+						break
+					}
+					// we do this check for not eligible transactions like coinbase transactions
+					// they are not supposed to throw an error
+					// but also don't have a tweak that can be computed
+					if tweakPerTx != nil {
+						tweaks = append(tweaks, types.Tweak{
+							BlockHash:   block.Hash,
+							BlockHeight: block.Height,
+							Txid:        _tx.Txid,
+							Data:        *tweakPerTx,
+						})
+					}
+					break
+				}
+			}
+			wg.Done()
+		}(tx)
 	}
+
+	wg.Wait()
 	common.InfoLogger.Println("Tweaks computed...")
 	return tweaks, nil
 }
 
-func ComputeTweakPerTx(tx *types.Transaction) (*[33]byte, error) {
+func ComputeTweakPerTx(tx types.Transaction) (*[33]byte, error) {
 	//common.DebugLogger.Println("computing tweak for:", tx.Txid)
 	pubKeys := extractPubKeys(tx)
 	if pubKeys == nil {
@@ -63,7 +93,7 @@ func ComputeTweakPerTx(tx *types.Transaction) (*[33]byte, error) {
 		common.ErrorLogger.Println(err)
 		return nil, err
 	}
-	curve := btcec.KoblitzCurve{}
+	curve := btcec.S256()
 
 	x, y := curve.ScalarMult(summedKey.X(), summedKey.Y(), hash[:])
 
@@ -89,7 +119,7 @@ func ComputeTweakPerTx(tx *types.Transaction) (*[33]byte, error) {
 	return &tweakBytes, nil
 }
 
-func extractPubKeys(tx *types.Transaction) []string {
+func extractPubKeys(tx types.Transaction) []string {
 	var pubKeys []string
 
 	for _, vin := range tx.Vin {
@@ -262,7 +292,7 @@ func sumPublicKeys(pubKeys []string) (*btcec.PublicKey, error) {
 }
 
 // ComputeInputHash computes the input_hash for a transaction as per the specification.
-func ComputeInputHash(tx *types.Transaction, sumPublicKeys *btcec.PublicKey) ([32]byte, error) {
+func ComputeInputHash(tx types.Transaction, sumPublicKeys *btcec.PublicKey) ([32]byte, error) {
 	// Step 1: Aggregate public keys (A)
 
 	// Step 2: Find the lexicographically smallest outpoint (outpointL)
@@ -283,7 +313,7 @@ func ComputeInputHash(tx *types.Transaction, sumPublicKeys *btcec.PublicKey) ([3
 	return inputHash, nil
 }
 
-func findSmallestOutpoint(tx *types.Transaction) ([]byte, error) {
+func findSmallestOutpoint(tx types.Transaction) ([]byte, error) {
 	if len(tx.Vin) == 0 {
 		return nil, errors.New("transaction has no inputs")
 	}

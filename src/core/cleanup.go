@@ -13,12 +13,15 @@ todo needs a routine that cleans up the tweak data if no more utxos exist for a 
  In an optimal implementation this should not be needed though.
 */
 
-func removeSpentUTXOs(utxos []types.UTXO) error {
+func removeSpentUTXOsAndTweaks(utxos []types.UTXO) error {
+	// First delete the old UTXOs
 	err := dblevel.DeleteBatchUTXOs(utxos)
 	if err != nil {
 		common.ErrorLogger.Println(err)
 		return err
 	}
+
+	// Now begin process to find the tweaks that need to be deleted
 
 	// we only need to check for one utxo per txid, so we reduce the number of utxos -> fewer lookups in DB
 	var cleanUTXOs []types.UTXO
@@ -33,7 +36,7 @@ func removeSpentUTXOs(utxos []types.UTXO) error {
 
 	var tweaksToDelete []types.Tweak
 	for _, utxo := range cleanUTXOs {
-		_, err := dblevel.FetchByBlockHashAndTxidUTXOs(utxo.BlockHash, utxo.Txid)
+		_, err = dblevel.FetchByBlockHashAndTxidUTXOs(utxo.BlockHash, utxo.Txid)
 		if err != nil && !errors.Is(err, dblevel.NoEntryErr{}) {
 			common.ErrorLogger.Println(err)
 			return err

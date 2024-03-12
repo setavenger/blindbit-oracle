@@ -87,6 +87,7 @@ func CheckBlock(block *types.Block) {
 	// todo this should fail at the highest instance were its wrapped in,
 	//  fatal made sense here while it only had one use,
 	//  but might not want to exit the program if used in other locations
+	common.InfoLogger.Println("Processing block:", block.Height)
 
 	err := HandleBlock(block)
 	if err != nil {
@@ -130,7 +131,7 @@ func HandleBlock(block *types.Block) error {
 	// get spent taproot UTXOs
 	taprootSpent := extractSpentTaprootPubKeysFromBlock(block)
 
-	err := removeSpentUTXOs(taprootSpent)
+	err := removeSpentUTXOsAndTweaks(taprootSpent)
 	if err != nil {
 		common.ErrorLogger.Println(err)
 		return err

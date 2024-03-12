@@ -17,8 +17,9 @@ var (
 	//MinHeightToProcess uint32 = 833_000
 
 	// SyncHeadersMaxPerCall how many headers will maximally be requested in one batched RPC call
-	SyncHeadersMaxPerCall uint32 = 2_000
-	MaxParallelRequests   uint8  = 6
+	SyncHeadersMaxPerCall        uint32 = 2_000
+	MaxParallelRequests          uint8  = 6
+	MaxParallelTweakComputations        = 6
 )
 
 // NumsH = 0x50929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0

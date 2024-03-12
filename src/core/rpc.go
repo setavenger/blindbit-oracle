@@ -16,12 +16,14 @@ import (
 func makeRPCRequest(rpcData interface{}, result interface{}) error {
 	payload, err := json.Marshal(rpcData)
 	if err != nil {
+		common.ErrorLogger.Println(err)
 		return fmt.Errorf("error marshaling RPC data: %v", err)
 	}
 
 	// Prepare the request...
 	req, err := http.NewRequest("POST", common.RpcEndpoint, bytes.NewBuffer(payload))
 	if err != nil {
+		common.ErrorLogger.Println(err)
 		return fmt.Errorf("error creating request: %v", err)
 	}
 
@@ -43,6 +45,7 @@ func makeRPCRequest(rpcData interface{}, result interface{}) error {
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		common.DebugLogger.Println("status code:", resp.Status)
+		common.DebugLogger.Println("status body:", resp.Body)
 		return fmt.Errorf("error reading response body: %v", err)
 	}
 

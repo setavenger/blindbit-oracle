@@ -41,10 +41,10 @@ func SyncChain() error {
 
 		var heights []uint32
 		for height := i; height < i+step; height++ {
-			heights = append(heights, i)
+			heights = append(heights, height)
 		}
 		var heightsClean []uint32
-		heightsClean, err = dblevel.GetMissingHeadersInv(heights)
+		heightsClean, err = dblevel.GetMissingHeadersInvFlag(heights, false) // only find unprocessed blocks heights
 		if err != nil {
 			common.ErrorLogger.Println(err)
 			return err
@@ -139,7 +139,7 @@ func processHeaders(headers []types.BlockHeader) error {
 						// Log and skip this block since it's already been processed
 						// send empty block to signal it was processed, will be skipped in processing loop
 						fetchedBlocks <- &types.Block{Height: _header.Height}
-						//common.InfoLogger.Printf("Block %d already processed\n", _header.Height)
+						common.InfoLogger.Printf("Block %d already processed\n", _header.Height)
 					} else {
 						// For other errors, log and store the first occurrence, then exit
 						common.ErrorLogger.Println(err)

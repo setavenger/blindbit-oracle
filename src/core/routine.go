@@ -97,17 +97,7 @@ func CheckBlock(block *types.Block) {
 		return
 	}
 
-	// insert normal BlockHeader last as that is the basis on which we pull new blocks
-	err = dblevel.InsertBlockHeaderInv(types.BlockHeaderInv{
-		Hash:   block.Hash,
-		Height: block.Height,
-		Flag:   true,
-	})
-	if err != nil {
-		common.DebugLogger.Println("could not insert inverted header for:", block.Height, block.Hash)
-		return
-	}
-
+	// insert flagged BlockHeader last as that is the basis on which we pull new blocks
 	err = dblevel.InsertBlockHeader(types.BlockHeader{
 		Hash:          block.Hash,
 		PrevBlockHash: block.PreviousBlockHash,
@@ -116,6 +106,16 @@ func CheckBlock(block *types.Block) {
 	})
 	if err != nil {
 		common.DebugLogger.Println("could not insert header for:", block.Hash)
+		return
+	}
+
+	err = dblevel.InsertBlockHeaderInv(types.BlockHeaderInv{
+		Hash:   block.Hash,
+		Height: block.Height,
+		Flag:   true,
+	})
+	if err != nil {
+		common.DebugLogger.Println("could not insert inverted header for:", block.Height, block.Hash)
 		return
 	}
 
@@ -137,9 +137,7 @@ func HandleBlock(block *types.Block) error {
 	}
 
 	// build light UTXOs
-	common.InfoLogger.Println("Processing Light UTXOs")
 	lightUTXOs := CreateLightUTXOs(block)
-	common.InfoLogger.Println("Light UTXOs processed")
 	err = dblevel.InsertUTXOs(lightUTXOs)
 	if err != nil {
 		common.ErrorLogger.Println(err)

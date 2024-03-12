@@ -4,3 +4,4 @@
 docker-compose.yaml
 /data
 /.run/
+/profiling/

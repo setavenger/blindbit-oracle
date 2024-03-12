@@ -26,7 +26,8 @@ func InsertBatchBlockHeaderInv(headersInv []types.BlockHeaderInv) error {
 
 	// Convert each HeaderInv to a Pair and assign it to the new slice
 	for i, pair := range headersInv {
-		pairs[i] = &pair
+		pairHelp := pair
+		pairs[i] = &pairHelp // todo fix assigning the pointer writes the same value all the time
 	}
 
 	err := insertBatch(HeadersInvDB, pairs)
@@ -34,7 +35,10 @@ func InsertBatchBlockHeaderInv(headersInv []types.BlockHeaderInv) error {
 		common.ErrorLogger.Println(err)
 		return err
 	}
-	common.InfoLogger.Printf("Inserted %d tweaks", len(headersInv))
+	//for _, headerInv := range headersInv {
+	//	common.InfoLogger.Printf("Inserted height: %d\n", headerInv.Height)
+	//}
+	common.InfoLogger.Printf("Inserted %d headers-inv\n", len(headersInv))
 	return nil
 }
 
@@ -118,7 +122,7 @@ func FetchHighestBlockHeaderInvByFlag(flag bool) (*types.BlockHeaderInv, error) 
 	return &result, err
 }
 
-// GetMissingHeadersInv looks for all missing BlockerHeadersInv in the range of max_height of heights and min_height
+// GetMissingHeadersInv looks for all missing BlockerHeadersInv heights in the range of max_height of heights and min_height
 func GetMissingHeadersInv(heights []uint32) ([]uint32, error) {
 	// general combination of heights as input could be simplified
 	// to directly compare the keys in the iter against the heights provided
@@ -157,12 +161,17 @@ func GetMissingHeadersInv(heights []uint32) ([]uint32, error) {
 		return nil, err
 	}
 
-	// Create an iterator that iterates in reverse order
 	iter := HeadersInvDB.NewIterator(&util.Range{Start: minHeightBuf.Bytes(), Limit: maxHeightBuf.Bytes()}, nil)
 	defer iter.Release()
 	var pairs []types.BlockHeaderInv
 
-	for iter.Next() {
+	// go backwards, it is more likely that we will be looking for recent blocks
+	ok := iter.Last()
+	if !ok {
+		return heights, nil
+	}
+
+	for iter.Prev() {
 		pair := types.BlockHeaderInv{}
 		// we only need the key for the height
 		err = pair.DeSerialiseKey(iter.Key())
@@ -171,6 +180,106 @@ func GetMissingHeadersInv(heights []uint32) ([]uint32, error) {
 			return nil, err
 		}
 		pairs = append(pairs, pair)
+	}
+
+	err = iter.Error()
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return nil, err
+	}
+
+	// shortcut to save some iterations below
+	if len(pairs) == 0 {
+		return heights, nil
+	}
+
+	var unmatchedHeights []uint32
+	heightSet := make(map[uint32]bool)
+
+	// Populate the set with heights from blockHeaders
+	for _, blockHeader := range pairs {
+		heightSet[blockHeader.Height] = true
+	}
+
+	// Iterate over the heights array and check each height against the set
+	for _, height := range heights {
+		if _, found := heightSet[height]; !found {
+			unmatchedHeights = append(unmatchedHeights, height)
+		}
+	}
+
+	return unmatchedHeights, err
+}
+
+// GetMissingHeadersInvFlag looks for all missing BlockerHeadersInv heights with a certain flag
+// in the range of max_height of heights and min_height according to a
+func GetMissingHeadersInvFlag(heights []uint32, flag bool) ([]uint32, error) {
+	// general combination of heights as input could be simplified
+	// to directly compare the keys in the iter against the heights provided
+	// keeping it general might not be bad for future use cases
+	// keep an eye on performance around this function
+
+	if len(heights) == 0 {
+		common.ErrorLogger.Println("passed an empty slice to check")
+		return []uint32{}, nil
+	}
+
+	var minHeight = heights[0]
+	var maxHeight = heights[0]
+
+	for _, height := range heights {
+		if height > maxHeight {
+			maxHeight = height
+			continue // can't be both higher than max and lower than min, skip to save time
+		}
+		if height < minHeight {
+			minHeight = height
+		}
+	}
+
+	// convert min and max to bytes for range inputs
+	var minHeightBuf bytes.Buffer
+	err := binary.Write(&minHeightBuf, binary.BigEndian, minHeight)
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return nil, err
+	}
+	var maxHeightBuf bytes.Buffer
+	err = binary.Write(&maxHeightBuf, binary.BigEndian, maxHeight)
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return nil, err
+	}
+
+	iter := HeadersInvDB.NewIterator(&util.Range{Start: minHeightBuf.Bytes(), Limit: maxHeightBuf.Bytes()}, nil)
+	defer iter.Release()
+	var pairs []types.BlockHeaderInv
+
+	// go backwards, it is more likely that we will be looking for recent blocks
+	ok := iter.Last()
+	if !ok {
+		return heights, nil
+	}
+
+	for iter.Prev() {
+		pair := types.BlockHeaderInv{}
+		// Deserialize data first
+		err = pair.DeSerialiseData(iter.Value())
+		if err != nil {
+			common.ErrorLogger.Println(err)
+			return nil, err
+		}
+
+		// need the inverse of the flag
+		// we throw out all of those that match below
+		if pair.Flag == !flag {
+			err = pair.DeSerialiseKey(iter.Key())
+			if err != nil {
+				common.ErrorLogger.Println(err)
+				return nil, err
+			}
+			pairs = append(pairs, pair)
+		}
 	}
 
 	err = iter.Error()

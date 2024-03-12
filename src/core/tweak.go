@@ -14,6 +14,7 @@ import (
 )
 
 func ComputeTweaksForBlock(block *types.Block) ([]types.Tweak, error) {
+	common.InfoLogger.Println("Computing tweaks...")
 	var tweaks []types.Tweak
 
 	for _, tx := range block.Txs {
@@ -40,6 +41,7 @@ func ComputeTweaksForBlock(block *types.Block) ([]types.Tweak, error) {
 			}
 		}
 	}
+	common.InfoLogger.Println("Tweaks computed...")
 	return tweaks, nil
 }
 
@@ -57,6 +59,8 @@ func ComputeTweakPerTx(tx *types.Transaction) (*[33]byte, error) {
 	}
 	hash, err := ComputeInputHash(tx, summedKey)
 	if err != nil {
+		common.DebugLogger.Println("tx:", tx.Txid)
+		common.ErrorLogger.Println(err)
 		return nil, err
 	}
 	curve := btcec.KoblitzCurve{}

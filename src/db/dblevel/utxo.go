@@ -25,7 +25,7 @@ func InsertUTXOs(utxos []types.UTXO) error {
 }
 
 func FetchByBlockHashUTXOs(blockHash string) ([]types.UTXO, error) {
-	common.InfoLogger.Println("Fetching UTXOs")
+	//common.InfoLogger.Println("Fetching UTXOs")
 	pairs, err := retrieveManyByBlockHash(UTXOsDB, blockHash, types.PairFactoryUTXO)
 	if err != nil {
 		common.ErrorLogger.Println(err)
@@ -45,13 +45,13 @@ func FetchByBlockHashUTXOs(blockHash string) ([]types.UTXO, error) {
 			panic("wrong pair struct returned")
 		}
 	}
-	common.InfoLogger.Printf("Fetched %d UTXOs\n", len(result))
+	//common.InfoLogger.Printf("Fetched %d UTXOs\n", len(result))
 
 	return result, nil
 }
 
 func FetchByBlockHashAndTxidUTXOs(blockHash, txid string) ([]types.UTXO, error) {
-	common.InfoLogger.Println("Fetching UTXOs")
+	//common.InfoLogger.Println("Fetching UTXOs")
 	pairs, err := retrieveManyByBlockHashAndTxid(UTXOsDB, blockHash, txid, types.PairFactoryUTXO)
 	if err != nil {
 		common.ErrorLogger.Println(err)
@@ -71,7 +71,7 @@ func FetchByBlockHashAndTxidUTXOs(blockHash, txid string) ([]types.UTXO, error) 
 			panic("wrong pair struct returned")
 		}
 	}
-	common.InfoLogger.Printf("Fetched %d UTXOs\n", len(result))
+	//common.InfoLogger.Printf("Fetched %d UTXOs\n", len(result))
 
 	return result, nil
 }

@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/http"
+	_ "net/http/pprof" // Import for side effects: registers pprof handlers with the default mux.
 	"os"
 	"os/signal"
 	"strconv"
@@ -16,6 +18,9 @@ import (
 )
 
 func init() {
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
 	err := os.Mkdir("./logs", 0750)
 	if err != nil && !strings.Contains(err.Error(), "file exists") {
 		fmt.Println(err.Error())

@@ -44,6 +44,7 @@ func extractSpentTaprootPubKeysFromTx(tx *types.Transaction, block *types.Block)
 		if vin.Coinbase != "" {
 			continue
 		}
+		// todo change switch to simple if statement
 		switch vin.Prevout.ScriptPubKey.Type {
 
 		case "witness_v1_taproot":
@@ -61,7 +62,8 @@ func extractSpentTaprootPubKeysFromTx(tx *types.Transaction, block *types.Block)
 					common.ErrorLogger.Println(err)
 					// panic becuase if this fails it means we have incomplete data which requires a sync
 					common.ErrorLogger.Printf("tx: %+v\n", tx)
-					common.ErrorLogger.Println("Headers not synced from taproot activation height (709632). Either build complete index or fully sync headers only.")
+					common.ErrorLogger.Printf("prevout: %+v\n", vin.Prevout)
+					common.ErrorLogger.Println("Headers not synced from taproot activation height (708567). Either build complete index or fully sync headers only.")
 					panic(err)
 				}
 				blockHash = headerInv.Hash

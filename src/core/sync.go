@@ -230,10 +230,12 @@ func PreSyncHeaders() error {
 
 	var syncFromHeight uint32
 	if err != nil && errors.Is(err, dblevel.NoEntryErr{}) {
-		syncFromHeight = common.TaprootActivation
+		// we have to start before taproot activation height
+		// some taproot style pubKeys exist since height ~614000 (the last height I checked)
+		syncFromHeight = 500_000
 	} else {
 		// Sync from where the last header was set
-		syncFromHeight = common.TaprootActivation
+		syncFromHeight = 500_000
 		if syncFromHeight <= headerInv.Height {
 			syncFromHeight = headerInv.Height + 1
 		}

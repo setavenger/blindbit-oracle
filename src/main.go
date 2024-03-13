@@ -8,8 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net/http"
-	_ "net/http/pprof" // Import for side effects: registers pprof handlers with the default mux.
+	//_ "net/http/pprof" // Import for side effects: registers pprof handlers with the default mux.
 	"os"
 	"os/signal"
 	"strconv"
@@ -18,9 +17,9 @@ import (
 )
 
 func init() {
-	go func() {
-		log.Println(http.ListenAndServe("localhost:6060", nil))
-	}()
+	//go func() {
+	//	log.Println(http.ListenAndServe("localhost:6060", nil))
+	//}()
 	err := os.Mkdir("./logs", 0750)
 	if err != nil && !strings.Contains(err.Error(), "file exists") {
 		fmt.Println(err.Error())
@@ -84,18 +83,6 @@ func init() {
 	}
 }
 
-// todo investigate whether we should change the compound keys to use the height instead of the hash.
-//  As keys are sorted this could potentially give a performance boost due to better order across blocks
-// todo document EVERYTHING: especially serialisation patterns to easily look them up later
-// todo redo the storage system,
-//  after syncing ~5_500 blocks the estimated storage at 100_000 blocks for tweaks alone,
-//  will be somewhere around 40Gb
-//  Additionally performance is getting worse
-// todo investigate whether rpc parallel calls can speed up syncing
-//  caution: currently the flow is synchronous and hence there is less complexity making parallel calls will change that
-// todo include redundancy for when rpc calls are failing (probably due to networking issues in testing home environment)
-// todo review all duplicate key error exemptions and raise to error/warn from debug
-// todo remove unnecessary panics
 func main() {
 	defer func() {
 		err := dblevel.HeadersDB.Close()
@@ -130,6 +117,7 @@ func main() {
 
 	// moved into go routine such that the interrupt signal will apply properly
 	go func() {
+		startSync := time.Now()
 		err := core.PreSyncHeaders()
 		if err != nil {
 			common.ErrorLogger.Fatalln(err)
@@ -140,6 +128,7 @@ func main() {
 			common.ErrorLogger.Fatalln(err)
 			return
 		}
+		common.InfoLogger.Printf("Sync took: %s", time.Now().Sub(startSync).String())
 		go core.CheckForNewBlockRoutine()
 		go server.RunServer(&server.ApiHandler{})
 	}()

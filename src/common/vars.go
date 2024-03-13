@@ -1,10 +1,12 @@
 package common
 
+// TaprootActivation
+// todo might be inapplicable due to transactions that have taproot prevouts from before the activation
+//  is relevant for the height-to-hash lookup in the db
 const TaprootActivation uint32 = 709632
 
 var (
-	MongoDBURI  = "mongodb://root:example@127.0.0.1:27017/"
-	RpcEndpoint = "http://umbrel.local:8332/"
+	RpcEndpoint = "http://127.0.0.1:8332" // default local node
 	RpcUser     = ""
 	RpcPass     = ""
 )
@@ -17,8 +19,8 @@ var (
 	//MinHeightToProcess uint32 = 833_000
 
 	// SyncHeadersMaxPerCall how many headers will maximally be requested in one batched RPC call
-	SyncHeadersMaxPerCall        uint32 = 2_000
-	MaxParallelRequests          uint8  = 6
+	SyncHeadersMaxPerCall        uint32 = 10_000
+	MaxParallelRequests          uint8  = 12
 	MaxParallelTweakComputations        = 12
 )
 

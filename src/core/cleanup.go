@@ -41,7 +41,7 @@ func removeSpentUTXOsAndTweaks(utxos []types.UTXO) error {
 			common.ErrorLogger.Println(err)
 			return err
 		} else if err != nil && errors.Is(err, dblevel.NoEntryErr{}) {
-			//	if no UTXOs are left for a certain blockHash txid combination we can remove the tweak
+			//	if no UTXOs are left for a certain blockHash-txid combination we can remove the tweak
 			tweaksToDelete = append(tweaksToDelete, types.Tweak{
 				// we only need those Fields to serialise the key
 				BlockHash: utxo.BlockHash,

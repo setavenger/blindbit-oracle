@@ -156,12 +156,14 @@ func HandleBlock(block *types.Block) error {
 		common.ErrorLogger.Println(err)
 		return err
 	}
-
-	tweaksForBlock, err := ComputeTweaksForBlock(block)
+	common.InfoLogger.Println("Computing tweaks...")
+	tweaksForBlock, err := ComputeTweaksForBlockV2(block)
 	if err != nil {
 		common.ErrorLogger.Println(err)
 		return err
 	}
+	common.InfoLogger.Println("Tweaks computed...")
+
 	err = dblevel.InsertBatchTweaks(tweaksForBlock)
 	if err != nil {
 		common.ErrorLogger.Println(err)

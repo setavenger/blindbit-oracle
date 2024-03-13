@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"testing"
 )
 
@@ -107,6 +108,26 @@ func LoadCaseData(t *testing.T) ([]TestCase, error) {
 	}
 
 	return testCases, err
+}
+
+func LoadAndUnmarshalBlockFromFile(filePath string, block *types.Block) error {
+
+	// Read the JSON file
+	data, err := ioutil.ReadFile(filePath)
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+
+	var result types.RPCResponseBlock
+	// Unmarshal the JSON data into the struct
+	err = json.Unmarshal(data, &result)
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+	*block = result.Block
+	return err
 }
 
 // parseWitnessScript parses a hex-encoded witness script and returns the actual witness data as a list,

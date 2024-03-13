@@ -2,6 +2,132 @@
 
 This file is to keep track of changes made over time and to have reference points for the implementation.
 
+## Tweak Computation Performance
+
+Results from Benchmarking. Running v2 is a clear win in terms of speed for all types of blocks (many txs and few txs).
+Spinning up a go routine for every tweak seems very efficient. But can it be improved? Can push the performance even a bit more? 
+Next I want to try to assign a number of tweaks to a goroutine before it spins up, 
+so that we don't have the overhead of a goroutine spinning up all the time. 
+
+```text
+Allowed number of parallel processes (`common.MaxParallelTweakComputations`) was 6.
+
+goos: darwin
+goarch: amd64
+pkg: SilentPaymentAppBackend/src/core
+cpu: Intel(R) Core(TM) i9-9880H CPU @ 2.30GHz
+BenchmarkTweakV2Block833000-16                40          32978726 ns/op
+BenchmarkTweakV1Block833000-16                 8         132168333 ns/op
+BenchmarkTweakV2Block833010-16                21          55258107 ns/op
+BenchmarkTweakV1Block833010-16                 5         219691875 ns/op
+BenchmarkTweakV2Block833013-16                27          51755626 ns/op
+BenchmarkTweakV1Block833013-16                 6         191223854 ns/op
+BenchmarkTweakV2Block834469-16                56          21750344 ns/op
+BenchmarkTweakV1Block834469-16                16          70707631 ns/op
+PASS
+ok      SilentPaymentAppBackend/src/core        13.452s
+```
+V2 Code
+```go
+func ComputeTweaksForBlockV2(block *types.Block) ([]types.Tweak, error) {
+	// moved outside of function avoid issues with benchmarking
+	//common.InfoLogger.Println("Computing tweaks...")
+	var tweaks []types.Tweak
+
+	semaphore := make(chan struct{}, common.MaxParallelTweakComputations)
+
+	var errG error
+	var mu sync.Mutex // Mutex to protect shared resources
+
+	var wg sync.WaitGroup
+	// block fetcher routine
+	for _, tx := range block.Txs {
+		if errG != nil {
+			common.ErrorLogger.Println(errG)
+			break // If an error occurred, break the loop
+		}
+
+		semaphore <- struct{}{} // Acquire a slot
+		wg.Add(1)               // make the function wait for this slot
+		go func(_tx types.Transaction) {
+			//start := time.Now()
+			defer func() {
+				<-semaphore // Release the slot
+			}()
+
+			for _, vout := range _tx.Vout {
+				// only compute tweak for txs with a taproot output
+				if vout.ScriptPubKey.Type == "witness_v1_taproot" {
+					tweakPerTx, err := ComputeTweakPerTx(_tx)
+					if err != nil {
+						common.ErrorLogger.Println(err)
+						mu.Lock()
+						if errG == nil {
+							errG = err // Store the first error that occurs
+						}
+						mu.Unlock()
+						break
+					}
+					// we do this check for not eligible transactions like coinbase transactions
+					// they are not supposed to throw an error
+					// but also don't have a tweak that can be computed
+					if tweakPerTx != nil {
+						tweaks = append(tweaks, types.Tweak{
+							BlockHash:   block.Hash,
+							BlockHeight: block.Height,
+							Txid:        _tx.Txid,
+							Data:        *tweakPerTx,
+						})
+					}
+					break
+				}
+			}
+			wg.Done()
+		}(tx)
+	}
+
+	wg.Wait()
+	//common.InfoLogger.Println("Tweaks computed...")
+	return tweaks, nil
+}
+```
+
+V1 Code
+```go
+func ComputeTweaksForBlockV1(block *types.Block) ([]types.Tweak, error) {
+	//common.InfoLogger.Println("Computing tweaks...")
+	var tweaks []types.Tweak
+
+	for _, tx := range block.Txs {
+		for _, vout := range tx.Vout {
+			// only compute tweak for txs with a taproot output
+			if vout.ScriptPubKey.Type == "witness_v1_taproot" {
+				tweakPerTx, err := ComputeTweakPerTx(tx)
+				if err != nil {
+					common.ErrorLogger.Println(err)
+					return []types.Tweak{}, err
+				}
+				// we do this check for not eligible transactions like coinbase transactions
+				// they are not supposed to throw an error
+				// but also don't have a tweak that can be computed
+				if tweakPerTx != nil {
+					tweaks = append(tweaks, types.Tweak{
+						BlockHash:   block.Hash,
+						BlockHeight: block.Height,
+						Txid:        tx.Txid,
+						Data:        *tweakPerTx,
+					})
+				}
+				break
+			}
+		}
+	}
+	//common.InfoLogger.Println("Tweaks computed...")
+	return tweaks, nil
+}
+```
+
+
 ## Database Efficiency
 
 ### Overview

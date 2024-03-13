@@ -2,6 +2,7 @@ package core
 
 import (
 	"SilentPaymentAppBackend/src/common"
+	"SilentPaymentAppBackend/src/common/types"
 	"SilentPaymentAppBackend/src/testhelpers"
 	"encoding/hex"
 	"log"
@@ -9,11 +10,18 @@ import (
 	"testing"
 )
 
+var b833000 types.Block
+
 func init() {
 	common.DebugLogger = log.New(os.Stdout, "[DEBUG] ", log.Ldate|log.Lmicroseconds|log.Lshortfile|log.Lmsgprefix)
 	common.InfoLogger = log.New(os.Stdout, "[INFO] ", log.Ldate|log.Lmicroseconds|log.Lshortfile|log.Lmsgprefix)
 	common.WarningLogger = log.New(os.Stdout, "[WARNING] ", log.Ldate|log.Lmicroseconds|log.Lshortfile|log.Lmsgprefix)
 	common.ErrorLogger = log.New(os.Stdout, "[ERROR] ", log.Ldate|log.Lmicroseconds|log.Lshortfile|log.Lmsgprefix)
+
+	err := testhelpers.LoadAndUnmarshalBlockFromFile("../test_data/block_833000.json", &b833000)
+	if err != nil {
+		log.Fatalln(err)
+	}
 }
 
 // todo integrate the test vectors into the tests
@@ -31,7 +39,7 @@ func TestSimpleInputHash(t *testing.T) {
 		return
 	}
 
-	pubKeys := extractPubKeys(&tx)
+	pubKeys := extractPubKeys(tx)
 	if pubKeys == nil {
 		t.Error("exit no pub keys found")
 		return
@@ -43,7 +51,7 @@ func TestSimpleInputHash(t *testing.T) {
 		return
 	}
 	common.DebugLogger.Println(hex.EncodeToString(summedKey.SerializeCompressed()))
-	inputHash, err := ComputeInputHash(&tx, summedKey)
+	inputHash, err := ComputeInputHash(tx, summedKey)
 	if err != nil {
 		t.Error(err)
 		return
@@ -75,7 +83,7 @@ func TestComputeAllReceivingTweaks(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			tweakPerTx, err := ComputeTweakPerTx(&tx)
+			tweakPerTx, err := ComputeTweakPerTx(tx)
 			if err != nil {
 				t.Error(err)
 				return
@@ -93,4 +101,19 @@ func TestComputeAllReceivingTweaks(t *testing.T) {
 		}
 	}
 
+}
+
+func TestBlockProcessingTime(t *testing.T) {
+	common.InfoLogger.Println("Starting v2 computation")
+	_, err := ComputeTweaksForBlockV2(&b833000)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	common.InfoLogger.Println("Finished v2 computation")
+	common.InfoLogger.Println("Starting v1 computation")
+	_, err = ComputeTweaksForBlockV1(&b833000)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	common.InfoLogger.Println("Finished v1 computation")
 }

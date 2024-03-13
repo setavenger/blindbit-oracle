@@ -64,9 +64,9 @@ func init() {
 	// open levelDB connections
 	openLevelDBConnections()
 
-	mongoDBConnection := os.Getenv("MONGO_DB_CONNECTION")
-	if mongoDBConnection != "" {
-		common.MongoDBURI = mongoDBConnection
+	rpcEndpoint := os.Getenv("RPC_ENDPOINT")
+	if rpcEndpoint != "" {
+		common.RpcEndpoint = rpcEndpoint
 	}
 
 	rpcUser := os.Getenv("RPC_USER")

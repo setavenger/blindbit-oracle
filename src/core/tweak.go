@@ -14,8 +14,9 @@ import (
 	"sync"
 )
 
-func ComputeTweaksForBlock(block *types.Block) ([]types.Tweak, error) {
-	common.InfoLogger.Println("Computing tweaks...")
+func ComputeTweaksForBlockV2(block *types.Block) ([]types.Tweak, error) {
+	// moved outside of function avoid issues with benchmarking
+	//common.InfoLogger.Println("Computing tweaks...")
 	var tweaks []types.Tweak
 
 	semaphore := make(chan struct{}, common.MaxParallelTweakComputations)
@@ -71,7 +72,39 @@ func ComputeTweaksForBlock(block *types.Block) ([]types.Tweak, error) {
 	}
 
 	wg.Wait()
-	common.InfoLogger.Println("Tweaks computed...")
+	//common.InfoLogger.Println("Tweaks computed...")
+	return tweaks, nil
+}
+
+func ComputeTweaksForBlockV1(block *types.Block) ([]types.Tweak, error) {
+	//common.InfoLogger.Println("Computing tweaks...")
+	var tweaks []types.Tweak
+
+	for _, tx := range block.Txs {
+		for _, vout := range tx.Vout {
+			// only compute tweak for txs with a taproot output
+			if vout.ScriptPubKey.Type == "witness_v1_taproot" {
+				tweakPerTx, err := ComputeTweakPerTx(tx)
+				if err != nil {
+					common.ErrorLogger.Println(err)
+					return []types.Tweak{}, err
+				}
+				// we do this check for not eligible transactions like coinbase transactions
+				// they are not supposed to throw an error
+				// but also don't have a tweak that can be computed
+				if tweakPerTx != nil {
+					tweaks = append(tweaks, types.Tweak{
+						BlockHash:   block.Hash,
+						BlockHeight: block.Height,
+						Txid:        tx.Txid,
+						Data:        *tweakPerTx,
+					})
+				}
+				break
+			}
+		}
+	}
+	//common.InfoLogger.Println("Tweaks computed...")
 	return tweaks, nil
 }
 

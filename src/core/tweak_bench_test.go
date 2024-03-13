@@ -51,6 +51,24 @@ func init() {
 	}
 }
 
+func BenchmarkTweakV4Block833000(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		_, err := ComputeTweaksForBlockV4(&block833000)
+		if err != nil {
+			log.Fatalln(err)
+		}
+	}
+}
+
+func BenchmarkTweakV3Block833000(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		_, err := ComputeTweaksForBlockV3(&block833000)
+		if err != nil {
+			log.Fatalln(err)
+		}
+	}
+}
+
 func BenchmarkTweakV2Block833000(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_, err := ComputeTweaksForBlockV2(&block833000)
@@ -63,6 +81,24 @@ func BenchmarkTweakV2Block833000(b *testing.B) {
 func BenchmarkTweakV1Block833000(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_, err := ComputeTweaksForBlockV1(&block833000)
+		if err != nil {
+			log.Fatalln(err)
+		}
+	}
+}
+
+func BenchmarkTweakV4Block833010(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		_, err := ComputeTweaksForBlockV4(&block833010)
+		if err != nil {
+			log.Fatalln(err)
+		}
+	}
+}
+
+func BenchmarkTweakV3Block833010(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		_, err := ComputeTweaksForBlockV3(&block833010)
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -87,6 +123,24 @@ func BenchmarkTweakV1Block833010(b *testing.B) {
 	}
 }
 
+func BenchmarkTweakV4Block833013(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		_, err := ComputeTweaksForBlockV4(&block833013)
+		if err != nil {
+			log.Fatalln(err)
+		}
+	}
+}
+
+func BenchmarkTweakV3Block833013(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		_, err := ComputeTweaksForBlockV3(&block833013)
+		if err != nil {
+			log.Fatalln(err)
+		}
+	}
+}
+
 func BenchmarkTweakV2Block833013(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_, err := ComputeTweaksForBlockV2(&block833013)
@@ -99,6 +153,24 @@ func BenchmarkTweakV2Block833013(b *testing.B) {
 func BenchmarkTweakV1Block833013(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_, err := ComputeTweaksForBlockV1(&block833013)
+		if err != nil {
+			log.Fatalln(err)
+		}
+	}
+}
+
+func BenchmarkTweakV4Block834469(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		_, err := ComputeTweaksForBlockV4(&block834469)
+		if err != nil {
+			log.Fatalln(err)
+		}
+	}
+}
+
+func BenchmarkTweakV3Block834469(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		_, err := ComputeTweaksForBlockV3(&block834469)
 		if err != nil {
 			log.Fatalln(err)
 		}

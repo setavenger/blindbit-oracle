@@ -9,6 +9,41 @@ Spinning up a go routine for every tweak seems very efficient. But can it be imp
 Next I want to try to assign a number of tweaks to a goroutine before it spins up, 
 so that we don't have the overhead of a goroutine spinning up all the time. 
 
+We variations between different benchmarking calls, 
+as seen by v1 where the only one thread is used, and we still see some discrepancies.
+Overall the pattern becomes clear. v4 reduces the overhead of goroutine spawning significantly but does not outperform v2 in any real way.
+v2 seems to be quite optimised at this point. I'm not quite sure what one could try to boost performance except of course just utilizing more cores.
+Using more cores clearly improves the performance (almost linearly in some cases). 
+Parallel processing could be used for extracting [spent UTXOs](./src/core/extractutxos.go) (L:31) as well. 
+This is not a priority at the moment as the processing time seems to be low.
+### 12 Goroutines
+
+```text
+goos: darwin
+goarch: amd64
+pkg: SilentPaymentAppBackend/src/core
+cpu: Intel(R) Core(TM) i9-9880H CPU @ 2.30GHz
+BenchmarkTweakV4Block833000-16                66          18221455 ns/op
+BenchmarkTweakV3Block833000-16                51          23240305 ns/op
+BenchmarkTweakV2Block833000-16                66          18484002 ns/op
+BenchmarkTweakV1Block833000-16                 8         158669041 ns/op
+BenchmarkTweakV4Block833010-16                42          28893857 ns/op
+BenchmarkTweakV3Block833010-16                30          37702025 ns/op
+BenchmarkTweakV2Block833010-16                42          28723057 ns/op
+BenchmarkTweakV1Block833010-16                 5         212243446 ns/op
+BenchmarkTweakV4Block833013-16                44          28600250 ns/op
+BenchmarkTweakV3Block833013-16                36          34166821 ns/op
+BenchmarkTweakV2Block833013-16                42          28579243 ns/op
+BenchmarkTweakV1Block833013-16                 6         190190890 ns/op
+BenchmarkTweakV4Block834469-16                86          13207238 ns/op
+BenchmarkTweakV3Block834469-16                91          12260387 ns/op
+BenchmarkTweakV2Block834469-16                82          13145223 ns/op
+BenchmarkTweakV1Block834469-16                15          75665007 ns/op
+PASS
+ok      SilentPaymentAppBackend/src/core        25.640s
+```
+
+### 6 Goroutines
 ```text
 Allowed number of parallel processes (`common.MaxParallelTweakComputations`) was 6.
 
@@ -16,18 +51,173 @@ goos: darwin
 goarch: amd64
 pkg: SilentPaymentAppBackend/src/core
 cpu: Intel(R) Core(TM) i9-9880H CPU @ 2.30GHz
-BenchmarkTweakV2Block833000-16                40          32978726 ns/op
-BenchmarkTweakV1Block833000-16                 8         132168333 ns/op
-BenchmarkTweakV2Block833010-16                21          55258107 ns/op
-BenchmarkTweakV1Block833010-16                 5         219691875 ns/op
-BenchmarkTweakV2Block833013-16                27          51755626 ns/op
-BenchmarkTweakV1Block833013-16                 6         191223854 ns/op
-BenchmarkTweakV2Block834469-16                56          21750344 ns/op
-BenchmarkTweakV1Block834469-16                16          70707631 ns/op
+BenchmarkTweakV4Block833000-16                34          37608796 ns/op
+BenchmarkTweakV3Block833000-16                31          37644976 ns/op
+BenchmarkTweakV2Block833000-16                43          35005047 ns/op
+BenchmarkTweakV1Block833000-16                 8         132897864 ns/op
+BenchmarkTweakV4Block833010-16                24          58622605 ns/op
+BenchmarkTweakV3Block833010-16                19          62589645 ns/op
+BenchmarkTweakV2Block833010-16                21          52516952 ns/op
+BenchmarkTweakV1Block833010-16                 5         204381619 ns/op
+BenchmarkTweakV4Block833013-16                21          54992341 ns/op
+BenchmarkTweakV3Block833013-16                18          57974175 ns/op
+BenchmarkTweakV2Block833013-16                28          49971872 ns/op
+BenchmarkTweakV1Block833013-16                 6         184793615 ns/op
+BenchmarkTweakV4Block834469-16                66          21655617 ns/op
+BenchmarkTweakV3Block834469-16                67          16031086 ns/op
+BenchmarkTweakV2Block834469-16                50          20486003 ns/op
+BenchmarkTweakV1Block834469-16                15          68968977 ns/op
 PASS
-ok      SilentPaymentAppBackend/src/core        13.452s
+ok      SilentPaymentAppBackend/src/core        27.134s
 ```
-V2 Code
+
+
+### v4 Code
+```go
+// ComputeTweaksForBlockV4 Upgraded version of v2
+func ComputeTweaksForBlockV4(block *types.Block) ([]types.Tweak, error) {
+	var tweaks []types.Tweak
+	var mu sync.Mutex // Mutex to protect shared resources
+	var wg sync.WaitGroup
+
+	// Create channels for transactions and results
+	txChannel := make(chan types.Transaction)
+	resultsChannel := make(chan types.Tweak)
+
+	semaphore := make(chan struct{}, common.MaxParallelTweakComputations)
+
+	// Start worker goroutines
+	for i := 0; i < common.MaxParallelTweakComputations; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for tx := range txChannel {
+				semaphore <- struct{}{} // Acquire a slot
+				for _, vout := range tx.Vout {
+					if vout.ScriptPubKey.Type == "witness_v1_taproot" {
+						tweakPerTx, err := ComputeTweakPerTx(tx)
+						if err != nil {
+							common.ErrorLogger.Println(err)
+							// todo errG
+							break
+						}
+						if tweakPerTx != nil {
+							resultsChannel <- types.Tweak{
+								BlockHash:   block.Hash,
+								BlockHeight: block.Height,
+								Txid:        tx.Txid,
+								Data:        *tweakPerTx,
+							}
+						}
+						break
+					}
+				}
+				<-semaphore // Release the slot
+			}
+		}()
+	}
+	waitForResultsChan := make(chan struct{}, 1)
+	// Start a goroutine to collect results
+	go func() {
+		for tweak := range resultsChannel {
+			mu.Lock()
+			tweaks = append(tweaks, tweak)
+			mu.Unlock()
+		}
+		waitForResultsChan <- struct{}{}
+	}()
+
+	// Feed transactions to the channel
+	for _, tx := range block.Txs {
+		txChannel <- tx
+	}
+	close(txChannel)      // Ensure to close the txChannel after sending all transactions
+	wg.Wait()             // Wait for all workers to finish
+	close(resultsChannel) // Close resultsChannel only after all workers are done
+	<-waitForResultsChan  // wait for all results to be processed
+	return tweaks, nil
+}
+```
+
+### v3 Code
+```go
+// ComputeTweaksForBlockV3 performs worse for high tx count but faster for low tx count <800-1000 txs
+func ComputeTweaksForBlockV3(block *types.Block) ([]types.Tweak, error) {
+	if block.Txs == nil || len(block.Txs) == 0 {
+		common.DebugLogger.Printf("%+v", block)
+		common.WarningLogger.Println("Block had zero transactions")
+		return []types.Tweak{}, nil
+	}
+	var tweaks []types.Tweak
+	var muTweaks sync.Mutex // Mutex to protect tweaks slice
+	var muErr sync.Mutex    // Mutex to protect error
+	var wg sync.WaitGroup
+
+	totalTxs := len(block.Txs)
+	numGoroutines := common.MaxParallelTweakComputations // Number of goroutines you want to spin up
+	baseBatchSize := totalTxs / numGoroutines            // Base number of transactions per goroutine
+	remainder := totalTxs % numGoroutines                // Transactions that need to be distributed
+	var errG error
+
+	for i := 0; i < numGoroutines; i++ {
+		start := i * baseBatchSize
+		if i < remainder {
+			start += i // One extra transaction for the first 'remainder' goroutines
+		} else {
+			start += remainder // No extra transactions for the rest
+		}
+
+		end := start + baseBatchSize
+		if i < remainder {
+			end++ // One extra transaction for the first 'remainder' goroutines
+		}
+
+		batch := block.Txs[start:end]
+
+		wg.Add(1)
+		go func(txBatch []types.Transaction) {
+			defer wg.Done()
+			var localTweaks []types.Tweak
+
+			for _, _tx := range txBatch {
+				for _, vout := range _tx.Vout {
+					if vout.ScriptPubKey.Type == "witness_v1_taproot" {
+						tweakPerTx, err := ComputeTweakPerTx(_tx)
+						if err != nil {
+							common.ErrorLogger.Println(err)
+							muErr.Lock()
+							if errG == nil {
+								errG = err // Store the first error that occurs
+							}
+							muErr.Unlock()
+							break
+						}
+						if tweakPerTx != nil {
+							localTweaks = append(localTweaks, types.Tweak{
+								BlockHash:   block.Hash,
+								BlockHeight: block.Height,
+								Txid:        _tx.Txid,
+								Data:        *tweakPerTx,
+							})
+						}
+						break // Assuming you only need one tweak per transaction
+					}
+				}
+			}
+
+			// Safely append to the global slice
+			muTweaks.Lock()
+			tweaks = append(tweaks, localTweaks...)
+			muTweaks.Unlock()
+		}(batch)
+	}
+
+	wg.Wait()
+	return tweaks, nil
+}
+```
+
+### v2 Code
 ```go
 func ComputeTweaksForBlockV2(block *types.Block) ([]types.Tweak, error) {
 	// moved outside of function avoid issues with benchmarking
@@ -37,7 +227,8 @@ func ComputeTweaksForBlockV2(block *types.Block) ([]types.Tweak, error) {
 	semaphore := make(chan struct{}, common.MaxParallelTweakComputations)
 
 	var errG error
-	var mu sync.Mutex // Mutex to protect shared resources
+	var muTweaks sync.Mutex // Mutex to protect tweaks
+	var muErr sync.Mutex    // Mutex to protect err
 
 	var wg sync.WaitGroup
 	// block fetcher routine
@@ -53,6 +244,7 @@ func ComputeTweaksForBlockV2(block *types.Block) ([]types.Tweak, error) {
 			//start := time.Now()
 			defer func() {
 				<-semaphore // Release the slot
+				wg.Done()
 			}()
 
 			for _, vout := range _tx.Vout {
@@ -61,28 +253,29 @@ func ComputeTweaksForBlockV2(block *types.Block) ([]types.Tweak, error) {
 					tweakPerTx, err := ComputeTweakPerTx(_tx)
 					if err != nil {
 						common.ErrorLogger.Println(err)
-						mu.Lock()
+						muErr.Lock()
 						if errG == nil {
 							errG = err // Store the first error that occurs
 						}
-						mu.Unlock()
+						muErr.Unlock()
 						break
 					}
 					// we do this check for not eligible transactions like coinbase transactions
 					// they are not supposed to throw an error
 					// but also don't have a tweak that can be computed
 					if tweakPerTx != nil {
+						muTweaks.Lock()
 						tweaks = append(tweaks, types.Tweak{
 							BlockHash:   block.Hash,
 							BlockHeight: block.Height,
 							Txid:        _tx.Txid,
 							Data:        *tweakPerTx,
 						})
+						muTweaks.Unlock()
 					}
 					break
 				}
 			}
-			wg.Done()
 		}(tx)
 	}
 
@@ -92,7 +285,7 @@ func ComputeTweaksForBlockV2(block *types.Block) ([]types.Tweak, error) {
 }
 ```
 
-V1 Code
+### v1 Code
 ```go
 func ComputeTweaksForBlockV1(block *types.Block) ([]types.Tweak, error) {
 	//common.InfoLogger.Println("Computing tweaks...")

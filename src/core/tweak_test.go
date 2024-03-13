@@ -104,16 +104,97 @@ func TestComputeAllReceivingTweaks(t *testing.T) {
 }
 
 func TestBlockProcessingTime(t *testing.T) {
-	common.InfoLogger.Println("Starting v2 computation")
-	_, err := ComputeTweaksForBlockV2(&b833000)
+	common.InfoLogger.Println("Starting v3 computation")
+	_, err := ComputeTweaksForBlockV3(&b833000)
 	if err != nil {
-		log.Fatalln(err)
+		t.Error(err)
+		return
+	}
+	common.InfoLogger.Println("Finished v3 computation")
+	common.InfoLogger.Println("Starting v2 computation")
+	_, err = ComputeTweaksForBlockV2(&b833000)
+	if err != nil {
+		t.Error(err)
+		return
 	}
 	common.InfoLogger.Println("Finished v2 computation")
 	common.InfoLogger.Println("Starting v1 computation")
 	_, err = ComputeTweaksForBlockV1(&b833000)
 	if err != nil {
-		log.Fatalln(err)
+		t.Error(err)
+		return
 	}
 	common.InfoLogger.Println("Finished v1 computation")
+}
+
+func TestV3NoTxs(t *testing.T) {
+	// if Txs field is nil
+	block1 := types.Block{
+		Hash:              "testHash",
+		Height:            111,
+		PreviousBlockHash: "testHashBefore",
+		Timestamp:         1234,
+		Txs:               nil,
+	}
+	_, err := ComputeTweaksForBlockV3(&block1)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	// if Txs field is empty array
+	block2 := types.Block{
+		Hash:              "testHash",
+		Height:            111,
+		PreviousBlockHash: "testHashBefore",
+		Timestamp:         1234,
+		Txs:               []types.Transaction{},
+	}
+	_, err = ComputeTweaksForBlockV3(&block2)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+}
+
+//TestAllTweakVersionsOutputs all tweak computations should match the computed length of tweaks from the V1
+func TestAllTweakVersionsOutputs(t *testing.T) {
+	compareForBlock(t, &block833000)
+	compareForBlock(t, &block833010)
+	compareForBlock(t, &block833013)
+	compareForBlock(t, &block834469)
+}
+
+func compareForBlock(t *testing.T, block *types.Block) {
+	tweaks4, err := ComputeTweaksForBlockV4(block)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	tweaks3, err := ComputeTweaksForBlockV3(block)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	tweaks2, err := ComputeTweaksForBlockV2(block)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	tweaks1, err := ComputeTweaksForBlockV1(block)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	if len(tweaks1) != len(tweaks2) {
+		t.Errorf("block: %d tweak1 and tweak2 don't match: %d - %d\n", block.Height, len(tweaks1), len(tweaks2))
+	}
+	if len(tweaks1) != len(tweaks3) {
+		t.Errorf("block: %d tweak1 and tweak3 don't match: %d - %d\n", block.Height, len(tweaks1), len(tweaks3))
+	}
+	if len(tweaks1) != len(tweaks4) {
+		t.Errorf("block: %d tweak1 and tweak4 don't match: %d - %d\n", block.Height, len(tweaks1), len(tweaks4))
+	}
 }

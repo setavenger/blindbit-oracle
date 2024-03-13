@@ -157,7 +157,7 @@ func HandleBlock(block *types.Block) error {
 		return err
 	}
 	common.InfoLogger.Println("Computing tweaks...")
-	tweaksForBlock, err := ComputeTweaksForBlockV2(block)
+	tweaksForBlock, err := ComputeTweaksForBlock(block)
 	if err != nil {
 		common.ErrorLogger.Println(err)
 		return err

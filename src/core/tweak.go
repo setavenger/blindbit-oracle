@@ -14,6 +14,155 @@ import (
 	"sync"
 )
 
+func ComputeTweaksForBlock(block *types.Block) ([]types.Tweak, error) {
+	// performance tests have shown that for blocks with low transaction count v3 constantly outperforms the other implementations
+	if len(block.Txs) < 1000 {
+		return ComputeTweaksForBlockV3(block)
+	} else {
+		//We use v2 until v4 becomes stable and a bit better
+		return ComputeTweaksForBlockV2(block)
+	}
+}
+
+// ComputeTweaksForBlockV4 Upgraded version of v2
+func ComputeTweaksForBlockV4(block *types.Block) ([]types.Tweak, error) {
+	var tweaks []types.Tweak
+	var mu sync.Mutex // Mutex to protect shared resources
+	var wg sync.WaitGroup
+
+	// Create channels for transactions and results
+	txChannel := make(chan types.Transaction)
+	resultsChannel := make(chan types.Tweak)
+
+	semaphore := make(chan struct{}, common.MaxParallelTweakComputations)
+
+	// Start worker goroutines
+	for i := 0; i < common.MaxParallelTweakComputations; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for tx := range txChannel {
+				semaphore <- struct{}{} // Acquire a slot
+				for _, vout := range tx.Vout {
+					if vout.ScriptPubKey.Type == "witness_v1_taproot" {
+						tweakPerTx, err := ComputeTweakPerTx(tx)
+						if err != nil {
+							common.ErrorLogger.Println(err)
+							// todo errG
+							break
+						}
+						if tweakPerTx != nil {
+							resultsChannel <- types.Tweak{
+								BlockHash:   block.Hash,
+								BlockHeight: block.Height,
+								Txid:        tx.Txid,
+								Data:        *tweakPerTx,
+							}
+						}
+						break
+					}
+				}
+				<-semaphore // Release the slot
+			}
+		}()
+	}
+	waitForResultsChan := make(chan struct{}, 1)
+	// Start a goroutine to collect results
+	go func() {
+		for tweak := range resultsChannel {
+			mu.Lock()
+			tweaks = append(tweaks, tweak)
+			mu.Unlock()
+		}
+		waitForResultsChan <- struct{}{}
+	}()
+
+	// Feed transactions to the channel
+	for _, tx := range block.Txs {
+		txChannel <- tx
+	}
+	close(txChannel)      // Ensure to close the txChannel after sending all transactions
+	wg.Wait()             // Wait for all workers to finish
+	close(resultsChannel) // Close resultsChannel only after all workers are done
+	<-waitForResultsChan  // wait for all results to be processed
+	return tweaks, nil
+}
+
+// ComputeTweaksForBlockV3 performs worse for high tx count but faster for low tx count <800-1000 txs
+func ComputeTweaksForBlockV3(block *types.Block) ([]types.Tweak, error) {
+	if block.Txs == nil || len(block.Txs) == 0 {
+		common.DebugLogger.Printf("%+v", block)
+		common.WarningLogger.Println("Block had zero transactions")
+		return []types.Tweak{}, nil
+	}
+	var tweaks []types.Tweak
+	var muTweaks sync.Mutex // Mutex to protect tweaks slice
+	var muErr sync.Mutex    // Mutex to protect error
+	var wg sync.WaitGroup
+
+	totalTxs := len(block.Txs)
+	numGoroutines := common.MaxParallelTweakComputations // Number of goroutines you want to spin up
+	baseBatchSize := totalTxs / numGoroutines            // Base number of transactions per goroutine
+	remainder := totalTxs % numGoroutines                // Transactions that need to be distributed
+	var errG error
+
+	for i := 0; i < numGoroutines; i++ {
+		start := i * baseBatchSize
+		if i < remainder {
+			start += i // One extra transaction for the first 'remainder' goroutines
+		} else {
+			start += remainder // No extra transactions for the rest
+		}
+
+		end := start + baseBatchSize
+		if i < remainder {
+			end++ // One extra transaction for the first 'remainder' goroutines
+		}
+
+		batch := block.Txs[start:end]
+
+		wg.Add(1)
+		go func(txBatch []types.Transaction) {
+			defer wg.Done()
+			var localTweaks []types.Tweak
+
+			for _, _tx := range txBatch {
+				for _, vout := range _tx.Vout {
+					if vout.ScriptPubKey.Type == "witness_v1_taproot" {
+						tweakPerTx, err := ComputeTweakPerTx(_tx)
+						if err != nil {
+							common.ErrorLogger.Println(err)
+							muErr.Lock()
+							if errG == nil {
+								errG = err // Store the first error that occurs
+							}
+							muErr.Unlock()
+							break
+						}
+						if tweakPerTx != nil {
+							localTweaks = append(localTweaks, types.Tweak{
+								BlockHash:   block.Hash,
+								BlockHeight: block.Height,
+								Txid:        _tx.Txid,
+								Data:        *tweakPerTx,
+							})
+						}
+						break // Assuming you only need one tweak per transaction
+					}
+				}
+			}
+
+			// Safely append to the global slice
+			muTweaks.Lock()
+			tweaks = append(tweaks, localTweaks...)
+			muTweaks.Unlock()
+		}(batch)
+	}
+
+	wg.Wait()
+	return tweaks, nil
+}
+
 func ComputeTweaksForBlockV2(block *types.Block) ([]types.Tweak, error) {
 	// moved outside of function avoid issues with benchmarking
 	//common.InfoLogger.Println("Computing tweaks...")
@@ -22,7 +171,8 @@ func ComputeTweaksForBlockV2(block *types.Block) ([]types.Tweak, error) {
 	semaphore := make(chan struct{}, common.MaxParallelTweakComputations)
 
 	var errG error
-	var mu sync.Mutex // Mutex to protect shared resources
+	var muTweaks sync.Mutex // Mutex to protect tweaks
+	var muErr sync.Mutex    // Mutex to protect err
 
 	var wg sync.WaitGroup
 	// block fetcher routine
@@ -38,6 +188,7 @@ func ComputeTweaksForBlockV2(block *types.Block) ([]types.Tweak, error) {
 			//start := time.Now()
 			defer func() {
 				<-semaphore // Release the slot
+				wg.Done()
 			}()
 
 			for _, vout := range _tx.Vout {
@@ -46,28 +197,29 @@ func ComputeTweaksForBlockV2(block *types.Block) ([]types.Tweak, error) {
 					tweakPerTx, err := ComputeTweakPerTx(_tx)
 					if err != nil {
 						common.ErrorLogger.Println(err)
-						mu.Lock()
+						muErr.Lock()
 						if errG == nil {
 							errG = err // Store the first error that occurs
 						}
-						mu.Unlock()
+						muErr.Unlock()
 						break
 					}
 					// we do this check for not eligible transactions like coinbase transactions
 					// they are not supposed to throw an error
 					// but also don't have a tweak that can be computed
 					if tweakPerTx != nil {
+						muTweaks.Lock()
 						tweaks = append(tweaks, types.Tweak{
 							BlockHash:   block.Hash,
 							BlockHeight: block.Height,
 							Txid:        _tx.Txid,
 							Data:        *tweakPerTx,
 						})
+						muTweaks.Unlock()
 					}
 					break
 				}
 			}
-			wg.Done()
 		}(tx)
 	}
 

@@ -41,6 +41,10 @@ func (v *Tweak) DeSerialiseKey(key []byte) error {
 }
 
 func (v *Tweak) DeSerialiseData(data []byte) error {
+	if len(data) != 33 {
+		common.ErrorLogger.Printf("wrong data length: %+v", data)
+		return errors.New("data is wrong length. should not happen")
+	}
 	copy(v.Data[:], data)
 	return nil
 }

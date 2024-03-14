@@ -128,18 +128,41 @@ func HandleBlock(block *types.Block) error {
 	// todo the next sections can potentially be optimized by combining them into one loop where
 	//  all things are extracted from the blocks transaction data
 
-	// get spent taproot UTXOs
-	taprootSpent := extractSpentTaprootPubKeysFromBlock(block)
-
-	err := removeSpentUTXOsAndTweaks(taprootSpent)
+	// first we need to get the new outputs because some of them might/will be spent in the same block
+	// build light UTXOs
+	newUTXOs := ExtractNewUTXOs(block)
+	err := dblevel.InsertUTXOs(newUTXOs)
 	if err != nil {
 		common.ErrorLogger.Println(err)
 		return err
 	}
 
-	// build light UTXOs
-	lightUTXOs := CreateLightUTXOs(block)
-	err = dblevel.InsertUTXOs(lightUTXOs)
+	common.DebugLogger.Println("Computing tweaks...")
+	tweaksForBlock, err := ComputeTweaksForBlock(block)
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return err
+	}
+	common.DebugLogger.Println("Tweaks computed...")
+	err = dblevel.InsertBatchTweaks(tweaksForBlock)
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return err
+	}
+	common.DebugLogger.Println("Constructing full index")
+	tweakIndex := types.TweakIndexFromTweakArray(tweaksForBlock)
+	tweakIndex.BlockHash = block.Hash
+	tweakIndex.BlockHeight = block.Height
+	err = dblevel.InsertTweakIndex(tweakIndex)
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return err
+	}
+
+	// get spent taproot UTXOs
+	taprootSpent := extractSpentTaprootPubKeysFromBlock(block)
+
+	err = removeSpentUTXOsAndTweaks(taprootSpent)
 	if err != nil {
 		common.ErrorLogger.Println(err)
 		return err
@@ -152,19 +175,6 @@ func HandleBlock(block *types.Block) error {
 		return err
 	}
 	err = dblevel.InsertFilter(cFilterTaproot)
-	if err != nil {
-		common.ErrorLogger.Println(err)
-		return err
-	}
-	common.InfoLogger.Println("Computing tweaks...")
-	tweaksForBlock, err := ComputeTweaksForBlock(block)
-	if err != nil {
-		common.ErrorLogger.Println(err)
-		return err
-	}
-	common.InfoLogger.Println("Tweaks computed...")
-
-	err = dblevel.InsertBatchTweaks(tweaksForBlock)
 	if err != nil {
 		common.ErrorLogger.Println(err)
 		return err

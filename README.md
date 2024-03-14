@@ -2,8 +2,23 @@
 A GO implementation for a BIP0352 Silent Payments Indexing Server. 
 This backend was focused on serving the BlindBit mobile app with tweak data. 
 
+## Requirements
+- rpc access to a bitcoin full node 
+  - unpruned because we need the prevouts for every transaction in the block with a taproot output
+  - Note: Indexing will take longer if the rpc calls take longer 
+  - Processing a block takes ~100ms-500ms
+- disk space
+  - ~500mb-1GB with cut-through (@828000 about 250mb taken)
+  - +4GB if you have full-indexing enabled (@828000 about 2GB taken)
+
 ## Todos
 
+- [ ] Benchmark btcec vs libsecp C library wrapper/binding
+  - https://github.com/renproject/secp256k1
+  - https://github.com/ethereum/go-ethereum/tree/master/crypto/secp256k1/libsecp256k1 (~8 years without update)
+- [ ] Periodically recompute the filters? 
+  - Noticed during indexing, that the taproot-only filters take up a significant chunk of total db space (~55% @799000).
+  This might change after compaction but is still a higher percentage than expected. One could implement a periodic re-computation every 1000(?) blocks of the old filters with the current UTXO set.
 - [ ] Investigate whether we should change the compound keys to use the height instead of the hash. As keys are sorted this could potentially give a performance boost due to better order across blocks.
 - [ ] Document EVERYTHING: especially serialization patterns to easily look them up later.
   - Serialisation

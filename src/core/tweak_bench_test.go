@@ -8,26 +8,12 @@ import (
 )
 
 /*
-
-Results from Benchmarking. Running v2 is a clear win in terms of speed for all types of blocks (many txs and few txs)
-
-
-goos: darwin
-goarch: amd64
-pkg: SilentPaymentAppBackend/src/core
-cpu: Intel(R) Core(TM) i9-9880H CPU @ 2.30GHz
-BenchmarkTweakV2Block833000-16                40          32978726 ns/op
-BenchmarkTweakV1Block833000-16                 8         132168333 ns/op
-BenchmarkTweakV2Block833010-16                21          55258107 ns/op
-BenchmarkTweakV1Block833010-16                 5         219691875 ns/op
-BenchmarkTweakV2Block833013-16                27          51755626 ns/op
-BenchmarkTweakV1Block833013-16                 6         191223854 ns/op
-BenchmarkTweakV2Block834469-16                56          21750344 ns/op
-BenchmarkTweakV1Block834469-16                16          70707631 ns/op
-PASS
-ok      SilentPaymentAppBackend/src/core        13.452s
+todo blocks to test
+ 000000000000000000030fcdb1ee03e49a5c50c0d457441a7bf4215920048824 ~4.8k txs
+ 000000000000000000027bd4698820dc77142b578a0bb824af9bdc799e731b85 ~5.2k txs
+ 000000000000000000028988a6b092b1bd1aa64211495e280ed274985fbfada5 ~6.1k txs
+ 00000000000000000000d1b78dabafed74c4483fdde4d899952274fafb70998c ~0.9k txs but 19k taproot UTXOs
 */
-
 var (
 	block833000, block833010, block833013, block834469 types.Block
 )

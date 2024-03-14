@@ -147,5 +147,6 @@ func openLevelDBConnections() {
 	dblevel.HeadersInvDB = dblevel.OpenDBConnection(dblevel.DBPathHeadersInv)
 	dblevel.FiltersDB = dblevel.OpenDBConnection(dblevel.DBPathFilters)
 	dblevel.TweaksDB = dblevel.OpenDBConnection(dblevel.DBPathTweaks)
+	dblevel.TweakIndexDB = dblevel.OpenDBConnection(dblevel.DBPathTweakIndex)
 	dblevel.UTXOsDB = dblevel.OpenDBConnection(dblevel.DBPathUTXOs)
 }

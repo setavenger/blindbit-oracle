@@ -6,7 +6,7 @@ import (
 )
 
 func InsertUTXOs(utxos []types.UTXO) error {
-	common.InfoLogger.Println("Inserting UTXOs...")
+	common.DebugLogger.Println("Inserting UTXOs...")
 	// Create a slice of types.Pair with the same length as pairs
 	pairs := make([]types.Pair, len(utxos))
 
@@ -20,7 +20,7 @@ func InsertUTXOs(utxos []types.UTXO) error {
 		common.ErrorLogger.Println(err)
 		return err
 	}
-	common.InfoLogger.Printf("Inserted %d UTXOs", len(utxos))
+	common.DebugLogger.Printf("Inserted %d UTXOs", len(utxos))
 	return nil
 }
 
@@ -77,7 +77,7 @@ func FetchByBlockHashAndTxidUTXOs(blockHash, txid string) ([]types.UTXO, error) 
 }
 
 func DeleteBatchUTXOs(utxos []types.UTXO) error {
-	common.InfoLogger.Println("Deleting UTXOs...")
+	common.DebugLogger.Println("Deleting UTXOs...")
 	// Create a slice of types.Pair with the same length as pairs
 	pairs := make([]types.Pair, len(utxos))
 
@@ -90,6 +90,6 @@ func DeleteBatchUTXOs(utxos []types.UTXO) error {
 		common.ErrorLogger.Println(err)
 		return err
 	}
-	common.InfoLogger.Printf("Deleted %d UTXOs\n", len(utxos))
+	common.DebugLogger.Printf("Deleted %d UTXOs\n", len(utxos))
 	return nil
 }

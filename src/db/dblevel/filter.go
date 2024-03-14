@@ -11,7 +11,7 @@ func InsertFilter(pair types.Filter) error {
 		common.ErrorLogger.Println(err)
 		return err
 	}
-	common.InfoLogger.Println("Taproot Filter inserted")
+	common.DebugLogger.Println("Taproot Filter inserted")
 	return nil
 }
 

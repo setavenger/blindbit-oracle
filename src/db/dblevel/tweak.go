@@ -6,7 +6,7 @@ import (
 )
 
 func InsertBatchTweaks(tweaks []types.Tweak) error {
-	common.InfoLogger.Println("Inserting tweaks...")
+	common.DebugLogger.Println("Inserting tweaks...")
 	// Create a slice of types.Pair with the same length as pairs
 	pairs := make([]types.Pair, len(tweaks))
 
@@ -20,12 +20,12 @@ func InsertBatchTweaks(tweaks []types.Tweak) error {
 		common.ErrorLogger.Println(err)
 		return err
 	}
-	common.InfoLogger.Printf("Inserted %d tweaks", len(tweaks))
+	common.DebugLogger.Printf("Inserted %d tweaks", len(tweaks))
 	return nil
 }
 
 func FetchByBlockHashTweaks(blockHash string) ([]types.Tweak, error) {
-	common.InfoLogger.Println("Fetching tweaks")
+	common.DebugLogger.Println("Fetching tweaks")
 	pairs, err := retrieveManyByBlockHash(TweaksDB, blockHash, types.PairFactoryTweak)
 	if err != nil {
 		common.ErrorLogger.Println(err)
@@ -45,15 +45,15 @@ func FetchByBlockHashTweaks(blockHash string) ([]types.Tweak, error) {
 			panic("wrong pair struct returned")
 		}
 	}
-	common.InfoLogger.Printf("Fetched %d tweaks\n", len(result))
+	common.DebugLogger.Printf("Fetched %d tweaks\n", len(result))
 
 	return result, nil
 }
 
 func DeleteBatchTweaks(tweaks []types.Tweak) error {
-	common.InfoLogger.Println("Deleting Tweaks...")
+	common.DebugLogger.Println("Deleting Tweaks...")
 	if len(tweaks) == 0 {
-		common.InfoLogger.Println("no tweaks to delete")
+		common.DebugLogger.Println("no tweaks to delete")
 		return nil
 	}
 	// Create a slice of types.Pair with the same length as pairs
@@ -68,6 +68,6 @@ func DeleteBatchTweaks(tweaks []types.Tweak) error {
 		common.ErrorLogger.Println(err)
 		return err
 	}
-	common.InfoLogger.Printf("Deleted %d Tweaks\n", len(tweaks))
+	common.DebugLogger.Printf("Deleted %d Tweaks\n", len(tweaks))
 	return err
 }

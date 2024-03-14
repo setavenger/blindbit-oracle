@@ -109,7 +109,7 @@ func updateBlockchainInfo(blockchainInfo *types.BlockchainInfo) error {
 func processHeaders(headers []types.BlockHeader) error {
 	common.InfoLogger.Printf("Processing %d headers\n", len(headers))
 	if len(headers) == 0 {
-		common.InfoLogger.Println("No headers were passed")
+		common.WarningLogger.Println("No headers were passed")
 		return nil
 	}
 	fetchedBlocks := make(chan *types.Block, common.MaxParallelRequests)

@@ -14,12 +14,12 @@ func InsertBlockHeaderInv(pair types.BlockHeaderInv) error {
 		common.ErrorLogger.Println(err)
 		return err
 	}
-	common.InfoLogger.Println("header-inv inserted")
+	common.DebugLogger.Println("header-inv inserted")
 	return nil
 }
 
 func InsertBatchBlockHeaderInv(headersInv []types.BlockHeaderInv) error {
-	common.InfoLogger.Println("Inserting headers-inv...")
+	common.DebugLogger.Println("Inserting headers-inv...")
 
 	// Create a slice of types.Pair with the same length as pairs
 	pairs := make([]types.Pair, len(headersInv))
@@ -38,7 +38,7 @@ func InsertBatchBlockHeaderInv(headersInv []types.BlockHeaderInv) error {
 	//for _, headerInv := range headersInv {
 	//	common.InfoLogger.Printf("Inserted height: %d\n", headerInv.Height)
 	//}
-	common.InfoLogger.Printf("Inserted %d headers-inv\n", len(headersInv))
+	common.DebugLogger.Printf("Inserted %d headers-inv\n", len(headersInv))
 	return nil
 }
 

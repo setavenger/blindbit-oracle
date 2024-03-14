@@ -6,8 +6,8 @@ import (
 	"SilentPaymentAppBackend/src/db/dblevel"
 )
 
-func CreateLightUTXOs(block *types.Block) []types.UTXO {
-	common.InfoLogger.Println("Getting new UTXOs")
+func ExtractNewUTXOs(block *types.Block) []types.UTXO {
+	common.DebugLogger.Println("Getting new UTXOs")
 	var utxos []types.UTXO
 	for _, tx := range block.Txs {
 		for _, vout := range tx.Vout {

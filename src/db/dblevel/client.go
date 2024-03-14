@@ -24,6 +24,7 @@ const (
 	DBPathHeadersInv = dbPath + "/headers-inv" // for height to blockHash mapping
 	DBPathFilters    = dbPath + "/filters"
 	DBPathTweaks     = dbPath + "/tweaks"
+	DBPathTweakIndex = dbPath + "/tweak-index"
 	DBPathUTXOs      = dbPath + "/utxos"
 )
 
@@ -32,6 +33,7 @@ var (
 	HeadersInvDB *leveldb.DB
 	FiltersDB    *leveldb.DB
 	TweaksDB     *leveldb.DB
+	TweakIndexDB *leveldb.DB
 	UTXOsDB      *leveldb.DB
 )
 

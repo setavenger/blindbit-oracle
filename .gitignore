@@ -6,3 +6,4 @@ docker-compose.yaml
 /.run/
 /profiling/
 /data-old/
+/data-export/

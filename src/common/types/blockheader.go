@@ -11,10 +11,10 @@ import (
 // BlockHeader struct to hold relevant BlockHeader data
 // todo change naming to be consistent?
 type BlockHeader struct {
-	Hash          string `bson:"hash"`
-	PrevBlockHash string `bson:"previousblockhash"`
-	Timestamp     uint64 `bson:"timestamp"`
-	Height        uint32 `bson:"height"`
+	Hash          string
+	PrevBlockHash string
+	Timestamp     uint64
+	Height        uint32
 }
 
 func PairFactoryBlockHeader() Pair {

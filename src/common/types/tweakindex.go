@@ -28,7 +28,7 @@ func (v *TweakIndex) SerialiseKey() ([]byte, error) {
 
 func (v *TweakIndex) SerialiseData() ([]byte, error) {
 
-	// can this be made more efficiently
+	// todo can this be made more efficiently?
 	totalLength := len(v.Data) * 33
 	flattened := make([]byte, 0, totalLength)
 
@@ -57,7 +57,7 @@ func (v *TweakIndex) DeSerialiseData(data []byte) error {
 	}
 
 	numArrays := len(data) / 33
-
+	v.Data = make([][33]byte, numArrays)
 	// Iterate and copy segments from the flat slice into the new array of arrays
 	for i := 0; i < numArrays; i++ {
 		copy(v.Data[i][:], data[i*33:(i+1)*33])

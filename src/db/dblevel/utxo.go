@@ -62,7 +62,7 @@ func FetchByBlockHashAndTxidUTXOs(blockHash, txid string) ([]types.UTXO, error) 
 	}
 
 	result := make([]types.UTXO, len(pairs))
-	// Convert each UTXO to a Pair and assign it to the new slice
+	// Convert each Pair to a UTXO and assign it to the new slice
 	for i, pair := range pairs {
 		if pairPtr, ok := pair.(*types.UTXO); ok {
 			result[i] = *pairPtr
@@ -92,4 +92,29 @@ func DeleteBatchUTXOs(utxos []types.UTXO) error {
 	}
 	common.DebugLogger.Printf("Deleted %d UTXOs\n", len(utxos))
 	return nil
+}
+
+// FetchAllUTXOs returns all types.UTXO in the DB
+func FetchAllUTXOs() ([]types.UTXO, error) {
+	pairs, err := retrieveAll(UTXOsDB, types.PairFactoryUTXO)
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return nil, err
+	}
+	if len(pairs) == 0 {
+		common.WarningLogger.Println("Nothing returned")
+		return nil, NoEntryErr{}
+	}
+
+	result := make([]types.UTXO, len(pairs))
+	// Convert each Pair to a TweakIndex and assign it to the new slice
+	for i, pair := range pairs {
+		if pairPtr, ok := pair.(*types.UTXO); ok {
+			result[i] = *pairPtr
+		} else {
+			common.ErrorLogger.Printf("%+v\n", pair)
+			panic("wrong pair struct returned")
+		}
+	}
+	return result, err
 }

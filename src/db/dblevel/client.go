@@ -169,6 +169,35 @@ func retrieveByBlockHeight(db *leveldb.DB, blockHeight uint32, pair types.Pair) 
 	return nil
 }
 
+func retrieveAll(db *leveldb.DB, factory types.PairFactory) ([]types.Pair, error) {
+	iter := db.NewIterator(nil, nil)
+	defer iter.Release()
+	var results []types.Pair
+
+	var err error
+	for iter.Next() {
+		pair := factory()
+		err = pair.DeSerialiseKey(iter.Key())
+		if err != nil {
+			common.ErrorLogger.Println(err)
+			return nil, err
+		}
+		err = pair.DeSerialiseData(iter.Value())
+		if err != nil {
+			common.ErrorLogger.Println(err)
+			return nil, err
+		}
+		results = append(results, pair)
+	}
+
+	err = iter.Error()
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return nil, err
+	}
+	return results, err
+}
+
 func retrieveManyByBlockHash(db *leveldb.DB, blockHash string, factory types.PairFactory) ([]types.Pair, error) {
 	blockHashBytes, err := hex.DecodeString(blockHash)
 	if err != nil {

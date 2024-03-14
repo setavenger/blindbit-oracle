@@ -13,7 +13,7 @@ func CheckForNewBlockRoutine() {
 	common.InfoLogger.Println("starting check_for_new_block_routine")
 	for true {
 		select {
-		case <-time.NewTicker(5 * time.Second).C:
+		case <-time.NewTicker(15 * time.Second).C:
 			blockHash, err := GetBestBlockHash()
 			if err != nil {
 				common.ErrorLogger.Println(err)
@@ -68,6 +68,7 @@ func PullBlock(blockHash string) (*types.Block, error) {
 	}
 
 	if header != nil {
+		// todo might not want to constantly log this
 		common.DebugLogger.Printf("Block: %s has already been processed\n", blockHash)
 		// if we already processed the header into our DB don't do anything
 		return nil, errors.New("block already processed")

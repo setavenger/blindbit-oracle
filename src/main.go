@@ -3,11 +3,14 @@ package main
 import (
 	"SilentPaymentAppBackend/src/common"
 	"SilentPaymentAppBackend/src/core"
+	"SilentPaymentAppBackend/src/dataexport"
 	"SilentPaymentAppBackend/src/db/dblevel"
 	"SilentPaymentAppBackend/src/server"
 	"fmt"
 	"io"
 	"log"
+	"sync"
+
 	//_ "net/http/pprof" // Import for side effects: registers pprof handlers with the default mux.
 	"os"
 	"os/signal"
@@ -115,7 +118,10 @@ func main() {
 
 	// make sure everything is ready before we receive data
 
-	// moved into go routine such that the interrupt signal will apply properly
+	//todo create proper handling for exporting data
+	//exportAll()
+
+	//moved into go routine such that the interrupt signal will apply properly
 	go func() {
 		startSync := time.Now()
 		err := core.PreSyncHeaders()
@@ -149,4 +155,52 @@ func openLevelDBConnections() {
 	dblevel.TweaksDB = dblevel.OpenDBConnection(dblevel.DBPathTweaks)
 	dblevel.TweakIndexDB = dblevel.OpenDBConnection(dblevel.DBPathTweakIndex)
 	dblevel.UTXOsDB = dblevel.OpenDBConnection(dblevel.DBPathUTXOs)
+}
+
+func exportAll() {
+	common.InfoLogger.Println("Exporting data")
+	var wg sync.WaitGroup
+	timestamp := time.Now()
+
+	wg.Add(1)
+	go func() {
+		err := dataexport.ExportUTXOs(fmt.Sprintf("./data-export/utxos-%d.csv", timestamp.Unix()))
+		if err != nil {
+			panic(err)
+		}
+		wg.Done()
+		common.InfoLogger.Println("Finished UTXOs")
+	}()
+
+	wg.Add(1)
+	go func() {
+		err := dataexport.ExportFilters(fmt.Sprintf("./data-export/filters-%d.csv", timestamp.Unix()))
+		if err != nil {
+			panic(err)
+		}
+		wg.Done()
+		common.InfoLogger.Println("Finished Filters")
+	}()
+
+	wg.Add(1)
+	go func() {
+		err := dataexport.ExportTweaks(fmt.Sprintf("./data-export/tweaks-%d.csv", timestamp.Unix()))
+		if err != nil {
+			panic(err)
+		}
+		wg.Done()
+		common.InfoLogger.Println("Finished Tweaks")
+	}()
+
+	wg.Add(1)
+	go func() {
+		err := dataexport.ExportTweakIndices(fmt.Sprintf("./data-export/tweak-indices-%d.csv", timestamp.Unix()))
+		if err != nil {
+			panic(err)
+		}
+		wg.Done()
+		common.InfoLogger.Println("Finished Tweak Indices")
+	}()
+
+	wg.Wait()
 }

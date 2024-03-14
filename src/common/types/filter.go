@@ -9,10 +9,10 @@ import (
 )
 
 type Filter struct {
-	FilterType  uint8  `json:"filter_type" bson:"filter_type"`
-	BlockHeight uint32 `json:"block_height" bson:"block_height"`
-	Data        []byte `json:"data" bson:"data"`
-	BlockHash   string `json:"block_hash" bson:"block_hash"`
+	FilterType  uint8  `json:"filter_type"`
+	BlockHeight uint32 `json:"block_height"`
+	Data        []byte `json:"data"`
+	BlockHash   string `json:"block_hash"`
 }
 
 func PairFactoryFilter() Pair {

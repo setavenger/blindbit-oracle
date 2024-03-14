@@ -71,3 +71,28 @@ func DeleteBatchTweaks(tweaks []types.Tweak) error {
 	common.DebugLogger.Printf("Deleted %d Tweaks\n", len(tweaks))
 	return err
 }
+
+// FetchAllTweaks returns all types.Tweak in the DB
+func FetchAllTweaks() ([]types.Tweak, error) {
+	pairs, err := retrieveAll(TweaksDB, types.PairFactoryTweak)
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return nil, err
+	}
+	if len(pairs) == 0 {
+		common.WarningLogger.Println("Nothing returned")
+		return nil, NoEntryErr{}
+	}
+
+	result := make([]types.Tweak, len(pairs))
+	// Convert each Pair to a Tweak and assign it to the new slice
+	for i, pair := range pairs {
+		if pairPtr, ok := pair.(*types.Tweak); ok {
+			result[i] = *pairPtr
+		} else {
+			common.ErrorLogger.Printf("%+v\n", pair)
+			panic("wrong pair struct returned")
+		}
+	}
+	return result, err
+}

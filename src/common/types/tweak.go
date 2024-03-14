@@ -8,9 +8,9 @@ import (
 )
 
 type Tweak struct {
-	BlockHash   string   `json:"block_hash" bson:"block_hash"`
-	BlockHeight uint32   `json:"block_height" bson:"block_height"`
-	Txid        string   `json:"txid" bson:"txid"`
+	BlockHash   string   `json:"block_hash"`
+	BlockHeight uint32   `json:"block_height"`
+	Txid        string   `json:"txid"`
 	Data        [33]byte `json:"data"`
 }
 

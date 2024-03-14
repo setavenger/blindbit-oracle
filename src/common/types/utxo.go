@@ -12,14 +12,14 @@ import (
 // todo could be changed to unify spent UTXO and Light UTXO,
 //  unused fields could just be omitted from serialisation and de-serialisation
 type UTXO struct {
-	Txid         string `json:"txid" bson:"txid"`
-	Vout         uint32 `json:"vout" bson:"vout"`
-	Value        uint64 `json:"value" bson:"value"`
-	ScriptPubKey string `json:"scriptpubkey" bson:"scriptpubkey"`
-	BlockHeight  uint32 `json:"block_height" bson:"block_height"`
-	BlockHash    string `json:"block_hash" bson:"block_hash"`
-	Timestamp    uint64 `json:"timestamp" bson:"timestamp"`
-	Spent        bool   `json:"-"`
+	Txid         string `json:"txid"`
+	Vout         uint32 `json:"vout"`
+	Value        uint64 `json:"value"`
+	ScriptPubKey string `json:"scriptpubkey"`
+	BlockHeight  uint32 `json:"block_height"` // not used
+	BlockHash    string `json:"block_hash"`
+	Timestamp    uint64 `json:"timestamp"` // not used
+	Spent        bool   `json:"-"`         // not used
 }
 
 // SpentUTXO

@@ -182,3 +182,35 @@ func convertTweakIndicesToRecords(data []types.TweakIndex) ([][]string, error) {
 	}
 	return records, nil
 }
+
+// HeadersInv
+
+func ExportHeadersInv(path string) error {
+	allEntries, err := dblevel.FetchAllHeadersInv()
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return err
+	}
+	records, err := convertHeadersInvToRecords(allEntries)
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return err
+	}
+	return writeToCSV(path, records)
+}
+
+func convertHeadersInvToRecords(data []types.BlockHeaderInv) ([][]string, error) {
+	var records [][]string
+
+	records = append(records, []string{
+		"blockHeight",
+		"blockHash",
+	})
+	for _, pair := range data {
+		records = append(records, []string{
+			strconv.FormatUint(uint64(pair.Height), 10),
+			pair.Hash,
+		})
+	}
+	return records, nil
+}

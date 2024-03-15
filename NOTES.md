@@ -16,6 +16,9 @@ v2 seems to be quite optimised at this point. I'm not quite sure what one could 
 Using more cores clearly improves the performance (almost linearly in some cases). 
 Parallel processing could be used for extracting [spent UTXOs](./src/core/extractutxos.go) (L:31) as well. 
 This is not a priority at the moment as the processing time seems to be low.
+
+It should be noted that these are benchmarking results when solely running the tweak computation function. 
+During initial syncing/indexing there are also a lot of parallel processes for the rpc calls.   
 ### 12 Goroutines
 
 ```text

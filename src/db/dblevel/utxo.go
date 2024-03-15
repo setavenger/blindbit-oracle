@@ -12,7 +12,8 @@ func InsertUTXOs(utxos []types.UTXO) error {
 
 	// Convert each UTXO to a Pair and assign it to the new slice
 	for i, pair := range utxos {
-		pairs[i] = &pair
+		pairCopy := pair // Create a new variable that is a copy of pair
+		pairs[i] = &pairCopy
 	}
 
 	err := insertBatch(UTXOsDB, pairs)
@@ -83,7 +84,8 @@ func DeleteBatchUTXOs(utxos []types.UTXO) error {
 
 	// Convert each UTXO to a Pair and assign it to the new slice
 	for i, pair := range utxos {
-		pairs[i] = &pair
+		pairCopy := pair // Create a new variable that is a copy of pair
+		pairs[i] = &pairCopy
 	}
 	err := deleteBatch(UTXOsDB, pairs)
 	if err != nil {

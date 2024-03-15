@@ -20,7 +20,7 @@ var (
 
 	// SyncHeadersMaxPerCall how many headers will maximally be requested in one batched RPC call
 	SyncHeadersMaxPerCall        uint32 = 10_000
-	MaxParallelRequests          uint8  = 12
+	MaxParallelRequests          uint8  = 24
 	MaxParallelTweakComputations        = 12
 )
 

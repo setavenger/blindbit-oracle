@@ -310,3 +310,28 @@ func GetMissingHeadersInvFlag(heights []uint32, flag bool) ([]uint32, error) {
 
 	return unmatchedHeights, err
 }
+
+// FetchAllHeadersInv returns all types.BlockHeaderInv in the DB
+func FetchAllHeadersInv() ([]types.BlockHeaderInv, error) {
+	pairs, err := retrieveAll(HeadersInvDB, types.PairFactoryBlockHeaderInv)
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return nil, err
+	}
+	if len(pairs) == 0 {
+		common.WarningLogger.Println("Nothing returned")
+		return nil, NoEntryErr{}
+	}
+
+	result := make([]types.BlockHeaderInv, len(pairs))
+	// Convert each Pair to a kHeaderInv and assign it to the new slice
+	for i, pair := range pairs {
+		if pairPtr, ok := pair.(*types.BlockHeaderInv); ok {
+			result[i] = *pairPtr
+		} else {
+			common.ErrorLogger.Printf("%+v\n", pair)
+			panic("wrong pair struct returned")
+		}
+	}
+	return result, err
+}

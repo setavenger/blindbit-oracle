@@ -12,7 +12,8 @@ func InsertBatchTweaks(tweaks []types.Tweak) error {
 
 	// Convert each Tweak to a Pair and assign it to the new slice
 	for i, pair := range tweaks {
-		pairs[i] = &pair
+		pairCopy := pair // Create a new variable that is a copy of pair
+		pairs[i] = &pairCopy
 	}
 
 	err := insertBatch(TweaksDB, pairs)
@@ -61,7 +62,8 @@ func DeleteBatchTweaks(tweaks []types.Tweak) error {
 
 	// Convert each Tweak to a Pair and assign it to the new slice
 	for i, pair := range tweaks {
-		pairs[i] = &pair
+		pairCopy := pair // Create a new variable that is a copy of pair
+		pairs[i] = &pairCopy
 	}
 	err := deleteBatch(TweaksDB, pairs)
 	if err != nil {

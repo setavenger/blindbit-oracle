@@ -21,7 +21,6 @@ func PairFactoryTweak() Pair {
 
 func (v *Tweak) SerialiseKey() ([]byte, error) {
 	return GetDBKeyTweak(v.BlockHash, v.Txid)
-
 }
 
 func (v *Tweak) SerialiseData() ([]byte, error) {

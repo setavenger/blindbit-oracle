@@ -13,6 +13,7 @@ This backend was focused on serving the BlindBit mobile app with tweak data.
 
 ## Todos
 
+- [ ] write operation tests to ensure data integrity
 - [ ] Benchmark btcec vs libsecp C library wrapper/binding
   - https://github.com/renproject/secp256k1
   - https://github.com/ethereum/go-ethereum/tree/master/crypto/secp256k1/libsecp256k1 (~8 years without update)

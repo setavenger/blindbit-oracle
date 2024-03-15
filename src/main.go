@@ -9,8 +9,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"sync"
-
 	//_ "net/http/pprof" // Import for side effects: registers pprof handlers with the default mux.
 	"os"
 	"os/signal"
@@ -56,7 +54,8 @@ func init() {
 	// load env vars
 	catchUpRaw := os.Getenv("SYNC_CATCH_UP")
 	if catchUpRaw != "" {
-		catchUpRawConv, err := strconv.ParseUint(catchUpRaw, 10, 32)
+		var catchUpRawConv uint64
+		catchUpRawConv, err = strconv.ParseUint(catchUpRaw, 10, 32)
 		common.CatchUp = uint32(catchUpRawConv)
 		if err != nil {
 			common.ErrorLogger.Println(err)
@@ -135,7 +134,7 @@ func main() {
 			return
 		}
 		common.InfoLogger.Printf("Sync took: %s", time.Now().Sub(startSync).String())
-		go core.CheckForNewBlockRoutine()
+		//go core.CheckForNewBlockRoutine()
 		go server.RunServer(&server.ApiHandler{})
 	}()
 
@@ -158,49 +157,40 @@ func openLevelDBConnections() {
 }
 
 func exportAll() {
+	// todo manage memory better, bloats completely during export
 	common.InfoLogger.Println("Exporting data")
-	var wg sync.WaitGroup
 	timestamp := time.Now()
 
-	wg.Add(1)
-	go func() {
-		err := dataexport.ExportUTXOs(fmt.Sprintf("./data-export/utxos-%d.csv", timestamp.Unix()))
-		if err != nil {
-			panic(err)
-		}
-		wg.Done()
-		common.InfoLogger.Println("Finished UTXOs")
-	}()
+	err := dataexport.ExportUTXOs(fmt.Sprintf("./data-export/utxos-%d.csv", timestamp.Unix()))
+	if err != nil {
+		panic(err)
+	}
+	common.InfoLogger.Println("Finished UTXOs")
 
-	wg.Add(1)
-	go func() {
-		err := dataexport.ExportFilters(fmt.Sprintf("./data-export/filters-%d.csv", timestamp.Unix()))
-		if err != nil {
-			panic(err)
-		}
-		wg.Done()
-		common.InfoLogger.Println("Finished Filters")
-	}()
+	err = dataexport.ExportFilters(fmt.Sprintf("./data-export/filters-%d.csv", timestamp.Unix()))
+	if err != nil {
+		panic(err)
+	}
+	common.InfoLogger.Println("Finished Filters")
 
-	wg.Add(1)
-	go func() {
-		err := dataexport.ExportTweaks(fmt.Sprintf("./data-export/tweaks-%d.csv", timestamp.Unix()))
-		if err != nil {
-			panic(err)
-		}
-		wg.Done()
-		common.InfoLogger.Println("Finished Tweaks")
-	}()
+	err = dataexport.ExportTweaks(fmt.Sprintf("./data-export/tweaks-%d.csv", timestamp.Unix()))
+	if err != nil {
+		panic(err)
+	}
+	common.InfoLogger.Println("Finished Tweaks")
 
-	wg.Add(1)
-	go func() {
-		err := dataexport.ExportTweakIndices(fmt.Sprintf("./data-export/tweak-indices-%d.csv", timestamp.Unix()))
-		if err != nil {
-			panic(err)
-		}
-		wg.Done()
-		common.InfoLogger.Println("Finished Tweak Indices")
-	}()
+	err = dataexport.ExportTweakIndices(fmt.Sprintf("./data-export/tweak-indices-%d.csv", timestamp.Unix()))
+	if err != nil {
+		panic(err)
+	}
+	common.InfoLogger.Println("Finished Tweak Indices")
 
-	wg.Wait()
+	err = dataexport.ExportHeadersInv(fmt.Sprintf("./data-export/headers-inv-%d.csv", timestamp.Unix()))
+	if err != nil {
+		panic(err)
+	}
+	common.InfoLogger.Println("Finished HeadersInv")
+
+	common.InfoLogger.Println("All exported")
+	os.Exit(0)
 }

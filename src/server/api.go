@@ -5,6 +5,7 @@ import (
 	"SilentPaymentAppBackend/src/db/dblevel"
 	"bytes"
 	"encoding/hex"
+	"errors"
 	"github.com/gin-gonic/gin"
 	"io/ioutil"
 	"net/http"
@@ -20,6 +21,7 @@ type TxRequest struct {
 }
 
 func (h *ApiHandler) GetBestBlockHeight(c *gin.Context) {
+	// todo returns one height too low
 	lastHeader, err := dblevel.FetchHighestBlockHeaderInvByFlag(true)
 	if err != nil {
 		common.ErrorLogger.Println(err)
@@ -117,7 +119,9 @@ func (h *ApiHandler) GetLightUTXOsByHeight(c *gin.Context) {
 func (h *ApiHandler) GetTweakDataByHeight(c *gin.Context) {
 	heightStr := c.Param("blockheight")
 	if heightStr == "" {
-		c.JSON(http.StatusBadRequest, nil)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "bad format: height",
+		})
 		return
 	}
 	height, err := strconv.ParseUint(heightStr, 10, 32)
@@ -137,13 +141,17 @@ func (h *ApiHandler) GetTweakDataByHeight(c *gin.Context) {
 		return
 	}
 	tweaks, err := dblevel.FetchByBlockHashTweaks(headerInv.Hash)
-	if err != nil {
+	if err != nil && !errors.Is(err, dblevel.NoEntryErr{}) {
 		common.ErrorLogger.Println(err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "could could not retrieve data from database",
 		})
 		return
 	}
+	if err != nil && errors.Is(err, dblevel.NoEntryErr{}) {
+		c.JSON(http.StatusOK, []string{})
+	}
+
 	var serveTweakData []string
 	for _, tweak := range tweaks {
 		serveTweakData = append(serveTweakData, hex.EncodeToString(tweak.Data[:]))

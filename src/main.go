@@ -134,7 +134,7 @@ func main() {
 			return
 		}
 		common.InfoLogger.Printf("Sync took: %s", time.Now().Sub(startSync).String())
-		//go core.CheckForNewBlockRoutine()
+		go core.CheckForNewBlockRoutine()
 		go server.RunServer(&server.ApiHandler{})
 	}()
 

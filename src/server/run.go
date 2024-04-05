@@ -6,7 +6,7 @@ import (
 )
 
 func RunServer(api *ApiHandler) {
-
+	// todo merge gin logging into common logging
 	router := gin.Default()
 
 	router.GET("/block-height", api.GetBestBlockHeight)

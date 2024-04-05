@@ -2,6 +2,7 @@ package server
 
 import (
 	"SilentPaymentAppBackend/src/common"
+	"SilentPaymentAppBackend/src/common/types"
 	"SilentPaymentAppBackend/src/db/dblevel"
 	"bytes"
 	"encoding/hex"
@@ -132,6 +133,14 @@ func (h *ApiHandler) GetTweakDataByHeight(c *gin.Context) {
 		})
 		return
 	}
+	// Extracting the dustLimit query parameter and converting it to uint64
+	dustLimitStr := c.DefaultQuery("dustLimit", "0") // Default to "0" if not provided
+	dustLimit, err := strconv.ParseUint(dustLimitStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid dustLimit parameter"})
+		return
+	}
+
 	headerInv, err := dblevel.FetchByBlockHeightBlockHeaderInv(uint32(height))
 	if err != nil {
 		common.ErrorLogger.Println(err)
@@ -140,14 +149,29 @@ func (h *ApiHandler) GetTweakDataByHeight(c *gin.Context) {
 		})
 		return
 	}
-	tweaks, err := dblevel.FetchByBlockHashTweaks(headerInv.Hash)
-	if err != nil && !errors.Is(err, dblevel.NoEntryErr{}) {
-		common.ErrorLogger.Println(err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "could could not retrieve data from database",
-		})
-		return
+	var tweaks []types.Tweak
+
+	if dustLimit == 0 {
+		// this query should have a better performance due to no required checks
+		tweaks, err = dblevel.FetchByBlockHashTweaks(headerInv.Hash)
+		if err != nil && !errors.Is(err, dblevel.NoEntryErr{}) {
+			common.ErrorLogger.Println(err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "could could not retrieve data from database",
+			})
+			return
+		}
+	} else {
+		tweaks, err = dblevel.FetchByBlockHashDustLimitTweaks(headerInv.Hash, dustLimit)
+		if err != nil && !errors.Is(err, dblevel.NoEntryErr{}) {
+			common.ErrorLogger.Println(err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "could could not retrieve data from database",
+			})
+			return
+		}
 	}
+
 	if err != nil && errors.Is(err, dblevel.NoEntryErr{}) {
 		c.JSON(http.StatusOK, []string{})
 	}

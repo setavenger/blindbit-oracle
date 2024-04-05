@@ -3,6 +3,10 @@ package dblevel
 import (
 	"SilentPaymentAppBackend/src/common"
 	"SilentPaymentAppBackend/src/common/types"
+	"encoding/hex"
+	"errors"
+	"github.com/syndtr/goleveldb/leveldb/util"
+	"math"
 )
 
 func InsertBatchTweaks(tweaks []types.Tweak) error {
@@ -23,6 +27,47 @@ func InsertBatchTweaks(tweaks []types.Tweak) error {
 	}
 	common.DebugLogger.Printf("Inserted %d tweaks", len(tweaks))
 	return nil
+}
+
+func OverWriteTweaks(tweaks []types.Tweak) error {
+	var tweaksToOverwrite []types.Tweak
+	for _, tweak := range tweaks {
+		pairs, err := retrieveManyByBlockHashAndTxid(TweaksDB, tweak.BlockHash, tweak.Txid, types.PairFactoryTweak)
+		if err != nil && !errors.Is(err, NoEntryErr{}) {
+			common.ErrorLogger.Println(err)
+			return err
+		} else if err != nil && !errors.Is(err, NoEntryErr{}) {
+			// This should not happen because the overwrites are computed from remaining UTXOs.
+			// Getting this error would mean that we have UTXOs without corresponding tweaks in the DB
+			common.WarningLogger.Println("no entries for a tweak were found. this should not happen")
+			return err
+		}
+		if len(pairs) != 1 {
+			common.ErrorLogger.Printf("%+v", pairs)
+			common.ErrorLogger.Println("number of tweaks was not exactly 1")
+			return errors.New("number of tweaks was not exactly 1")
+		}
+
+		var result types.Tweak
+		// Convert Pair to a Tweak and assign it to the new slice
+		if pairPtr, ok := pairs[0].(*types.Tweak); ok {
+			result = *pairPtr
+		} else {
+			common.ErrorLogger.Printf("%+v\n", pairs[0])
+			panic("wrong pair struct returned")
+		}
+		tweak.Data = result.Data
+
+		tweaksToOverwrite = append(tweaksToOverwrite, tweak)
+
+	}
+
+	err := InsertBatchTweaks(tweaksToOverwrite)
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return err
+	}
+	return err
 }
 
 func FetchByBlockHashTweaks(blockHash string) ([]types.Tweak, error) {
@@ -97,4 +142,100 @@ func FetchAllTweaks() ([]types.Tweak, error) {
 		}
 	}
 	return result, err
+}
+
+func DustOverwriteRoutine() error {
+	iter := TweaksDB.NewIterator(nil, nil)
+	defer iter.Release()
+
+	var tweaksForBatchInsert []types.Tweak
+	counter := 0
+	for iter.Next() {
+		counter++
+		// Deserialize data first
+		tweak := types.Tweak{}
+		err := tweak.DeSerialiseData(iter.Value())
+		if err != nil {
+			common.ErrorLogger.Println(err)
+			return err
+		}
+
+		err = tweak.DeSerialiseKey(iter.Key())
+		if err != nil {
+			common.ErrorLogger.Println(err)
+			return err
+		}
+
+		utxos, err := FetchByBlockHashAndTxidUTXOs(tweak.BlockHash, tweak.Txid)
+		if err != nil {
+			common.ErrorLogger.Println(err)
+			return err
+		}
+		// we insert a fake spentUTXO such that the highest of the remaining will be taken.
+		highestValue, err := types.FindBiggestRemainingUTXO(types.UTXO{Value: math.MaxUint64}, utxos)
+		tweak.HighestValue = *highestValue
+		tweaksForBatchInsert = append(tweaksForBatchInsert, tweak)
+		if counter%2_500 == 0 {
+			common.InfoLogger.Println("Inserting for", counter)
+			// we use insert instead of overwrite because we already have all the information ready
+			err = InsertBatchTweaks(tweaksForBatchInsert)
+			if err != nil {
+				common.ErrorLogger.Println(err)
+				return err
+			}
+			tweaksForBatchInsert = []types.Tweak{}
+		}
+	}
+
+	// insert the remaining tweaks
+	err := InsertBatchTweaks(tweaksForBatchInsert)
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return err
+	}
+
+	err = iter.Error()
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return err
+	}
+	return err
+}
+
+func FetchByBlockHashDustLimitTweaks(blockHash string, dustLimit uint64) ([]types.Tweak, error) {
+	blockHashBytes, err := hex.DecodeString(blockHash)
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return nil, err
+	}
+	iter := TweaksDB.NewIterator(util.BytesPrefix(blockHashBytes), nil)
+	defer iter.Release()
+	var results []types.Tweak
+
+	for iter.Next() {
+		tweak := types.Tweak{}
+		// Deserialize data first
+		err = tweak.DeSerialiseData(iter.Value())
+		if err != nil {
+			common.ErrorLogger.Println(err)
+			return nil, err
+		}
+		if tweak.HighestValue >= dustLimit {
+			err = tweak.DeSerialiseKey(iter.Key())
+			if err != nil {
+				common.ErrorLogger.Println(err)
+				return nil, err
+			}
+			results = append(results, tweak)
+		}
+
+	}
+
+	err = iter.Error()
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return nil, err
+	}
+
+	return results, err
 }

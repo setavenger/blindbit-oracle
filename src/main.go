@@ -2,7 +2,6 @@ package main
 
 import (
 	"SilentPaymentAppBackend/src/common"
-	"SilentPaymentAppBackend/src/core"
 	"SilentPaymentAppBackend/src/dataexport"
 	"SilentPaymentAppBackend/src/db/dblevel"
 	"SilentPaymentAppBackend/src/server"
@@ -122,19 +121,27 @@ func main() {
 
 	//moved into go routine such that the interrupt signal will apply properly
 	go func() {
-		startSync := time.Now()
-		err := core.PreSyncHeaders()
-		if err != nil {
-			common.ErrorLogger.Fatalln(err)
-			return
-		}
-		err = core.SyncChain()
-		if err != nil {
-			common.ErrorLogger.Fatalln(err)
-			return
-		}
-		common.InfoLogger.Printf("Sync took: %s", time.Now().Sub(startSync).String())
-		go core.CheckForNewBlockRoutine()
+		//startSync := time.Now()
+		//err := core.PreSyncHeaders()
+		//if err != nil {
+		//	common.ErrorLogger.Fatalln(err)
+		//	return
+		//}
+		//err = core.SyncChain()
+		//if err != nil {
+		//	common.ErrorLogger.Fatalln(err)
+		//	return
+		//}
+		//common.InfoLogger.Printf("Sync took: %s", time.Now().Sub(startSync).String())
+		//go core.CheckForNewBlockRoutine()
+
+		// only call this if you need to reindex. It doesn't delete anything but takes a couple minutess to finish
+		//err := core.ReindexDustLimitsOnly()
+		//if err != nil {
+		//	common.ErrorLogger.Fatalln(err)
+		//	return
+		//}
+
 		go server.RunServer(&server.ApiHandler{})
 	}()
 

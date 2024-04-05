@@ -35,8 +35,11 @@ func removeSpentUTXOsAndTweaks(utxos []types.UTXO) error {
 	}
 
 	var tweaksToDelete []types.Tweak
+	var tweaksToOverwrite []types.Tweak
+
 	for _, utxo := range cleanUTXOs {
-		_, err = dblevel.FetchByBlockHashAndTxidUTXOs(utxo.BlockHash, utxo.Txid)
+		var remainingUTXOs []types.UTXO
+		remainingUTXOs, err = dblevel.FetchByBlockHashAndTxidUTXOs(utxo.BlockHash, utxo.Txid)
 		if err != nil && !errors.Is(err, dblevel.NoEntryErr{}) {
 			common.ErrorLogger.Println(err)
 			return err
@@ -47,6 +50,23 @@ func removeSpentUTXOsAndTweaks(utxos []types.UTXO) error {
 				BlockHash: utxo.BlockHash,
 				Txid:      utxo.Txid,
 			})
+			continue
+		}
+		var newBiggest *uint64
+		newBiggest, err = types.FindBiggestRemainingUTXO(utxo, remainingUTXOs)
+		if err != nil {
+			common.ErrorLogger.Println(err)
+			return err
+		}
+		if newBiggest != nil {
+			// find the biggest UTXO for the tx and overwrite if necessary
+			tweaksToOverwrite = append(tweaksToOverwrite, types.Tweak{
+				BlockHash:    utxo.BlockHash,
+				BlockHeight:  0,
+				Txid:         utxo.Txid,
+				Data:         [33]byte{},
+				HighestValue: *newBiggest,
+			})
 		}
 	}
 
@@ -56,8 +76,32 @@ func removeSpentUTXOsAndTweaks(utxos []types.UTXO) error {
 		return err
 	}
 
-	// this is already logged in the DB.Delete function
-	//common.InfoLogger.Printf("Deleted %d UTXOs\n", len(utxos))
+	err = dblevel.OverWriteTweaks(tweaksToOverwrite)
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return err
+	}
 
 	return err
 }
+
+// ReindexDustLimitsOnly this routine adds the dust limit data to tweaks after a sync
+func ReindexDustLimitsOnly() error {
+	common.InfoLogger.Println("Reindexing dust limit from synced data")
+	err := dblevel.DustOverwriteRoutine()
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return err
+	}
+	common.InfoLogger.Println("Reindexing dust limit done")
+	return nil
+
+}
+
+/*
+	err = dblevel.OverWriteTweaks(tweaksToOverwrite)
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return err
+	}
+*/

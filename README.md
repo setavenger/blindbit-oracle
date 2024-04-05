@@ -1,15 +1,25 @@
 # BlindBit Backend
 A GO implementation for a BIP0352 Silent Payments Indexing Server. 
-This backend was focused on serving the BlindBit mobile app with tweak data. 
+This backend was focused on serving the BlindBit mobile app with tweak data and other simplified data to spend and receive. 
 
 ## Requirements
-- rpc access to a bitcoin full node 
+- RPC access to a bitcoin full node 
   - unpruned because we need the prevouts for every transaction in the block with a taproot output
-  - Note: Indexing will take longer if the rpc calls take longer 
-  - Processing a block takes ~100ms-500ms
-- disk space
-  - ~500mb-1GB with cut-through (@828000 about 250mb taken)
-  - +4GB if you have full-indexing enabled (@828000 about 2GB taken)
+  - Note: Indexing will take longer if the rpc calls take longer; 
+  You might also want to allow more rpc workers on your node to speed things up. 
+- Processing a block takes ~100ms-300ms
+- Disk space
+  - ```text
+    709632 -> 834761
+    217M	./filters
+    2.7G	./utxos
+    16M	    ./headers-inv
+    12M	    ./headers
+    2.8G	./tweaks        33,679,543 tweaks
+    1.7G	./tweak-index   54,737,510 tweaks
+    7.4G	.
+    ```
+
 
 ## Todos
 
@@ -32,3 +42,4 @@ This backend was focused on serving the BlindBit mobile app with tweak data.
 - [ ] Review all duplicate key error exemptions and raise to error/warn from debug.
 - [ ] Remove unnecessary panics.
 - [ ] Future non priority: move tweak computation code into another repo
+- [ ] Convert hardcoded serialisation assertions into constants (?)

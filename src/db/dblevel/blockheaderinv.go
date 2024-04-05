@@ -87,7 +87,6 @@ func FetchHighestBlockHeaderInv() (*types.BlockHeaderInv, error) {
 // FetchHighestBlockHeaderInvByFlag gets the block with the highest height which has the corresponding flag set
 // Flag being either processed or unprocessed according to types.BlockHeaderInv
 func FetchHighestBlockHeaderInvByFlag(flag bool) (*types.BlockHeaderInv, error) {
-	// Create an iterator that iterates in reverse order
 	iter := HeadersInvDB.NewIterator(nil, nil)
 	defer iter.Release()
 	var result types.BlockHeaderInv

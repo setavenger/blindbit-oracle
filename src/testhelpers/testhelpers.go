@@ -97,7 +97,6 @@ func LoadCaseData(t *testing.T) ([]TestCase, error) {
 		return nil, err
 	}
 
-	// Assuming `testCases` is the variable for storing the unmarshaled data
 	var testCases []TestCase
 
 	// Unmarshal the JSON data into the struct
@@ -130,8 +129,7 @@ func LoadAndUnmarshalBlockFromFile(filePath string, block *types.Block) error {
 	return err
 }
 
-// parseWitnessScript parses a hex-encoded witness script and returns the actual witness data as a list,
-// assuming the first byte indicates the number of items.
+// parseWitnessScript parses a hex-encoded witness script and returns the actual witness data as a list
 func parseWitnessScript(script string) ([]string, error) {
 	// Decode the hex-encoded script
 	data, err := hex.DecodeString(script)

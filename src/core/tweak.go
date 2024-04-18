@@ -147,7 +147,7 @@ func ComputeTweaksForBlockV3(block *types.Block) ([]types.Tweak, error) {
 								Data:        *tweakPerTx,
 							})
 						}
-						break // Assuming you only need one tweak per transaction
+						break
 					}
 				}
 			}
@@ -360,7 +360,6 @@ func extractPubKeys(tx types.Transaction) []string {
 
 // extractPublicKey tries to find a public key within the given scriptSig.
 func extractFromP2PKH(vin types.Vin) ([]byte, error) {
-	// Assuming the scriptPubKey's hex starts with the op_codes and then the hash
 	spkHashHex := vin.Prevout.ScriptPubKey.Hex[6:46] // Skip op_codes and grab the hash
 	spkHash, err := hex.DecodeString(spkHashHex)
 	if err != nil {
@@ -478,21 +477,18 @@ func sumPublicKeys(pubKeys []string) (*btcec.PublicKey, error) {
 
 // ComputeInputHash computes the input_hash for a transaction as per the specification.
 func ComputeInputHash(tx types.Transaction, sumPublicKeys *btcec.PublicKey) ([32]byte, error) {
-	// Step 1: Aggregate public keys (A)
-
-	// Step 2: Find the lexicographically smallest outpoint (outpointL)
-	smallestOutpoint, err := findSmallestOutpoint(tx) // Implement this function based on your requirements
+	smallestOutpoint, err := findSmallestOutpoint(tx)
 	if err != nil {
+		common.ErrorLogger.Println(err) // todo why do we send a custom error
 		return [32]byte{}, fmt.Errorf("error finding smallest outpoint: %w", err)
 	}
 
 	// Concatenate outpointL and A
 	var buffer bytes.Buffer
-	buffer.Write(smallestOutpoint) // Ensure this is serialized as per your transaction structure
+	buffer.Write(smallestOutpoint)
 	// Serialize the x-coordinate of the sumPublicKeys
 	buffer.Write(sumPublicKeys.SerializeCompressed())
 
-	// Compute input_hash using domain-separated hash
 	inputHash := common.HashTagged("BIP0352/Inputs", buffer.Bytes())
 
 	return inputHash, nil
@@ -515,6 +511,7 @@ func findSmallestOutpoint(tx types.Transaction) ([]byte, error) {
 		// Decode the Txid (hex to bytes) and reverse it to match little-endian format
 		txidBytes, err := hex.DecodeString(vin.Txid)
 		if err != nil {
+			common.ErrorLogger.Println(err)
 			return nil, err
 		}
 		reversedTxid := common.ReverseBytes(txidBytes)

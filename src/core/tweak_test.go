@@ -62,8 +62,6 @@ func TestSimpleInputHash(t *testing.T) {
 		t.Errorf("computed input hash does not match: %s - %s\n", inputHashHex, controlInputHash)
 		return
 	}
-	// At this point, `testCases` contains the data from your JSON file
-	// You can now process it as needed
 	common.InfoLogger.Println("Done")
 }
 

@@ -23,6 +23,7 @@ This backend was focused on serving the BlindBit mobile app with tweak data and 
 
 ## Todos
 
+- [ ] Update to new test vectors
 - [ ] Write operation tests to ensure data integrity
 - [ ] Benchmark btcec vs libsecp C library wrapper/binding
   - https://github.com/renproject/secp256k1

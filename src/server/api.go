@@ -13,7 +13,7 @@ import (
 	"strconv"
 )
 
-// todo might not need ApiHandler struct if no data is stored within.
+// ApiHandler todo might not need ApiHandler struct if no data is stored within.
 //  Will keep for now just in case, so I don't have to refactor twice
 type ApiHandler struct{}
 
@@ -71,7 +71,7 @@ func (h *ApiHandler) GetCFilterByHeight(c *gin.Context) {
 	data := gin.H{
 		"filter_type":  cFilter.FilterType,
 		"block_height": height, // saves us a "join" in the query
-		"block_header": cFilter.BlockHash,
+		"block_hash":   cFilter.BlockHash,
 		"data":         hex.EncodeToString(cFilter.Data),
 	}
 
@@ -101,7 +101,7 @@ func (h *ApiHandler) GetLightUTXOsByHeight(c *gin.Context) {
 		return
 	}
 	utxos, err := dblevel.FetchByBlockHashUTXOs(headerInv.Hash)
-	if err != nil {
+	if err != nil && !errors.Is(err, dblevel.NoEntryErr{}) {
 		common.ErrorLogger.Println(err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "could could not retrieve data from database",
@@ -174,6 +174,7 @@ func (h *ApiHandler) GetTweakDataByHeight(c *gin.Context) {
 
 	if err != nil && errors.Is(err, dblevel.NoEntryErr{}) {
 		c.JSON(http.StatusOK, []string{})
+		return
 	}
 
 	var serveTweakData []string

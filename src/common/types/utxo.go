@@ -8,7 +8,7 @@ import (
 	"errors"
 )
 
-// UTXO could
+// UTXO
 // todo could be changed to unify spent UTXO and Light UTXO,
 //  unused fields could just be omitted from serialisation and de-serialisation
 type UTXO struct {
@@ -116,7 +116,9 @@ func GetDBKeyUTXO(blockHash, txid string, vout uint32) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-//FindBiggestRemainingUTXO returns nil if the spent utxo was not the largest and hence no downward adjustment has to be made for the tweak. Returns the largest value of utxos if utxoSpent had the largest value.
+// FindBiggestRemainingUTXO returns nil if the spent utxo was not the largest and
+// hence no downward adjustment has to be made for the tweak.
+// Returns the largest value of utxos if utxoSpent had the largest value.
 func FindBiggestRemainingUTXO(utxoSpent UTXO, utxos []UTXO) (*uint64, error) {
 	var valueMax uint64 = 0
 	spentIsMax := true // Assume the spent UTXO is the max until proven otherwise.
@@ -133,16 +135,15 @@ func FindBiggestRemainingUTXO(utxoSpent UTXO, utxos []UTXO) (*uint64, error) {
 	}
 
 	if spentIsMax {
+		if valueMax == 0 {
+			common.ErrorLogger.Printf("%+v", utxoSpent)
+			common.ErrorLogger.Printf("%+v", utxos)
+			return nil, errors.New("valueMax was 0. this should not happen")
+		}
 		// If the spent UTXO was the largest, return the max value among the remaining UTXOs.
 		return &valueMax, nil
+	} else {
+		// If the spent UTXO was not the largest, no adjustment is needed.
+		return nil, nil
 	}
-
-	if valueMax == 0 {
-		common.ErrorLogger.Printf("%+v", utxoSpent)
-		common.ErrorLogger.Printf("%+v", utxos)
-		return nil, errors.New("valueMax was 0. this should not happen")
-	}
-
-	// If the spent UTXO was not the largest, no adjustment is needed.
-	return nil, nil
 }

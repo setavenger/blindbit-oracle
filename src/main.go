@@ -2,6 +2,7 @@ package main
 
 import (
 	"SilentPaymentAppBackend/src/common"
+	"SilentPaymentAppBackend/src/core"
 	"SilentPaymentAppBackend/src/dataexport"
 	"SilentPaymentAppBackend/src/db/dblevel"
 	"SilentPaymentAppBackend/src/server"
@@ -17,20 +18,35 @@ import (
 )
 
 func init() {
+	// for profiling or testing iirc
 	//go func() {
 	//	log.Println(http.ListenAndServe("localhost:6060", nil))
 	//}()
-	err := os.Mkdir("./logs", 0750)
+
+	baseDir := os.Getenv("BASE_DIRECTORY")
+	if baseDir == "" {
+		panic("base directory not set")
+	}
+	common.BaseDirectory = baseDir
+	common.SetDirectories() // todo a proper set settings function which does it all would be good to avoid several small function calls
+
+	err := os.Mkdir(common.BaseDirectory, 0750)
 	if err != nil && !strings.Contains(err.Error(), "file exists") {
 		fmt.Println(err.Error())
 		log.Fatal(err)
 	}
 
-	file, err := os.OpenFile(fmt.Sprintf("./logs/logs-%s.txt", time.Now()), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	err = os.Mkdir(common.LogsPath, 0750)
+	if err != nil && !strings.Contains(err.Error(), "file exists") {
+		fmt.Println(err.Error())
+		log.Fatal(err)
+	}
+
+	file, err := os.OpenFile(fmt.Sprintf("%s/logs/logs-%s.txt", common.BaseDirectory, time.Now()), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
 		log.Fatal(err)
 	}
-	fileDebug, err := os.OpenFile(fmt.Sprintf("./logs/logs-debug-%s.txt", time.Now()), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	fileDebug, err := os.OpenFile(fmt.Sprintf("%s/logs/logs-debug-%s.txt", common.BaseDirectory, time.Now()), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -44,21 +60,45 @@ func init() {
 	common.ErrorLogger = log.New(multi, "[ERROR] ", log.Ldate|log.Lmicroseconds|log.Llongfile|log.Lmsgprefix)
 
 	// create DB path
-	err = os.Mkdir("./data", 0750)
+	err = os.Mkdir(common.DBPath, 0750)
 	if err != nil && !strings.Contains(err.Error(), "file exists") {
-		fmt.Println(err.Error())
-		log.Fatal(err)
+		common.ErrorLogger.Println(err)
+		panic(err)
 	}
 
 	// load env vars
-	catchUpRaw := os.Getenv("SYNC_CATCH_UP")
-	if catchUpRaw != "" {
-		var catchUpRawConv uint64
-		catchUpRawConv, err = strconv.ParseUint(catchUpRaw, 10, 32)
-		common.CatchUp = uint32(catchUpRawConv)
+	syncStartHeightStr := os.Getenv("SYNC_START_HEIGHT")
+	if syncStartHeightStr != "" {
+		var syncStartHeightConv uint64
+		syncStartHeightConv, err = strconv.ParseUint(syncStartHeightStr, 10, 32)
 		if err != nil {
 			common.ErrorLogger.Println(err)
+			panic(err)
 		}
+		common.SyncStartHeight = uint32(syncStartHeightConv)
+	} else {
+		panic("SYNC_START_HEIGHT not set")
+	}
+	maxParallelRequestsStr := os.Getenv("MAX_PARALLEL_REQUESTS")
+	if maxParallelRequestsStr != "" {
+		var maxParallelRequestsConv uint64
+		maxParallelRequestsConv, err = strconv.ParseUint(maxParallelRequestsStr, 10, 16)
+		if err != nil {
+			common.ErrorLogger.Println(err)
+			panic(err)
+		}
+		common.MaxParallelRequests = uint16(maxParallelRequestsConv)
+	}
+
+	maxParallelTweakComputationsStr := os.Getenv("MAX_PARALLEL_TWEAK_COMPUTATIONS")
+	if maxParallelTweakComputationsStr != "" {
+		var maxParallelTweakComputationsConv int64
+		maxParallelTweakComputationsConv, err = strconv.ParseInt(maxParallelTweakComputationsStr, 10, 64)
+		if err != nil {
+			common.ErrorLogger.Println(err)
+			panic(err)
+		}
+		common.MaxParallelTweakComputations = int(maxParallelTweakComputationsConv)
 	}
 
 	// open levelDB connections
@@ -85,28 +125,7 @@ func init() {
 }
 
 func main() {
-	defer func() {
-		err := dblevel.HeadersDB.Close()
-		if err != nil {
-			common.ErrorLogger.Println(err)
-		}
-		err = dblevel.HeadersInvDB.Close()
-		if err != nil {
-			common.ErrorLogger.Println(err)
-		}
-		err = dblevel.FiltersDB.Close()
-		if err != nil {
-			common.ErrorLogger.Println(err)
-		}
-		err = dblevel.TweaksDB.Close()
-		if err != nil {
-			common.ErrorLogger.Println(err)
-		}
-		err = dblevel.UTXOsDB.Close()
-		if err != nil {
-			common.ErrorLogger.Println(err)
-		}
-	}()
+	defer closeDBs()
 
 	//log.SetFlags(log.LstdFlags | log.Lshortfile | log.Lmicroseconds)
 	interrupt := make(chan os.Signal, 1)
@@ -121,19 +140,20 @@ func main() {
 
 	//moved into go routine such that the interrupt signal will apply properly
 	go func() {
-		//startSync := time.Now()
-		//err := core.PreSyncHeaders()
-		//if err != nil {
-		//	common.ErrorLogger.Fatalln(err)
-		//	return
-		//}
-		//err = core.SyncChain()
-		//if err != nil {
-		//	common.ErrorLogger.Fatalln(err)
-		//	return
-		//}
-		//common.InfoLogger.Printf("Sync took: %s", time.Now().Sub(startSync).String())
-		//go core.CheckForNewBlockRoutine()
+		startSync := time.Now()
+		err := core.PreSyncHeaders()
+		if err != nil {
+			common.ErrorLogger.Fatalln(err)
+			return
+		}
+		// todo buggy for sync catchup from 0, needs to be 1 or higher
+		err = core.SyncChain()
+		if err != nil {
+			common.ErrorLogger.Fatalln(err)
+			return
+		}
+		common.InfoLogger.Printf("Sync took: %s", time.Now().Sub(startSync).String())
+		go core.CheckForNewBlockRoutine()
 
 		// only call this if you need to reindex. It doesn't delete anything but takes a couple minutess to finish
 		//err := core.ReindexDustLimitsOnly()
@@ -155,12 +175,35 @@ func main() {
 }
 
 func openLevelDBConnections() {
-	dblevel.HeadersDB = dblevel.OpenDBConnection(dblevel.DBPathHeaders)
-	dblevel.HeadersInvDB = dblevel.OpenDBConnection(dblevel.DBPathHeadersInv)
-	dblevel.FiltersDB = dblevel.OpenDBConnection(dblevel.DBPathFilters)
-	dblevel.TweaksDB = dblevel.OpenDBConnection(dblevel.DBPathTweaks)
-	dblevel.TweakIndexDB = dblevel.OpenDBConnection(dblevel.DBPathTweakIndex)
-	dblevel.UTXOsDB = dblevel.OpenDBConnection(dblevel.DBPathUTXOs)
+	dblevel.HeadersDB = dblevel.OpenDBConnection(common.DBPathHeaders)
+	dblevel.HeadersInvDB = dblevel.OpenDBConnection(common.DBPathHeadersInv)
+	dblevel.FiltersDB = dblevel.OpenDBConnection(common.DBPathFilters)
+	dblevel.TweaksDB = dblevel.OpenDBConnection(common.DBPathTweaks)
+	dblevel.TweakIndexDB = dblevel.OpenDBConnection(common.DBPathTweakIndex)
+	dblevel.UTXOsDB = dblevel.OpenDBConnection(common.DBPathUTXOs)
+}
+
+func closeDBs() {
+	err := dblevel.HeadersDB.Close()
+	if err != nil {
+		common.ErrorLogger.Println(err)
+	}
+	err = dblevel.HeadersInvDB.Close()
+	if err != nil {
+		common.ErrorLogger.Println(err)
+	}
+	err = dblevel.FiltersDB.Close()
+	if err != nil {
+		common.ErrorLogger.Println(err)
+	}
+	err = dblevel.TweaksDB.Close()
+	if err != nil {
+		common.ErrorLogger.Println(err)
+	}
+	err = dblevel.UTXOsDB.Close()
+	if err != nil {
+		common.ErrorLogger.Println(err)
+	}
 }
 
 func exportAll() {

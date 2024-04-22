@@ -316,7 +316,7 @@ func extractPubKeys(tx types.Transaction) []string {
 				common.DebugLogger.Println("txid:", tx.Txid)
 				common.DebugLogger.Println("Could not extract public key")
 				common.ErrorLogger.Println(err)
-				continue
+				panic(err) //todo make this return an error
 			}
 			// todo what to do if none is matched
 			if pubKey != "" {
@@ -378,7 +378,7 @@ func extractFromP2PKH(vin types.Vin) ([]byte, error) {
 	for i := len(scriptSigBytes); i >= 33; i-- {
 		pubKeyBytes := scriptSigBytes[i-33 : i]
 		pubKeyHash := common.Hash160(pubKeyBytes)
-		if string(pubKeyHash) == string(spkHash) {
+		if bytes.Equal(pubKeyHash, spkHash) {
 			return pubKeyBytes, err
 		}
 	}

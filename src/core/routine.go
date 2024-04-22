@@ -42,7 +42,7 @@ func fullProcessBlockHash(blockHash string) error {
 	// this should not be a problem and only apply in very few cases
 	// the index should be caught up on startup and hence a previous block
 	// will most likely only be squeezed in if there were several blocks in between tip queries
-	if block.Height > common.CatchUp {
+	if block.Height > common.SyncStartHeight {
 		err = fullProcessBlockHash(block.PreviousBlockHash)
 		if err != nil {
 			common.ErrorLogger.Println(err)
@@ -151,6 +151,7 @@ func HandleBlock(block *types.Block) error {
 		return err
 	}
 	common.DebugLogger.Println("Constructing full index")
+	// todo we could sort the array here in accordance to the block data which we still have
 	tweakIndex := types.TweakIndexFromTweakArray(tweaksForBlock)
 	tweakIndex.BlockHash = block.Hash
 	tweakIndex.BlockHeight = block.Height

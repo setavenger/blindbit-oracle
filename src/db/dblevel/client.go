@@ -17,17 +17,6 @@ func (e NoEntryErr) Error() string {
 	return "[no entry found]"
 }
 
-const dbPath = "./data"
-
-const (
-	DBPathHeaders    = dbPath + "/headers"
-	DBPathHeadersInv = dbPath + "/headers-inv" // for height to blockHash mapping
-	DBPathFilters    = dbPath + "/filters"
-	DBPathTweaks     = dbPath + "/tweaks"
-	DBPathTweakIndex = dbPath + "/tweak-index"
-	DBPathUTXOs      = dbPath + "/utxos"
-)
-
 var (
 	HeadersDB    *leveldb.DB
 	HeadersInvDB *leveldb.DB

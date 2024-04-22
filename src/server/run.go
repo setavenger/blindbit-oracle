@@ -10,7 +10,7 @@ func RunServer(api *ApiHandler) {
 	router := gin.Default()
 
 	router.GET("/block-height", api.GetBestBlockHeight)
-	router.GET("/tweak/:blockheight", api.GetTweakDataByHeight)
+	router.GET("/tweaks/:blockheight", api.GetTweakDataByHeight)
 	router.GET("/filter/:blockheight", api.GetCFilterByHeight)
 	router.GET("/utxos/:blockheight", api.GetLightUTXOsByHeight)
 

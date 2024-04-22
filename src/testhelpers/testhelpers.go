@@ -138,6 +138,7 @@ func parseWitnessScript(script string) ([]string, error) {
 		return nil, err
 	}
 
+	// todo should this return an error?
 	if len(data) == 0 {
 		return []string{}, err
 	}

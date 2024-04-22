@@ -63,7 +63,7 @@ func extractSpentTaprootPubKeysFromTx(tx *types.Transaction, block *types.Block)
 					// panic becuase if this fails it means we have incomplete data which requires a sync
 					common.ErrorLogger.Printf("tx: %+v\n", tx)
 					common.ErrorLogger.Printf("prevout: %+v\n", vin.Prevout)
-					common.ErrorLogger.Println("Headers not synced from taproot activation height (708567). Either build complete index or fully sync headers only.")
+					common.ErrorLogger.Println("Headers not synced from first taproot like occurrence. Either build complete index or fully sync headers only.")
 					panic(err)
 				}
 				blockHash = headerInv.Hash

@@ -21,7 +21,7 @@ func SyncChain() error {
 
 	// Current logic is that we always just sync from where the user wants us to sync.
 	// We won't sync below the height
-	syncFromHeight := common.CatchUp
+	syncFromHeight := common.SyncStartHeight
 
 	// todo might need to change flow control to use break
 	// number of headers that will maximally be fetched at once
@@ -69,7 +69,6 @@ func SyncChain() error {
 			return headers[i].Height < headers[j].Height
 		})
 
-		// todo needs to return error
 		err = processHeaders(headers)
 		if err != nil {
 			common.ErrorLogger.Println(err)
@@ -105,7 +104,8 @@ func updateBlockchainInfo(blockchainInfo *types.BlockchainInfo) error {
 
 // todo works most of the times but hangs sometimes.
 //  Blocks are being skipped and not processed in the correct order.
-//  We don't want that -> further debugging and robustness tests needed
+//  We don't want that -> further debugging and robustness tests needed;
+//  NOTE: This seems fixed, keep an eye on it though
 func processHeaders(headers []types.BlockHeader) error {
 	common.InfoLogger.Printf("Processing %d headers\n", len(headers))
 	if len(headers) == 0 {

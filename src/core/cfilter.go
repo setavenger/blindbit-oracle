@@ -10,6 +10,7 @@ import (
 )
 
 // BuildTaprootOnlyFilter creates the taproot only filter
+// todo change to only use x-only pubKeys instead of 5120...
 func BuildTaprootOnlyFilter(block *types.Block) (types.Filter, error) {
 	var taprootOutput [][]byte
 

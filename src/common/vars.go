@@ -5,6 +5,8 @@ package common
 //  is relevant for the height-to-hash lookup in the db
 const TaprootActivation uint32 = 709632
 
+var TweaksOnly bool
+
 var (
 	RpcEndpoint = "http://127.0.0.1:8332" // default local node
 	RpcUser     = ""

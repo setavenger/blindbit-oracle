@@ -11,3 +11,5 @@ docker-compose.yaml
 /signet/
 /binaries/
 /build-test/
+/mainnet-test/
+/mainnet-test-1/

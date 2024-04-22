@@ -31,6 +31,9 @@ export RPC_USER="your-rpc-user"
 export SYNC_START_HEIGHT=1 (has to be >= 1)
 
 export MAX_PARALLEL_TWEAK_COMPUTATIONS=4 (the default for this is 1, but should be set to a higher value to increase performance, one should set this in accordance to how many cores one wants to use)
+
+[optional]
+export TWEAKS_ONLY=1 (default: 0; 1 to activate | will only generate tweaks)
 ```
 
 Once the ENV variables are set you can just run the binary.

@@ -131,12 +131,6 @@ func HandleBlock(block *types.Block) error {
 
 	// first we need to get the new outputs because some of them might/will be spent in the same block
 	// build light UTXOs
-	newUTXOs := ExtractNewUTXOs(block)
-	err := dblevel.InsertUTXOs(newUTXOs)
-	if err != nil {
-		common.ErrorLogger.Println(err)
-		return err
-	}
 
 	common.DebugLogger.Println("Computing tweaks...")
 	tweaksForBlock, err := ComputeTweaksForBlock(block)
@@ -156,6 +150,18 @@ func HandleBlock(block *types.Block) error {
 	tweakIndex.BlockHash = block.Hash
 	tweakIndex.BlockHeight = block.Height
 	err = dblevel.InsertTweakIndex(tweakIndex)
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return err
+	}
+
+	// if we only want to generate the tweaks we exit here
+	if common.TweaksOnly {
+		return nil
+	}
+
+	newUTXOs := ExtractNewUTXOs(block)
+	err = dblevel.InsertUTXOs(newUTXOs)
 	if err != nil {
 		common.ErrorLogger.Println(err)
 		return err

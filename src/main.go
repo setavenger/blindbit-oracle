@@ -30,6 +30,24 @@ func init() {
 	common.BaseDirectory = baseDir
 	common.SetDirectories() // todo a proper set settings function which does it all would be good to avoid several small function calls
 
+	tweaksOnly := os.Getenv("TWEAKS_ONLY")
+	if tweaksOnly != "" {
+		tweaksOnlyInt, err := strconv.ParseInt(tweaksOnly, 10, 64)
+		if err != nil {
+			panic(err)
+		}
+		switch tweaksOnlyInt {
+		case 0:
+			common.TweaksOnly = false
+		case 1:
+			common.TweaksOnly = true
+		default:
+			panic(fmt.Sprintf("only 0 or 1 allowed received %d", tweaksOnlyInt))
+		}
+	} else {
+		common.TweaksOnly = false
+	}
+
 	err := os.Mkdir(common.BaseDirectory, 0750)
 	if err != nil && !strings.Contains(err.Error(), "file exists") {
 		fmt.Println(err.Error())

@@ -43,6 +43,8 @@ Once the ENV variables are set you can just run the binary.
 - block 727506 no tweaks but still one utxo listed (this should not happen)
     - REASON: UTXOs are currently blindly added based on being taproot. There is no check whether the inputs are
       eligible. Will be fixed asap.
+- cleanup has an error on block 712,517 as per this [issue](https://github.com/setavenger/BlindBit-Backend/issues/2#issuecomment-2069827679). Needs fixing asap.
+  - program can only be run in tweak only mode for the time being
 
 ## Requirements
 

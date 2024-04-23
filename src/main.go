@@ -173,7 +173,7 @@ func main() {
 		common.InfoLogger.Printf("Sync took: %s", time.Now().Sub(startSync).String())
 		go core.CheckForNewBlockRoutine()
 
-		// only call this if you need to reindex. It doesn't delete anything but takes a couple minutess to finish
+		// only call this if you need to reindex. It doesn't delete anything but takes a couple of minutes to finish
 		//err := core.ReindexDustLimitsOnly()
 		//if err != nil {
 		//	common.ErrorLogger.Fatalln(err)

@@ -1,5 +1,7 @@
 package types
 
+import "fmt"
+
 // Block represents the structure of the block data in the RPC response
 type Block struct {
 	Hash              string        `json:"hash"`
@@ -67,18 +69,24 @@ type RPCRequest struct {
 	Params  []interface{} `json:"params"`
 }
 
+type ErrorRPC string
+
+func (e ErrorRPC) Error() string {
+	return fmt.Sprintf("%+v", e)
+}
+
 // RPCResponseBlock represents a JSON RPC response for GetBlock
 type RPCResponseBlock struct {
-	ID    string      `json:"id"`
-	Block Block       `json:"result,omitempty"`
-	Error interface{} `json:"error,omitempty"`
+	ID    string   `json:"id"`
+	Block Block    `json:"result,omitempty"`
+	Error ErrorRPC `json:"error,omitempty"`
 }
 
 // RPCResponseHeader represents a JSON RPC response for getblockheader
 type RPCResponseHeader struct {
 	ID     string         `json:"id"`
 	Result BlockHeaderRPC `json:"result,omitempty"`
-	Error  interface{}    `json:"error,omitempty"`
+	Error  ErrorRPC       `json:"error,omitempty"`
 }
 
 // BlockHeaderRPC represents the structure of a block header in the response

@@ -264,6 +264,7 @@ func ComputeTweakPerTx(tx types.Transaction) (*[33]byte, error) {
 	//common.DebugLogger.Println("computing tweak for:", tx.Txid)
 	pubKeys := extractPubKeys(tx)
 	if pubKeys == nil {
+		// for example if coinbase transaction does not return any pubKeys (as it should)
 		return nil, nil
 	}
 	summedKey, err := sumPublicKeys(pubKeys)
@@ -308,6 +309,9 @@ func extractPubKeys(tx types.Transaction) []string {
 	var pubKeys []string
 
 	for _, vin := range tx.Vin {
+		if vin.Coinbase != "" {
+			continue
+		}
 		switch vin.Prevout.ScriptPubKey.Type {
 		case "witness_v1_taproot":
 			// todo needs some extra parsing see reference implementation and bitcoin core wallet

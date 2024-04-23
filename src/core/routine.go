@@ -19,7 +19,7 @@ func CheckForNewBlockRoutine() {
 				common.ErrorLogger.Println(err)
 				continue
 			}
-			err = fullProcessBlockHash(blockHash)
+			err = FullProcessBlockHash(blockHash)
 			if err != nil {
 				common.ErrorLogger.Println(err)
 				return
@@ -28,7 +28,7 @@ func CheckForNewBlockRoutine() {
 	}
 }
 
-func fullProcessBlockHash(blockHash string) error {
+func FullProcessBlockHash(blockHash string) error {
 	block, err := PullBlock(blockHash)
 	if err != nil && err.Error() != "block already processed" {
 		common.ErrorLogger.Println(err)
@@ -43,7 +43,7 @@ func fullProcessBlockHash(blockHash string) error {
 	// the index should be caught up on startup and hence a previous block
 	// will most likely only be squeezed in if there were several blocks in between tip queries
 	if block.Height > common.SyncStartHeight {
-		err = fullProcessBlockHash(block.PreviousBlockHash)
+		err = FullProcessBlockHash(block.PreviousBlockHash)
 		if err != nil {
 			common.ErrorLogger.Println(err)
 			return err

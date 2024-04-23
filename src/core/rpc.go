@@ -75,9 +75,9 @@ func GetFullBlockPerBlockHash(blockHash string) (*types.Block, error) {
 		return nil, err
 	}
 
-	if rpcResponse.Error != nil {
+	if rpcResponse.Error != "" {
 		common.ErrorLogger.Printf("RPC Error: %v\n", rpcResponse.Error)
-		return nil, err
+		return nil, rpcResponse.Error
 	}
 
 	return &rpcResponse.Block, nil
@@ -162,7 +162,7 @@ func GetBlockHeadersBatch(heights []uint32) ([]types.BlockHeader, error) {
 
 	// Extract the headers from the responses
 	for i, headerResponse := range headerResponses {
-		if headerResponse.Error != nil {
+		if headerResponse.Error != "" {
 			return nil, fmt.Errorf("error in header response: %v", headerResponse.Error)
 		}
 		headers[i] = types.BlockHeader{

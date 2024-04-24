@@ -11,6 +11,7 @@ import (
 	"log"
 )
 
+// todo change to `var NoEntryErr = errors.new("[no entry found]")`
 type NoEntryErr struct{}
 
 func (e NoEntryErr) Error() string {
@@ -97,10 +98,10 @@ func retrieveByBlockHash(db *leveldb.DB, blockHash string, pair types.Pair) erro
 	}
 
 	data, err := db.Get(blockHashBytes, nil)
-	if err != nil && err.Error() != "leveldb: not found" {
+	if err != nil && err.Error() != "leveldb: not found" { // todo this error probably exists as var/type somewhere
 		common.ErrorLogger.Println(err)
 		return err
-	} else if err != nil && err.Error() == "leveldb: not found" {
+	} else if err != nil && err.Error() == "leveldb: not found" { // todo this error probably exists as var/type somewhere
 		return NoEntryErr{}
 	}
 	if len(data) == 0 {
@@ -131,10 +132,10 @@ func retrieveByBlockHeight(db *leveldb.DB, blockHeight uint32, pair types.Pair) 
 		return err
 	}
 	data, err := db.Get(buf.Bytes(), nil)
-	if err != nil && err.Error() != "leveldb: not found" {
+	if err != nil && err.Error() != "leveldb: not found" { // todo this error probably exists as var/type somewhere
 		common.ErrorLogger.Println(err)
 		return err
-	} else if err != nil && err.Error() == "leveldb: not found" {
+	} else if err != nil && err.Error() == "leveldb: not found" { // todo this error probably exists as var/type somewhere
 		return NoEntryErr{}
 	}
 

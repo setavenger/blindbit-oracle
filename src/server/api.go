@@ -118,6 +118,7 @@ func (h *ApiHandler) GetLightUTXOsByHeight(c *gin.Context) {
 // GetTweakDataByHeight serves tweak data as json array of tweaks (33 byte as hex-formatted)
 // todo can be changed to serve with verbosity aka serve with txid or even block data (height, hash)
 func (h *ApiHandler) GetTweakDataByHeight(c *gin.Context) {
+	// todo outsource all the blockHeight extraction and conversion through the inverse header table into middleware
 	heightStr := c.Param("blockheight")
 	if heightStr == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -180,6 +181,55 @@ func (h *ApiHandler) GetTweakDataByHeight(c *gin.Context) {
 	var serveTweakData []string
 	for _, tweak := range tweaks {
 		serveTweakData = append(serveTweakData, hex.EncodeToString(tweak.Data[:]))
+	}
+
+	c.JSON(200, serveTweakData)
+}
+
+func (h *ApiHandler) GetTweakIndexDataByHeight(c *gin.Context) {
+	heightStr := c.Param("blockheight")
+	if heightStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "bad format: height",
+		})
+		return
+	}
+	height, err := strconv.ParseUint(heightStr, 10, 32)
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "could not parse height",
+		})
+		return
+	}
+
+	headerInv, err := dblevel.FetchByBlockHeightBlockHeaderInv(uint32(height))
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "could not get height mapping from db",
+		})
+		return
+	}
+
+	// this query should have a better performance due to no required checks
+	tweakIndex, err := dblevel.FetchByBlockHashTweakIndex(headerInv.Hash)
+	if err != nil && !errors.Is(err, dblevel.NoEntryErr{}) {
+		common.ErrorLogger.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "could could not retrieve data from database",
+		})
+		return
+	}
+
+	if err != nil && errors.Is(err, dblevel.NoEntryErr{}) {
+		c.JSON(http.StatusOK, []string{})
+		return
+	}
+
+	var serveTweakData []string
+	for _, tweak := range tweakIndex.Data {
+		serveTweakData = append(serveTweakData, hex.EncodeToString(tweak[:]))
 	}
 
 	c.JSON(200, serveTweakData)

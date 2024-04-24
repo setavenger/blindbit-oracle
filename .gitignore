@@ -13,3 +13,4 @@ docker-compose.yaml
 /build-test/
 /mainnet-test/
 /mainnet-test-1/
+/_prod_/

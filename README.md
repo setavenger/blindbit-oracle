@@ -1,16 +1,22 @@
 # BlindBit Backend
 
 A GO implementation for a BIP0352 Silent Payments Indexing Server.
-This backend was focused on serving the BlindBit mobile app with tweak data and other simplified data to spend and
+This backend was focused on serving the BlindBit light clients with tweak data and other simplified data to spend and
 receive.
 
 ## Setup
 
 The installation process is still very manual. Will be improved based on feedback and new findings.
 
-### Prerequisites
+### Requirements
 
-- You need go 1.18 installed
+- RPC access to a bitcoin full node
+    - unpruned because we need the prevouts for every transaction in the block with a taproot output
+    - Note: Indexing will take longer if the rpc calls take longer;
+      You might also want to allow more rpc workers on your node to speed things up.
+- Processing a block takes ~100ms-300ms
+- Disk space (~10Gb)
+- go 1.18 installed
 
 ### Build
 
@@ -43,28 +49,9 @@ Once the ENV variables are set you can just run the binary.
 - block 727506 no tweaks but still one utxo listed (this should not happen)
     - REASON: UTXOs are currently blindly added based on being taproot. There is no check whether the inputs are
       eligible. Will be fixed asap.
-- cleanup has an error on block 712,517 as per this [issue](https://github.com/setavenger/BlindBit-Backend/issues/2#issuecomment-2069827679). Needs fixing asap.
-  - program can only be run in tweak only mode for the time being
-
-## Requirements
-
-- RPC access to a bitcoin full node
-    - unpruned because we need the prevouts for every transaction in the block with a taproot output
-    - Note: Indexing will take longer if the rpc calls take longer;
-      You might also want to allow more rpc workers on your node to speed things up.
-- Processing a block takes ~100ms-300ms
-- Disk space
-
-```text
-  709632 -> 834761
-  217M	./filters
-  2.7G	./utxos
-  16M	./headers-inv
-  12M	./headers
-  2.8G	./tweaks        33,679,543 tweaks
-  1.7G	./tweak-index   54,737,510 tweaks
-  7.4G	.
- ```
+- cleanup has an error on block 712,517 as per
+  this [issue](https://github.com/setavenger/BlindBit-Backend/issues/2#issuecomment-2069827679). Needs fixing asap.
+    - program can only be run in tweak only mode for the time being
 
 ## Todos
 
@@ -106,3 +93,29 @@ Once the ENV variables are set you can just run the binary.
 - [ ] Future non priority: move tweak computation code into another repo
 - [ ] Convert hardcoded serialisation assertions into constants (?)
 - [ ] Use x-only 32 byte public keys instead of scriptPubKey
+
+## Endpoints
+
+```text
+GET("/block-height")  // returns the height of the indexing server
+GET("/tweaks/:blockheight")  // returns tweak data (cut-through)
+GET("/tweak-index/:blockheight")  // returns the full tweak index (no cut-through)
+GET("/filter/:blockheight") // returns a custom taproot only filter (the underlying data is subject to change; changing scriptPubKey to x-only pubKey) 
+GET("/utxos/:blockheight")  // UTXO data for that block (cut down to the essentials needed to spend)
+```
+
+## DiskUsage
+
+This is roughly the space needed. Some changes were made to the indexing server but overall it should still be in this
+range.
+
+```text
+  709632 -> 834761
+  217M	./filters
+  2.7G	./utxos
+  16M	./headers-inv
+  12M	./headers
+  2.8G	./tweaks        33,679,543 tweaks
+  1.7G	./tweak-index   54,737,510 tweaks
+  7.4G	.
+ ```

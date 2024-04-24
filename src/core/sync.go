@@ -135,7 +135,7 @@ func processHeaders(headers []types.BlockHeader) error {
 
 				block, err := PullBlock(_header.Hash)
 				if err != nil {
-					if err.Error() == "block already processed" {
+					if err.Error() == "block already processed" { // todo built in error
 						// Log and skip this block since it's already been processed
 						// send empty block to signal it was processed, will be skipped in processing loop
 						fetchedBlocks <- &types.Block{Height: _header.Height}

@@ -30,7 +30,7 @@ func CheckForNewBlockRoutine() {
 
 func FullProcessBlockHash(blockHash string) error {
 	block, err := PullBlock(blockHash)
-	if err != nil && err.Error() != "block already processed" {
+	if err != nil && err.Error() != "block already processed" { // todo built in error
 		common.ErrorLogger.Println(err)
 		return err
 	}

@@ -143,6 +143,7 @@ func init() {
 }
 
 func main() {
+	defer common.InfoLogger.Println("Program shut down")
 	defer closeDBs()
 
 	//log.SetFlags(log.LstdFlags | log.Lshortfile | log.Lmicroseconds)
@@ -222,6 +223,7 @@ func closeDBs() {
 	if err != nil {
 		common.ErrorLogger.Println(err)
 	}
+	common.InfoLogger.Println("DBs closed")
 }
 
 func exportAll() {

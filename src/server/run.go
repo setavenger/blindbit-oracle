@@ -11,6 +11,7 @@ func RunServer(api *ApiHandler) {
 
 	router.GET("/block-height", api.GetBestBlockHeight)
 	router.GET("/tweaks/:blockheight", api.GetTweakDataByHeight)
+	router.GET("/tweak-index/:blockheight", api.GetTweakIndexDataByHeight)
 	router.GET("/filter/:blockheight", api.GetCFilterByHeight)
 	router.GET("/utxos/:blockheight", api.GetLightUTXOsByHeight)
 

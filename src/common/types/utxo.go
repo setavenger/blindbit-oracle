@@ -19,7 +19,7 @@ type UTXO struct {
 	BlockHeight  uint32 `json:"block_height"` // not used
 	BlockHash    string `json:"block_hash"`
 	Timestamp    uint64 `json:"timestamp"` // not used
-	Spent        bool   `json:"-"`         // not used
+	Spent        bool   `json:"spent"`
 }
 
 // SpentUTXO
@@ -59,12 +59,28 @@ func (v *UTXO) SerialiseData() ([]byte, error) {
 		common.ErrorLogger.Println(err)
 		return nil, err
 	}
-	return buf.Bytes(), nil
+	err = binary.Write(&buf, binary.BigEndian, v.Timestamp)
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return nil, err
+	}
+	err = binary.Write(&buf, binary.BigEndian, v.Spent)
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return nil, err
+	}
+	data := buf.Bytes()
+	if len(data) != 34+8+8+1 {
+		common.ErrorLogger.Printf("wrong data length: %d %+v", len(data), data)
+		return nil, err
+	}
+
+	return data, nil
 }
 
 func (v *UTXO) DeSerialiseKey(key []byte) error {
 	if len(key) != 32+32+4 {
-		common.ErrorLogger.Printf("wrong key length: %+v", key)
+		common.ErrorLogger.Printf("wrong key length: %d %+v", len(key), key)
 		return errors.New("key is wrong length. should not happen")
 	}
 
@@ -79,12 +95,22 @@ func (v *UTXO) DeSerialiseKey(key []byte) error {
 }
 
 func (v *UTXO) DeSerialiseData(data []byte) error {
-	if len(data) != 34+8 {
-		common.ErrorLogger.Printf("wrong data length: %+v", data)
+	if len(data) != 34+8+8+1 {
+		common.ErrorLogger.Printf("wrong data length: %d %+v", len(data), data)
 		return errors.New("data is wrong length. should not happen")
 	}
 	v.ScriptPubKey = hex.EncodeToString(data[:34])
-	err := binary.Read(bytes.NewReader(data[34:]), binary.BigEndian, &v.Value)
+	err := binary.Read(bytes.NewReader(data[34:34+8]), binary.BigEndian, &v.Value)
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return err
+	}
+	err = binary.Read(bytes.NewReader(data[34+8:34+8+8]), binary.BigEndian, &v.Timestamp)
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return err
+	}
+	err = binary.Read(bytes.NewReader(data[34+8+8:]), binary.BigEndian, &v.Spent)
 	if err != nil {
 		common.ErrorLogger.Println(err)
 		return err

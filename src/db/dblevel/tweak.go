@@ -42,7 +42,7 @@ func OverWriteTweaks(tweaks []types.Tweak) error {
 			common.WarningLogger.Println("no entries for a tweak were found. this should not happen")
 			return err
 		}
-		if len(pairs) != 1 {
+		if len(pairs) != 1 { // todo understand what's going on here raises an error
 			common.ErrorLogger.Printf("%+v", pairs)
 			common.ErrorLogger.Println("number of tweaks was not exactly 1")
 			return errors.New("number of tweaks was not exactly 1")

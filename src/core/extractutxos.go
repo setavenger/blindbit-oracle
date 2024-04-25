@@ -71,11 +71,12 @@ func extractSpentTaprootPubKeysFromTx(tx *types.Transaction, block *types.Block)
 
 			//832974
 			spentUTXOs = append(spentUTXOs, types.UTXO{
-				Txid:      vin.Txid,
-				Vout:      vin.Vout,
-				Value:     common.ConvertFloatBTCtoSats(vin.Prevout.Value),
-				BlockHash: blockHash,
-				Spent:     true,
+				Txid:         vin.Txid,
+				Vout:         vin.Vout,
+				Value:        common.ConvertFloatBTCtoSats(vin.Prevout.Value),
+				ScriptPubKey: vin.Prevout.ScriptPubKey.Hex,
+				BlockHash:    blockHash,
+				Spent:        true,
 			})
 		default:
 			continue

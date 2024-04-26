@@ -78,7 +78,7 @@ func (h *ApiHandler) GetCFilterByHeight(c *gin.Context) {
 	c.JSON(200, data)
 }
 
-func (h *ApiHandler) GetLightUTXOsByHeight(c *gin.Context) {
+func (h *ApiHandler) GetUtxosByHeight(c *gin.Context) {
 	heightStr := c.Param("blockheight")
 	if heightStr == "" {
 		c.JSON(http.StatusBadRequest, nil)

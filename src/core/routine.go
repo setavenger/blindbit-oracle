@@ -13,7 +13,7 @@ func CheckForNewBlockRoutine() {
 	common.InfoLogger.Println("starting check_for_new_block_routine")
 	for true {
 		select {
-		case <-time.NewTicker(15 * time.Second).C:
+		case <-time.NewTicker(3 * time.Second).C:
 			blockHash, err := GetBestBlockHash()
 			if err != nil {
 				common.ErrorLogger.Println(err)
@@ -170,7 +170,8 @@ func HandleBlock(block *types.Block) error {
 	// get spent taproot UTXOs
 	taprootSpent := extractSpentTaprootPubKeysFromBlock(block)
 
-	err = removeSpentUTXOsAndTweaks(taprootSpent)
+	//err = removeSpentUTXOsAndTweaks(taprootSpent)
+	err = markSpentUTXOsAndTweaks(taprootSpent)
 	if err != nil {
 		common.ErrorLogger.Println(err)
 		return err

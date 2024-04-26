@@ -544,5 +544,5 @@ func findSmallestOutpoint(tx types.Transaction) ([]byte, error) {
 		return outpoints[0], nil
 	}
 
-	return nil, errors.New("no valid outpoints found in transaction inputs")
+	return nil, errors.New("no valid outpoints found in transaction inputs, should not happen")
 }

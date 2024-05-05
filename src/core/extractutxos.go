@@ -6,10 +6,16 @@ import (
 	"SilentPaymentAppBackend/src/db/dblevel"
 )
 
-func ExtractNewUTXOs(block *types.Block) []types.UTXO {
+func ExtractNewUTXOs(block *types.Block, eligible map[string]struct{}) []types.UTXO {
 	common.DebugLogger.Println("Getting new UTXOs")
 	var utxos []types.UTXO
 	for _, tx := range block.Txs {
+
+		// only transactions with tweaks (pre-filtered by tweak computation) are going to be added
+		_, ok := eligible[tx.Txid]
+		if !ok {
+			continue
+		}
 		for _, vout := range tx.Vout {
 			if vout.ScriptPubKey.Type == "witness_v1_taproot" {
 				utxos = append(utxos, types.UTXO{

@@ -10,7 +10,8 @@ import (
 
 // UTXO
 // todo could be changed to unify spent UTXO and Light UTXO,
-//  unused fields could just be omitted from serialisation and de-serialisation
+//
+//	unused fields could just be omitted from serialisation and de-serialisation
 type UTXO struct {
 	Txid         string `json:"txid"`
 	Vout         uint32 `json:"vout"`
@@ -22,18 +23,8 @@ type UTXO struct {
 	Spent        bool   `json:"spent"`
 }
 
-// SpentUTXO
-// todo remove
-// Deprecated: won't be stored and can hence be modified or replaced by a different struct type
-type SpentUTXO struct {
-	SpentIn     string `json:"spent_in" bson:"spentin"`
-	Txid        string `json:"txid" bson:"txid"`
-	Vout        uint32 `json:"vout" bson:"vout"`
-	Value       uint64 `json:"value" bson:"value"`
-	BlockHeight uint32 `json:"block_height" bson:"block_height"`
-	BlockHash   string `json:"block_hash" bson:"block_hash"`
-	Timestamp   uint64 `json:"timestamp" bson:"timestamp"`
-}
+const SerialisedKeyLengthUtxo = 32 + 32 + 4
+const SerialisedDataLengthUtxo = 34 + 8 + 8 + 1
 
 func PairFactoryUTXO() Pair {
 	var filter Pair = &UTXO{}
@@ -70,7 +61,7 @@ func (v *UTXO) SerialiseData() ([]byte, error) {
 		return nil, err
 	}
 	data := buf.Bytes()
-	if len(data) != 34+8+8+1 {
+	if len(data) != SerialisedDataLengthUtxo {
 		common.ErrorLogger.Printf("wrong data length: %d %+v", len(data), data)
 		return nil, err
 	}
@@ -79,7 +70,7 @@ func (v *UTXO) SerialiseData() ([]byte, error) {
 }
 
 func (v *UTXO) DeSerialiseKey(key []byte) error {
-	if len(key) != 32+32+4 {
+	if len(key) != SerialisedKeyLengthUtxo {
 		common.ErrorLogger.Printf("wrong key length: %d %+v", len(key), key)
 		return errors.New("key is wrong length. should not happen")
 	}
@@ -95,7 +86,7 @@ func (v *UTXO) DeSerialiseKey(key []byte) error {
 }
 
 func (v *UTXO) DeSerialiseData(data []byte) error {
-	if len(data) != 34+8+8+1 {
+	if len(data) != SerialisedDataLengthUtxo {
 		common.ErrorLogger.Printf("wrong data length: %d %+v", len(data), data)
 		return errors.New("data is wrong length. should not happen")
 	}
@@ -147,12 +138,18 @@ func GetDBKeyUTXO(blockHash, txid string, vout uint32) ([]byte, error) {
 // Returns the largest value of utxos if utxoSpent had the largest value.
 func FindBiggestRemainingUTXO(utxoSpent UTXO, utxos []UTXO) (*uint64, error) {
 	var valueMax uint64 = 0
-	spentIsMax := true // Assume the spent UTXO is the max until proven otherwise.
+	spentIsMax := false
 
 	for _, utxo := range utxos {
-		if utxo.Value > utxoSpent.Value {
-			spentIsMax = false // Found a UTXO larger than the spent one.
-			break              // No need to continue checking.
+		if utxo.Spent {
+			continue
+		}
+		if utxo.Value < utxoSpent.Value {
+			spentIsMax = true // Found a UTXO larger than the spent one.
+		} else {
+			spentIsMax = false
+			valueMax = 0 // reset value max to zero as it's not the biggest anymore
+			break        // break because it turns out it's not the biggest so our job here is done
 		}
 
 		if utxo.Value > valueMax {

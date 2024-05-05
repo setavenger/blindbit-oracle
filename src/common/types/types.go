@@ -1,7 +1,5 @@
 package types
 
-import "fmt"
-
 // Block represents the structure of the block data in the RPC response
 type Block struct {
 	Hash              string        `json:"hash"`
@@ -71,9 +69,9 @@ type RPCRequest struct {
 
 type ErrorRPC string
 
-func (e ErrorRPC) Error() string {
-	return fmt.Sprintf("%+v", e)
-}
+//func (e ErrorRPC) Error() string {
+//	return fmt.Sprintf("%s", e)
+//}
 
 // RPCResponseBlock represents a JSON RPC response for GetBlock
 type RPCResponseBlock struct {

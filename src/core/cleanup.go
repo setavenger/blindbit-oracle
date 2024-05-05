@@ -85,16 +85,57 @@ func removeSpentUTXOsAndTweaks(utxos []types.UTXO) error {
 	return err
 }
 
-func markSpentUTXOsAndTweaks(utxos []types.UTXO) error {
-	if len(utxos) == 0 {
-		return nil
+func overwriteUTXOsWithLookUp(utxos []types.UTXO) error {
+	var utxosToOverwrite []types.UTXO
+
+	for _, utxo := range utxos {
+		fetchedUTXOs, err := dblevel.FetchByBlockHashAndTxidUTXOs(utxo.BlockHash, utxo.Txid)
+		if err != nil && !errors.Is(err, dblevel.NoEntryErr{}) {
+			common.ErrorLogger.Println(err)
+			return err
+		} else if err != nil && errors.Is(err, dblevel.NoEntryErr{}) {
+			// we skip if no entry was found. We don't want to insert those
+			continue
+		}
+		// we actually don't have to check the fetched UTXOs. if any utxos were found for this transaction it means that it was eligible.
+		// hence all taproot utxos have to be present
+		_ = fetchedUTXOs
+		utxosToOverwrite = append(utxosToOverwrite, utxo)
 	}
-	// First overwrite the spend UTXOs which now have the spent flag set
-	err := dblevel.InsertUTXOs(utxos)
+	err := dblevel.InsertUTXOs(utxosToOverwrite)
 	if err != nil {
 		common.ErrorLogger.Println(err)
 		return err
 	}
+	return err
+}
+
+// todo construct the subsequent deletion of all utxos per transaction once all per transaction are spent
+func markSpentUTXOsAndTweaks(utxos []types.UTXO) error {
+	if len(utxos) == 0 {
+		return nil
+	}
+
+	// we cannot just insert-override the utxos as we will insert non-eligible utxos which were not in the DB for a good reason to begin with
+	// needs a check against existing tweaks before we can insert
+
+	// todo how to avoid inserting non-eligible utxos
+	// probably the best solution is to check every x blocks and remove all utxos which cannot be mapped to a tweak
+	// or even better remove all utxos per a transaction where all utxos are spent
+
+	// current implementation is to check at block sync whether an utxo should be overridden/inserted or not
+
+	// First overwrite the spend UTXOs which now have the spent flag set
+	err := overwriteUTXOsWithLookUp(utxos)
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return err
+	}
+	//err := dblevel.InsertUTXOs(utxos)
+	//if err != nil {
+	//	common.ErrorLogger.Println(err)
+	//	return err
+	//}
 
 	// Now begin process to find the tweaks that need to be deleted
 
@@ -116,6 +157,7 @@ func markSpentUTXOsAndTweaks(utxos []types.UTXO) error {
 		var remainingUTXOs []types.UTXO
 		remainingUTXOs, err = dblevel.FetchByBlockHashAndTxidUTXOs(utxo.BlockHash, utxo.Txid)
 		if err != nil && !errors.Is(err, dblevel.NoEntryErr{}) {
+			// this is an actual error
 			common.ErrorLogger.Println(err)
 			return err
 		} else if err != nil && errors.Is(err, dblevel.NoEntryErr{}) {
@@ -173,10 +215,9 @@ func ReindexDustLimitsOnly() error {
 
 }
 
-/*
-	err = dblevel.OverWriteTweaks(tweaksToOverwrite)
-	if err != nil {
-		common.ErrorLogger.Println(err)
-		return err
-	}
-*/
+// Prune
+// This function checks the utxo set and deletes all utxos of a transaction where all utxos are marked as spent.
+// it can then also remove the tweak of completely spent transaction
+func Prune() error {
+	return nil
+}

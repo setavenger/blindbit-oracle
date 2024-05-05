@@ -17,7 +17,7 @@ func RunServer(api *ApiHandler) {
 
 	router.POST("/forward-tx", api.ForwardRawTX)
 
-	if err := router.Run(":8000"); err != nil {
+	if err := router.Run(common.Host); err != nil {
 		common.ErrorLogger.Fatal(err)
 	}
 }

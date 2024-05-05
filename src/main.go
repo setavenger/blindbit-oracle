@@ -6,13 +6,15 @@ import (
 	"SilentPaymentAppBackend/src/dataexport"
 	"SilentPaymentAppBackend/src/db/dblevel"
 	"SilentPaymentAppBackend/src/server"
+	"flag"
 	"fmt"
 	"io"
 	"log"
+	"path"
+
 	//_ "net/http/pprof" // Import for side effects: registers pprof handlers with the default mux.
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -23,30 +25,10 @@ func init() {
 	//	log.Println(http.ListenAndServe("localhost:6060", nil))
 	//}()
 
-	baseDir := os.Getenv("BASE_DIRECTORY")
-	if baseDir == "" {
-		panic("base directory not set")
-	}
-	common.BaseDirectory = baseDir
-	common.SetDirectories() // todo a proper set settings function which does it all would be good to avoid several small function calls
+	flag.StringVar(&common.BaseDirectory, "datadir", common.DefaultBaseDirectory, "Set the base directory for blindbit oracle. Default directory is ~/.blindbit-oracle")
+	flag.Parse()
 
-	tweaksOnly := os.Getenv("TWEAKS_ONLY")
-	if tweaksOnly != "" {
-		tweaksOnlyInt, err := strconv.ParseInt(tweaksOnly, 10, 64)
-		if err != nil {
-			panic(err)
-		}
-		switch tweaksOnlyInt {
-		case 0:
-			common.TweaksOnly = false
-		case 1:
-			common.TweaksOnly = true
-		default:
-			panic(fmt.Sprintf("only 0 or 1 allowed received %d", tweaksOnlyInt))
-		}
-	} else {
-		common.TweaksOnly = false
-	}
+	common.SetDirectories() // todo a proper set settings function which does it all would be good to avoid several small function calls
 
 	err := os.Mkdir(common.BaseDirectory, 0750)
 	if err != nil && !strings.Contains(err.Error(), "file exists") {
@@ -77,6 +59,11 @@ func init() {
 	common.WarningLogger = log.New(multi, "[WARNING] ", log.Ldate|log.Lmicroseconds|log.Lshortfile|log.Lmsgprefix)
 	common.ErrorLogger = log.New(multi, "[ERROR] ", log.Ldate|log.Lmicroseconds|log.Llongfile|log.Lmsgprefix)
 
+	common.InfoLogger.Println("base directory", common.BaseDirectory)
+
+	// load after loggers are instantiated
+	common.LoadConfigs(path.Join(common.BaseDirectory, common.ConfigFileName))
+
 	// create DB path
 	err = os.Mkdir(common.DBPath, 0750)
 	if err != nil && !strings.Contains(err.Error(), "file exists") {
@@ -84,60 +71,14 @@ func init() {
 		panic(err)
 	}
 
-	// load env vars
-	syncStartHeightStr := os.Getenv("SYNC_START_HEIGHT")
-	if syncStartHeightStr != "" {
-		var syncStartHeightConv uint64
-		syncStartHeightConv, err = strconv.ParseUint(syncStartHeightStr, 10, 32)
-		if err != nil {
-			common.ErrorLogger.Println(err)
-			panic(err)
-		}
-		common.SyncStartHeight = uint32(syncStartHeightConv)
-	} else {
-		panic("SYNC_START_HEIGHT not set")
-	}
-	maxParallelRequestsStr := os.Getenv("MAX_PARALLEL_REQUESTS")
-	if maxParallelRequestsStr != "" {
-		var maxParallelRequestsConv uint64
-		maxParallelRequestsConv, err = strconv.ParseUint(maxParallelRequestsStr, 10, 16)
-		if err != nil {
-			common.ErrorLogger.Println(err)
-			panic(err)
-		}
-		common.MaxParallelRequests = uint16(maxParallelRequestsConv)
-	}
-
-	maxParallelTweakComputationsStr := os.Getenv("MAX_PARALLEL_TWEAK_COMPUTATIONS")
-	if maxParallelTweakComputationsStr != "" {
-		var maxParallelTweakComputationsConv int64
-		maxParallelTweakComputationsConv, err = strconv.ParseInt(maxParallelTweakComputationsStr, 10, 64)
-		if err != nil {
-			common.ErrorLogger.Println(err)
-			panic(err)
-		}
-		common.MaxParallelTweakComputations = int(maxParallelTweakComputationsConv)
-	}
-
 	// open levelDB connections
 	openLevelDBConnections()
 
-	rpcEndpoint := os.Getenv("RPC_ENDPOINT")
-	if rpcEndpoint != "" {
-		common.RpcEndpoint = rpcEndpoint
-	}
-
-	rpcUser := os.Getenv("RPC_USER")
-	if rpcUser != "" {
-		common.RpcUser = rpcUser
-	} else {
+	if common.RpcUser == "" {
 		panic("rpc user not set")
 	}
 
-	rpcPass := os.Getenv("RPC_PASS")
-	if rpcPass != "" {
-		common.RpcPass = rpcPass
-	} else {
+	if common.RpcPass == "" {
 		panic("rpc pass not set")
 	}
 }
@@ -184,7 +125,7 @@ func main() {
 		go server.RunServer(&server.ApiHandler{})
 	}()
 
-	for true {
+	for {
 		select {
 		case <-interrupt:
 			common.InfoLogger.Println("Program interrupted")

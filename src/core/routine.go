@@ -11,12 +11,13 @@ import (
 
 func CheckForNewBlockRoutine() {
 	common.InfoLogger.Println("starting check_for_new_block_routine")
-	for true {
+	for {
 		select {
 		case <-time.NewTicker(3 * time.Second).C:
 			blockHash, err := GetBestBlockHash()
 			if err != nil {
 				common.ErrorLogger.Println(err)
+				// todo fail or restart after too many fails?
 				continue
 			}
 			err = FullProcessBlockHash(blockHash)
@@ -56,7 +57,7 @@ func FullProcessBlockHash(blockHash string) error {
 
 func PullBlock(blockHash string) (*types.Block, error) {
 	if len(blockHash) != 64 {
-		common.ErrorLogger.Println("block_hash invalid", blockHash)
+		common.ErrorLogger.Println("block_hash invalid:", blockHash)
 		return nil, errors.New(fmt.Sprintf("block_hash invalid: %s", blockHash))
 	}
 	// this method is preferred over lastHeader because then this function can be called for PreviousBlockHash
@@ -160,7 +161,13 @@ func HandleBlock(block *types.Block) error {
 		return nil
 	}
 
-	newUTXOs := ExtractNewUTXOs(block)
+	// mark all transaction which have eligible outputs
+	eligibleTransaction := map[string]struct{}{}
+	for _, tweak := range tweaksForBlock {
+		eligibleTransaction[tweak.Txid] = struct{}{}
+	}
+
+	newUTXOs := ExtractNewUTXOs(block, eligibleTransaction)
 	err = dblevel.InsertUTXOs(newUTXOs)
 	if err != nil {
 		common.ErrorLogger.Println(err)

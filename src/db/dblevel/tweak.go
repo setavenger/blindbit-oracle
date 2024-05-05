@@ -36,13 +36,17 @@ func OverWriteTweaks(tweaks []types.Tweak) error {
 		if err != nil && !errors.Is(err, NoEntryErr{}) {
 			common.ErrorLogger.Println(err)
 			return err
-		} else if err != nil && !errors.Is(err, NoEntryErr{}) {
+		} else if err != nil && errors.Is(err, NoEntryErr{}) {
 			// This should not happen because the overwrites are computed from remaining UTXOs.
 			// Getting this error would mean that we have UTXOs without corresponding tweaks in the DB
-			common.WarningLogger.Println("no entries for a tweak were found. this should not happen")
-			return err
+			common.ErrorLogger.Println("no entries for a tweak were found. this should not happen")
+			return err // keep this as an error. if this happens we have to know
 		}
-		if len(pairs) != 1 { // todo understand what's going on here raises an error
+
+		// this will be removed as we still check
+		if len(pairs) != 1 {
+			// this scenario should never happen. The database should not have >1 entries for one transaction. <1 (0) should give no entry error
+			// prev
 			common.ErrorLogger.Printf("%+v", pairs)
 			common.ErrorLogger.Println("number of tweaks was not exactly 1")
 			return errors.New("number of tweaks was not exactly 1")
@@ -145,6 +149,7 @@ func FetchAllTweaks() ([]types.Tweak, error) {
 }
 
 func DustOverwriteRoutine() error {
+	// todo has some issues remaining biggest remaining UTXOs
 	iter := TweaksDB.NewIterator(nil, nil)
 	defer iter.Release()
 
@@ -173,6 +178,11 @@ func DustOverwriteRoutine() error {
 		}
 		// we insert a fake spentUTXO such that the highest of the remaining will be taken.
 		highestValue, err := types.FindBiggestRemainingUTXO(types.UTXO{Value: math.MaxUint64}, utxos)
+		if err != nil {
+			common.ErrorLogger.Println(err)
+			return err
+		}
+		// todo highestValue might be nil here
 		tweak.HighestValue = *highestValue
 		tweaksForBatchInsert = append(tweaksForBatchInsert, tweak)
 		if counter%2_500 == 0 {

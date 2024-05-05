@@ -6,8 +6,9 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 )
 
@@ -42,7 +43,7 @@ func makeRPCRequest(rpcData interface{}, result interface{}) error {
 	defer resp.Body.Close()
 
 	// Read and unmarshal the response...
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		common.DebugLogger.Println("status code:", resp.Status)
 		common.DebugLogger.Println("status body:", resp.Body)
@@ -77,7 +78,7 @@ func GetFullBlockPerBlockHash(blockHash string) (*types.Block, error) {
 
 	if rpcResponse.Error != "" {
 		common.ErrorLogger.Printf("RPC Error: %v\n", rpcResponse.Error)
-		return nil, rpcResponse.Error
+		return nil, errors.New(string(rpcResponse.Error))
 	}
 
 	return &rpcResponse.Block, nil

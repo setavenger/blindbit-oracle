@@ -2,8 +2,11 @@ package common
 
 // TaprootActivation
 // todo might be inapplicable due to transactions that have taproot prevouts from before the activation
-//  is relevant for the height-to-hash lookup in the db
+//
+//	is relevant for the height-to-hash lookup in the db
 const TaprootActivation uint32 = 709632
+const ConfigFileName string = "blindbit.toml"
+const DefaultBaseDirectory = "./.blindbit-oracle"
 
 var TweaksOnly bool
 
@@ -12,9 +15,11 @@ var (
 	RpcUser     = ""
 	RpcPass     = ""
 
-	BaseDirectory = ""
+	BaseDirectory = "./.blindbit-oracle"
 	DBPath        = ""
 	LogsPath      = ""
+
+	Host = "127.0.0.1:8000"
 )
 
 // control vars
@@ -30,6 +35,9 @@ var (
 	MaxParallelRequests uint16 = 24
 	// MaxParallelTweakComputations number of parallel processes which will be spawned in order to compute the tweaks for a given block
 	MaxParallelTweakComputations = 1
+	// PruneFrequency every x blocks the data will be checked and pruned
+	// possible routines: -remove utxos for 100% spent transaction
+	PruneFrequency = 72
 )
 
 // one has to call SetDirectories otherwise common.DBPath will be empty

@@ -259,6 +259,9 @@ func retrieveManyByBlockHashAndTxid(db *leveldb.DB, blockHash, txid string, fact
 		common.ErrorLogger.Println(err)
 		return nil, err
 	}
+	if results == nil {
+		return nil, NoEntryErr{}
+	}
 	return results, err
 }
 

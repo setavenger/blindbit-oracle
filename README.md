@@ -2,7 +2,8 @@
 
 A GO implementation for a BIP0352 Silent Payments Indexing Server.
 This backend was focused on serving the BlindBit light clients with tweak data and other simplified data to spend and
-receive.
+receive. The produced index matches that
+of [other implementations](https://github.com/bitcoin/bitcoin/pull/28241#issuecomment-2079270744).
 
 ## Setup
 
@@ -55,7 +56,11 @@ Once the ENV variables are set you can just run the binary.
 
 ## Todos
 
-- [ ] Convert env vars into command line args
+- [ ] Add flags to control setup
+  - reindex
+  - headers only
+  - tweaks only
+  - move most env controls to config file or cli flags/args
 - [ ] Include [gobip352 module](https://github.com/setavenger/gobip352)
 - [ ] Refactor a bunch of stuff to use byte arrays or slices instead of strings for internal uses
     - Could potentially reduce the serialisation overhead
@@ -64,28 +69,11 @@ Once the ENV variables are set you can just run the binary.
 - [ ] Clean up code (bytes.Equal, parity on big.int with .Bit(), etc.)
 - [ ] Update to new test vectors
 - [ ] Write operation tests to ensure data integrity
-- [ ] Benchmark btcec vs libsecp C library wrapper/binding
-    - probably need to create my own wrapper
-    - https://github.com/renproject/secp256k1
-    - https://github.com/ethereum/go-ethereum/tree/master/crypto/secp256k1/libsecp256k1 (~8 years without update)
 - [ ] Periodically recompute filters
     - One could implement a periodic re-computation every 144 blocks of filters with the current UTXO set
-- [ ] Investigate whether we should change the compound keys to use the height instead of the hash. As keys are sorted
-  this could potentially give a performance boost due to better order across blocks.
-    - ON_HOLD: Not reorg resistant unless some extra work and checks are made
 - [ ] Document EVERYTHING: especially serialization patterns to easily look them up later.
     - Serialisation
     - tweak computation methods
-    - ...
-- [x] Redo the storage system. After syncing approximately 5,500 blocks, the estimated storage at 100,000 blocks for
-  tweaks alone will be somewhere around 40Gb. Additionally, performance is getting worse.
-    - Done: Switched to LevelDB see here
-      for [current numbers](https://github.com/setavenger/BIP0352-light-client-specification)
-- [x] Investigate whether RPC parallel calls can speed up syncing. Caution: currently the flow is synchronous and hence
-  there is less complexity. Making parallel calls will change that.
-    - note: This was mainly limited by a slow home node. First tests a more performant node show that this is not as big
-      as a problem. Also using parallel calls on a weak node just increases the latency for every individual call
-      reducing most of the gains from parallel calls.
 - [ ] Include redundancy for when RPC calls are failing (probably due to networking issues in a testing home
   environment).
 - [ ] Review all duplicate key error exemptions and raise to error/warn from debug.
@@ -93,6 +81,10 @@ Once the ENV variables are set you can just run the binary.
 - [ ] Future non priority: move tweak computation code into another repo
 - [ ] Convert hardcoded serialisation assertions into constants (?)
 - [ ] Use x-only 32 byte public keys instead of scriptPubKey
+
+### Low Priority
+- [ ] Index the next couple blocks in mempool
+  - Every 1-3 minute or so?
 
 ## Endpoints
 

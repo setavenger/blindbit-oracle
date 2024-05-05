@@ -15,3 +15,6 @@ docker-compose.yaml
 /mainnet-test-1/
 /_prod_/
 /regtest-2/
+/bin/
+/signet-1/
+/dev/

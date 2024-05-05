@@ -96,7 +96,8 @@ func FetchHighestBlockHeaderInvByFlag(flag bool) (*types.BlockHeaderInv, error) 
 		return nil, NoEntryErr{}
 	}
 
-	for iter.Prev() {
+	// Process the last element first, then continue with previous elements.
+	for {
 		// Deserialize data first
 		err := result.DeSerialiseData(iter.Value())
 		if err != nil {
@@ -111,7 +112,29 @@ func FetchHighestBlockHeaderInvByFlag(flag bool) (*types.BlockHeaderInv, error) 
 			}
 			break
 		}
+
+		// Move to the previous entry
+		if !iter.Prev() {
+			break
+		}
 	}
+
+	//for iter.Prev() {
+	//	// Deserialize data first
+	//	err := result.DeSerialiseData(iter.Value())
+	//	if err != nil {
+	//		common.ErrorLogger.Println(err)
+	//		return nil, err
+	//	}
+	//	if result.Flag == flag {
+	//		err = result.DeSerialiseKey(iter.Key())
+	//		if err != nil {
+	//			common.ErrorLogger.Println(err)
+	//			return nil, err
+	//		}
+	//		break
+	//	}
+	//}
 
 	err := iter.Error()
 	if err != nil {
@@ -170,7 +193,7 @@ func GetMissingHeadersInv(heights []uint32) ([]uint32, error) {
 		return heights, nil
 	}
 
-	for iter.Prev() {
+	for {
 		pair := types.BlockHeaderInv{}
 		// we only need the key for the height
 		err = pair.DeSerialiseKey(iter.Key())
@@ -179,6 +202,11 @@ func GetMissingHeadersInv(heights []uint32) ([]uint32, error) {
 			return nil, err
 		}
 		pairs = append(pairs, pair)
+
+		// Move to the previous entry
+		if !iter.Prev() {
+			break
+		}
 	}
 
 	err = iter.Error()
@@ -260,7 +288,7 @@ func GetMissingHeadersInvFlag(heights []uint32, flag bool) ([]uint32, error) {
 		return heights, nil
 	}
 
-	for iter.Prev() {
+	for {
 		pair := types.BlockHeaderInv{}
 		// Deserialize data first
 		err = pair.DeSerialiseData(iter.Value())
@@ -278,6 +306,10 @@ func GetMissingHeadersInvFlag(heights []uint32, flag bool) ([]uint32, error) {
 				return nil, err
 			}
 			pairs = append(pairs, pair)
+		}
+		// Move to the previous entry
+		if !iter.Prev() {
+			break
 		}
 	}
 

@@ -17,7 +17,7 @@ func LoadConfigs(pathToConfig string) {
 	/* set defaults */
 	// network
 	viper.SetDefault("max_parallel_requests", MaxParallelRequests)
-	viper.SetDefault("port", Host)
+	viper.SetDefault("host", Host)
 
 	// RPC endpoint only. Fails if others are not set
 	viper.SetDefault("rpc_endpoint", RpcEndpoint)

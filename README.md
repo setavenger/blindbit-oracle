@@ -1,9 +1,9 @@
-# BlindBit Backend
+# BlindBit Oracle
 
 A GO implementation for a BIP0352 Silent Payments Indexing Server.
-This backend was focused on serving the BlindBit light clients with tweak data and other simplified data to spend and
-receive. The produced index matches that
-of [other implementations](https://github.com/bitcoin/bitcoin/pull/28241#issuecomment-2079270744).
+This backend was focused on serving the BlindBit light client suite with tweak data and other simplified data to spend
+and receive. The produced index
+matches [other implementations](https://github.com/bitcoin/bitcoin/pull/28241#issuecomment-2079270744).
 
 ## Setup
 
@@ -26,41 +26,34 @@ The installation process is still very manual. Will be improved based on feedbac
 
 ### Run
 
-Set the necessary ENV variables. An example is shown below.
-All those should be set but the exact numbers depend on the machine the program is run on.
+Create a config file `blindbit.toml` in your data directory to run.
+An example [blindbit.toml](./blindbit.example.toml) is provided here.
+The settings in regard to parallelization have to be made in accordance to the cores on the Full node and host machine.
 
-```text
-export BASE_DIRECTORY="./test" 
-export MAX_PARALLEL_REQUESTS=4  (depends on max-rpc-workers of the underlying full node)
-export RPC_ENDPOINT="http://127.0.0.1:18443" (defaults to http://127.0.0.1:8332)
-export RPC_PASS="your-rpc-password"
-export RPC_USER="your-rpc-user"
-export SYNC_START_HEIGHT=1 (has to be >= 1)
-
-export MAX_PARALLEL_TWEAK_COMPUTATIONS=4 (the default for this is 1, but should be set to a higher value to increase performance, one should set this in accordance to how many cores one wants to use)
-
-[optional]
-export TWEAKS_ONLY=1 (default: 0; 1 to activate | will only generate tweaks)
+Once the data directory is set up you can run it as following.
+```console
+$ blindbit-oracle --datadir ./.blindbbit-oracle
 ```
 
-Once the ENV variables are set you can just run the binary.
+Note that the program will automatically default `--datadir` to `~/.blindbit-oracle` if not set. 
+You still have to set up a config file in any case as the rpc users can't and **should** not be defaulted.  
 
 ## Known Errors
 
-- block 727506 no tweaks but still one utxo listed (this should not happen)
+- [Should be fixed] block 727506 no tweaks but still one utxo listed (this should not happen)
     - REASON: UTXOs are currently blindly added based on being taproot. There is no check whether the inputs are
       eligible. Will be fixed asap.
-- cleanup has an error on block 712,517 as per
+- [Should be fixed] cleanup has an error on block 712,517 as per
   this [issue](https://github.com/setavenger/BlindBit-Backend/issues/2#issuecomment-2069827679). Needs fixing asap.
     - program can only be run in tweak only mode for the time being
 
 ## Todos
 
 - [ ] Add flags to control setup
-  - reindex
-  - headers only
-  - tweaks only
-  - move most env controls to config file or cli flags/args
+    - [ ] reindex
+    - [ ] headers only
+    - [x] tweaks only
+    - [x] move most env controls to config file or cli flags/args
 - [ ] Include [gobip352 module](https://github.com/setavenger/gobip352)
 - [ ] Refactor a bunch of stuff to use byte arrays or slices instead of strings for internal uses
     - Could potentially reduce the serialisation overhead
@@ -78,13 +71,13 @@ Once the ENV variables are set you can just run the binary.
   environment).
 - [ ] Review all duplicate key error exemptions and raise to error/warn from debug.
 - [ ] Remove unnecessary panics.
-- [ ] Future non priority: move tweak computation code into another repo
 - [ ] Convert hardcoded serialisation assertions into constants (?)
 - [ ] Use x-only 32 byte public keys instead of scriptPubKey
 
 ### Low Priority
+
 - [ ] Index the next couple blocks in mempool
-  - Every 1-3 minute or so?
+    - Every 1-3 minute or so?
 
 ## Endpoints
 

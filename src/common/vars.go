@@ -6,7 +6,7 @@ package common
 //	is relevant for the height-to-hash lookup in the db
 const TaprootActivation uint32 = 709632
 const ConfigFileName string = "blindbit.toml"
-const DefaultBaseDirectory = "./.blindbit-oracle"
+const DefaultBaseDirectory = "~/.blindbit-oracle"
 
 var TweaksOnly bool
 

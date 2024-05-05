@@ -1,27 +1,28 @@
-# default "./.blindbit-oracle"
-base_directory="./blindbit-oracle"
-
 # 0.0.0.0:8000 to expose outside of localhost
-host="127.0.0.1:8000"
+# default: "127.0.0.1:8000"
+host = "127.0.0.1:8000"
 
 # (defaults to http://127.0.0.1:8332)
-rpc_endpoint="http://127.0.0.1:18443"
+rpc_endpoint = "http://127.0.0.1:18443"
 
-rpc_pass="your-rpc-password"
 
-rpc_user="your-rpc-user"
+# required
+rpc_pass = "your-rpc-password"
 
-# (has to be >= 1)
-sync_start_height=1
+# required
+rpc_user = "your-rpc-user"
+
+# required (has to be >= 1)
+sync_start_height = 1
 
 # the default for this is 1, but should be set to a higher value to increase performance, 
 # one should set this in accordance to how many cores one wants to use
-max_parallel_tweak_computations=4
+max_parallel_tweak_computations = 4
 
 # (depends on max-rpc-workers of the underlying full node)
-max_parallel_requests=4
+max_parallel_requests = 4
 
 # 
-# optional - will only generate tweaks
+# optional - will only generate tweaks (still both cut-through and full-index)
 # default: 0 set to 1 to activate
-tweaks_only=1
+tweaks_only = 1

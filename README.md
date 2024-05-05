@@ -31,12 +31,13 @@ An example [blindbit.toml](./blindbit.example.toml) is provided here.
 The settings in regard to parallelization have to be made in accordance to the cores on the Full node and host machine.
 
 Once the data directory is set up you can run it as following.
+
 ```console
-$ blindbit-oracle --datadir ./.blindbbit-oracle
+$ <path/to/new/binary/file> --datadir <path/to/datadir/with/blindbit.toml>
 ```
 
-Note that the program will automatically default `--datadir` to `~/.blindbit-oracle` if not set. 
-You still have to set up a config file in any case as the rpc users can't and **should** not be defaulted.  
+Note that the program will automatically default `--datadir` to `~/.blindbit-oracle` if not set.
+You still have to set up a config file in any case as the rpc users can't and **should** not be defaulted.
 
 ## Known Errors
 

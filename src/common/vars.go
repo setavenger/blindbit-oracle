@@ -12,6 +12,7 @@ var TweaksOnly bool
 
 var (
 	RpcEndpoint = "http://127.0.0.1:8332" // default local node
+	CookiePath  = ""
 	RpcUser     = ""
 	RpcPass     = ""
 

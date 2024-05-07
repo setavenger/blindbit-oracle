@@ -5,11 +5,13 @@ host = "127.0.0.1:8000"
 # (defaults to http://127.0.0.1:8332)
 rpc_endpoint = "http://127.0.0.1:18443"
 
+# required, unless rpc_user and rpc_pass are set
+cookie_path = ""
 
-# required
+# required, unless cookie_path is set
 rpc_pass = "your-rpc-password"
 
-# required
+# required, unless cookie_path is set
 rpc_user = "your-rpc-user"
 
 # required (has to be >= 1)

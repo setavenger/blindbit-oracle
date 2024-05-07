@@ -14,7 +14,8 @@ import (
 )
 
 // ApiHandler todo might not need ApiHandler struct if no data is stored within.
-//  Will keep for now just in case, so I don't have to refactor twice
+//
+//	Will keep for now just in case, so I don't have to refactor twice
 type ApiHandler struct{}
 
 type TxRequest struct {
@@ -183,7 +184,7 @@ func (h *ApiHandler) GetTweakDataByHeight(c *gin.Context) {
 		serveTweakData = append(serveTweakData, hex.EncodeToString(tweak.Data[:]))
 	}
 
-	c.JSON(200, serveTweakData)
+	c.JSON(http.StatusOK, serveTweakData)
 }
 
 func (h *ApiHandler) GetTweakIndexDataByHeight(c *gin.Context) {

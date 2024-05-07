@@ -10,7 +10,7 @@ func LoadConfigs(pathToConfig string) {
 
 	// Handle errors reading the config file
 	if err := viper.ReadInConfig(); err != nil {
-		WarningLogger.Println("No config file detected", err.Error())
+		ErrorLogger.Println("No config file detected", err.Error())
 		return
 	}
 

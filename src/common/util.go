@@ -4,6 +4,8 @@ import (
 	"crypto/sha256"
 	"github.com/shopspring/decimal"
 	"golang.org/x/crypto/ripemd160"
+	"os/user"
+	"strings"
 )
 
 func ReverseBytes(bytes []byte) []byte {
@@ -42,4 +44,11 @@ func Hash160(data []byte) []byte {
 	ripemd160Hasher := ripemd160.New()
 	ripemd160Hasher.Write(sha256Hash[:]) // Hash the SHA256 hash
 	return ripemd160Hasher.Sum(nil)
+}
+
+func ResolvePath(path string) string {
+	usr, _ := user.Current()
+	dir := usr.HomeDir
+
+	return strings.Replace(path, "~", dir, 1)
 }

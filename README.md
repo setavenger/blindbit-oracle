@@ -45,7 +45,7 @@ You still have to set up a config file in any case as the rpc users can't and **
     - REASON: UTXOs are currently blindly added based on being taproot. There is no check whether the inputs are
       eligible. Will be fixed asap.
 - [Should be fixed] cleanup has an error on block 712,517 as per
-  this [issue](https://github.com/setavenger/BlindBit-Backend/issues/2#issuecomment-2069827679). Needs fixing asap.
+  this [issue](https://github.com/setavenger/blindbit-oracle/issues/2#issuecomment-2069827679). Needs fixing asap.
     - program can only be run in tweak only mode for the time being
 
 ## Todos

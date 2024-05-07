@@ -54,6 +54,8 @@ var (
 var NumsH = []byte{80, 146, 155, 116, 193, 160, 73, 84, 183, 139, 75, 96, 53, 233, 122, 94, 7, 138, 90, 15, 40, 236, 150, 213, 71, 191, 238, 154, 206, 128, 58, 192}
 
 func SetDirectories() {
+	BaseDirectory = ResolvePath(BaseDirectory)
+
 	DBPath = BaseDirectory + "/data"
 	LogsPath = BaseDirectory + "/logs"
 

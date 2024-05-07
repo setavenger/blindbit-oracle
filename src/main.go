@@ -29,7 +29,6 @@ func init() {
 	flag.Parse()
 
 	common.SetDirectories() // todo a proper set settings function which does it all would be good to avoid several small function calls
-
 	err := os.Mkdir(common.BaseDirectory, 0750)
 	if err != nil && !strings.Contains(err.Error(), "file exists") {
 		fmt.Println(err.Error())
@@ -75,11 +74,11 @@ func init() {
 	openLevelDBConnections()
 
 	if common.RpcUser == "" {
-		panic("rpc user not set")
+		panic("rpc user not set") // todo use cookie file to circumvent this requirement
 	}
 
 	if common.RpcPass == "" {
-		panic("rpc pass not set")
+		panic("rpc pass not set") // todo use cookie file to circumvent this requirement
 	}
 }
 

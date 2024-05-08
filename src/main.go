@@ -73,6 +73,20 @@ func init() {
 	// open levelDB connections
 	openLevelDBConnections()
 
+	if common.CookiePath != "" {
+		data, err := os.ReadFile(common.CookiePath)
+		if err != nil {
+			panic(err)
+		}
+
+		credentials := strings.Split(string(data), ":")
+		if len(credentials) != 2 {
+			panic("cookie file is invalid")
+		}
+		common.RpcUser = credentials[0]
+		common.RpcPass = credentials[1]
+	}
+
 	if common.RpcUser == "" {
 		panic("rpc user not set") // todo use cookie file to circumvent this requirement
 	}

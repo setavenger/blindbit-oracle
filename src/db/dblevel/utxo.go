@@ -3,6 +3,7 @@ package dblevel
 import (
 	"SilentPaymentAppBackend/src/common"
 	"SilentPaymentAppBackend/src/common/types"
+	"errors"
 )
 
 func InsertUTXOs(utxos []types.UTXO) error {
@@ -55,6 +56,10 @@ func FetchByBlockHashAndTxidUTXOs(blockHash, txid string) ([]types.UTXO, error) 
 	//common.InfoLogger.Println("Fetching UTXOs")
 	pairs, err := retrieveManyByBlockHashAndTxid(UTXOsDB, blockHash, txid, types.PairFactoryUTXO)
 	if err != nil {
+		if errors.Is(err, NoEntryErr{}) {
+			// don't print if it's a no entry error
+			return nil, err
+		}
 		common.ErrorLogger.Println(err)
 		return nil, err
 	}

@@ -33,9 +33,9 @@ var (
 	// SyncHeadersMaxPerCall how many headers will maximally be requested in one batched RPC call
 	SyncHeadersMaxPerCall uint32 = 10_000
 	// MaxParallelRequests sets how many RPC calls will be made in parallel to the Node
-	MaxParallelRequests uint16 = 24
+	MaxParallelRequests uint16 = 2
 	// MaxParallelTweakComputations number of parallel processes which will be spawned in order to compute the tweaks for a given block
-	MaxParallelTweakComputations = 1
+	MaxParallelTweakComputations = 2
 	// PruneFrequency every x blocks the data will be checked and pruned
 	// possible routines: -remove utxos for 100% spent transaction
 	PruneFrequency = 72

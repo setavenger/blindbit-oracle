@@ -41,11 +41,11 @@ func init() {
 		log.Fatal(err)
 	}
 
-	file, err := os.OpenFile(fmt.Sprintf("%s/logs/logs-%s.txt", common.BaseDirectory, time.Now()), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	file, err := os.OpenFile(fmt.Sprintf("%s/logs.log", common.BaseDirectory), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
 		log.Fatal(err)
 	}
-	fileDebug, err := os.OpenFile(fmt.Sprintf("%s/logs/logs-debug-%s.txt", common.BaseDirectory, time.Now()), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	fileDebug, err := os.OpenFile(fmt.Sprintf("%s/logs-debug.log", common.BaseDirectory), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
 		log.Fatal(err)
 	}

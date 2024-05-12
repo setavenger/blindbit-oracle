@@ -22,7 +22,7 @@ func BuildTaprootOnlyFilter(block *types.Block) (types.Filter, error) {
 					common.ErrorLogger.Fatalln(err)
 					return types.Filter{}, err
 				}
-				// only append the x-only pubKey. reduces bandwidth
+				// only append the x-only pubKey. reduces complexity
 				taprootOutput = append(taprootOutput, scriptAsBytes[2:])
 			}
 		}

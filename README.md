@@ -84,7 +84,7 @@ You still have to set up a config file in any case as the rpc users can't and **
 
 ```text
 GET("/block-height")  // returns the height of the indexing server
-GET("/tweaks/:blockheight")  // returns tweak data (cut-through)
+GET("/tweaks/:blockheight?dustLimit=<sat_amount>")  // returns tweak data (cut-through); optional parameter dustLimit can be omitted; filtering happens per request, so virtually any amount can be specified
 GET("/tweak-index/:blockheight")  // returns the full tweak index (no cut-through)
 GET("/filter/:blockheight") // returns a custom taproot only filter (the underlying data is subject to change; changing scriptPubKey to x-only pubKey) 
 GET("/utxos/:blockheight")  // UTXO data for that block (cut down to the essentials needed to spend)

@@ -35,6 +35,10 @@ func overwriteUTXOsWithLookUp(utxos []types.UTXO) error {
 // todo construct the subsequent deletion of all utxos per transaction once all per transaction are spent
 func markSpentUTXOsAndTweaks(utxos []types.UTXO) error {
 	if len(utxos) == 0 {
+		if common.Chain == common.Mainnet {
+			// no warnings on other chains as it is very likely to not have any taproot outputs for several blocks on end
+			common.WarningLogger.Println("no utxos to mark as spent")
+		}
 		return nil
 	}
 
@@ -53,11 +57,6 @@ func markSpentUTXOsAndTweaks(utxos []types.UTXO) error {
 		common.ErrorLogger.Println(err)
 		return err
 	}
-	//err := dblevel.InsertUTXOs(utxos)
-	//if err != nil {
-	//	common.ErrorLogger.Println(err)
-	//	return err
-	//}
 
 	// Now begin process to find the tweaks that need to be deleted
 

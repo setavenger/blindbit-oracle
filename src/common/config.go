@@ -18,9 +18,13 @@ func LoadConfigs(pathToConfig string) {
 	// network
 	viper.SetDefault("max_parallel_requests", MaxParallelRequests)
 	viper.SetDefault("host", Host)
+	viper.SetDefault("chain", "signet")
 
 	// RPC endpoint only. Fails if others are not set
 	viper.SetDefault("rpc_endpoint", RpcEndpoint)
+
+	//Others
+	viper.SetDefault("tweaks_only", false)
 
 	/* read and set config variables */
 	Host = viper.GetString("host")
@@ -34,4 +38,21 @@ func LoadConfigs(pathToConfig string) {
 	RpcUser = viper.GetString("rpc_user")
 
 	SyncStartHeight = viper.GetUint32("sync_start_height")
+
+	TweaksOnly = viper.GetBool("tweaks_only")
+
+	chainInput := viper.GetString("chain")
+
+	switch chainInput {
+	case "main":
+		Chain = Mainnet
+	case "signet":
+		Chain = Signet
+	case "regtest":
+		Chain = Regtest
+	case "testnet":
+		Chain = Testnet3
+	default:
+		panic("chain undefined")
+	}
 }

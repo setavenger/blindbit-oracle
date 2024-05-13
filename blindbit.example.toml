@@ -2,7 +2,7 @@
 # default: "127.0.0.1:8000"
 host = "127.0.0.1:8000"
 
-# Defines on which chain the wallet runs. Allowed values: main, test, signet, regtest.
+# Defines on which chain the wallet runs. Allowed values: main, testnet, signet, regtest.
 # Default: signet
 chain = "signet"
 
@@ -31,4 +31,4 @@ max_parallel_requests = 4
 # 
 # optional - will only generate tweaks (still both cut-through and full-index)
 # default: 0 set to 1 to activate
-tweaks_only = 1
+tweaks_only = 0

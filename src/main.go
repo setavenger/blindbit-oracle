@@ -125,6 +125,9 @@ func main() {
 	//todo create proper handling for exporting data
 	//exportAll()
 
+	// todo print settings
+	common.InfoLogger.Printf("Tweaks only: %t\n", common.TweaksOnly)
+
 	//moved into go routine such that the interrupt signal will apply properly
 	go func() {
 		startSync := time.Now()

@@ -73,7 +73,7 @@ You still have to set up a config file in any case as the rpc users can't and **
 - [ ] Review all duplicate key error exemptions and raise to error/warn from debug.
 - [ ] Remove unnecessary panics.
 - [ ] Convert hardcoded serialisation assertions into constants (?)
-- [ ] Use x-only 32 byte public keys instead of scriptPubKey
+- [x] Use x-only 32 byte public keys instead of scriptPubKey
 
 ### Low Priority
 

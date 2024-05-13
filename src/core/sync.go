@@ -102,10 +102,6 @@ func updateBlockchainInfo(blockchainInfo *types.BlockchainInfo) error {
 	return nil
 }
 
-// todo works most of the times but hangs sometimes.
-//  Blocks are being skipped and not processed in the correct order.
-//  We don't want that -> further debugging and robustness tests needed;
-//  NOTE: This seems fixed, keep an eye on it though
 func processHeaders(headers []types.BlockHeader) error {
 	common.InfoLogger.Printf("Processing %d headers\n", len(headers))
 	if len(headers) == 0 {
@@ -232,10 +228,10 @@ func PreSyncHeaders() error {
 	if err != nil && errors.Is(err, dblevel.NoEntryErr{}) {
 		// we have to start before taproot activation height
 		// some taproot style pubKeys exist since height ~614000 (the last height I checked)
-		syncFromHeight = 500_000
+		syncFromHeight = common.HeaderMustSyncHeight()
 	} else {
 		// Sync from where the last header was set
-		syncFromHeight = 500_000
+		syncFromHeight = common.HeaderMustSyncHeight()
 		if syncFromHeight <= headerInv.Height {
 			syncFromHeight = headerInv.Height + 1
 		}

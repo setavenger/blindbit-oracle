@@ -23,12 +23,24 @@ var (
 	Host = "127.0.0.1:8000"
 )
 
+type chain int
+
+const (
+	Unknown chain = iota
+	Mainnet
+	Signet
+	Regtest
+	Testnet3
+)
+
 // control vars
 var (
 	SyncStartHeight uint32 = 833_000 // random block where BIP352 was not active yet. todo change to actual number
 	// MinHeightToProcess No block below this number will be processed
 	// todo is this actually needed
 	//MinHeightToProcess uint32 = 833_000
+
+	Chain = Unknown
 
 	// SyncHeadersMaxPerCall how many headers will maximally be requested in one batched RPC call
 	SyncHeadersMaxPerCall uint32 = 10_000
@@ -66,4 +78,21 @@ func SetDirectories() {
 	DBPathTweaks = DBPath + "/tweaks"
 	DBPathTweakIndex = DBPath + "/tweak-index"
 	DBPathUTXOs = DBPath + "/utxos"
+}
+
+func HeaderMustSyncHeight() uint32 {
+	switch Chain {
+	case Mainnet:
+		return 500_000
+	case Signet:
+		return 1
+	case Regtest:
+		return 1
+	case Testnet3:
+		return 1
+	case Unknown:
+		panic("chain not defined")
+	default:
+		return 1
+	}
 }

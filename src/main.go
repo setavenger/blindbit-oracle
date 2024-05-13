@@ -19,6 +19,11 @@ import (
 	"time"
 )
 
+var (
+	displayVersion bool
+	Version        = "0.0.0"
+)
+
 func init() {
 	// for profiling or testing iirc
 	//go func() {
@@ -26,8 +31,13 @@ func init() {
 	//}()
 
 	flag.StringVar(&common.BaseDirectory, "datadir", common.DefaultBaseDirectory, "Set the base directory for blindbit oracle. Default directory is ~/.blindbit-oracle")
+	flag.BoolVar(&displayVersion, "version", false, "show version of blindbit-oracle")
 	flag.Parse()
 
+	if displayVersion {
+		// we only need the version for this
+		return
+	}
 	common.SetDirectories() // todo a proper set settings function which does it all would be good to avoid several small function calls
 	err := os.Mkdir(common.BaseDirectory, 0750)
 	if err != nil && !strings.Contains(err.Error(), "file exists") {
@@ -41,11 +51,11 @@ func init() {
 		log.Fatal(err)
 	}
 
-	file, err := os.OpenFile(fmt.Sprintf("%s/logs.log", common.BaseDirectory), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	file, err := os.OpenFile(fmt.Sprintf("%s/logs.log", common.LogsPath), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
 		log.Fatal(err)
 	}
-	fileDebug, err := os.OpenFile(fmt.Sprintf("%s/logs-debug.log", common.BaseDirectory), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	fileDebug, err := os.OpenFile(fmt.Sprintf("%s/logs-debug.log", common.LogsPath), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -97,6 +107,10 @@ func init() {
 }
 
 func main() {
+	if displayVersion {
+		fmt.Println("blindbit-oracle version:", Version) // using fmt because loggers are not initialised
+		os.Exit(0)
+	}
 	defer common.InfoLogger.Println("Program shut down")
 	defer closeDBs()
 

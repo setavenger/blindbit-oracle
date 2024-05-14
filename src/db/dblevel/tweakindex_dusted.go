@@ -6,19 +6,19 @@ import (
 	"errors"
 )
 
-func InsertTweakIndex(pair *types.TweakIndex) error {
-	err := insertSimple(TweakIndexDB, pair)
+func InsertTweakIndexDust(pair *types.TweakIndexDust) error {
+	err := insertSimple(TweakIndexDustDB, pair)
 	if err != nil {
 		common.ErrorLogger.Println(err)
 		return err
 	}
-	common.DebugLogger.Println("tweak index inserted")
+	common.DebugLogger.Println("tweak index with dust filter inserted")
 	return nil
 }
 
-func FetchByBlockHashTweakIndex(blockHash string) (*types.TweakIndex, error) {
-	var pair types.TweakIndex
-	err := retrieveByBlockHash(TweakIndexDB, blockHash, &pair)
+func FetchByBlockHashTweakIndexDust(blockHash string) (*types.TweakIndexDust, error) {
+	var pair types.TweakIndexDust
+	err := retrieveByBlockHash(TweakIndexDustDB, blockHash, &pair)
 	if err != nil && !errors.Is(err, NoEntryErr{}) {
 		common.ErrorLogger.Println(err)
 		return nil, err
@@ -30,9 +30,9 @@ func FetchByBlockHashTweakIndex(blockHash string) (*types.TweakIndex, error) {
 	return &pair, nil
 }
 
-// FetchAllTweakIndices returns all types.TweakIndex in the DB
-func FetchAllTweakIndices() ([]types.TweakIndex, error) {
-	pairs, err := retrieveAll(TweakIndexDB, types.PairFactoryTweakIndex)
+// FetchAllTweakIndicesDust returns all types.TweakIndexDust in the DB
+func FetchAllTweakIndicesDust() ([]types.TweakIndexDust, error) {
+	pairs, err := retrieveAll(TweakIndexDustDB, types.PairFactoryTweakIndexDust)
 	if err != nil {
 		common.ErrorLogger.Println(err)
 		return nil, err
@@ -42,10 +42,10 @@ func FetchAllTweakIndices() ([]types.TweakIndex, error) {
 		return nil, NoEntryErr{}
 	}
 
-	result := make([]types.TweakIndex, len(pairs))
+	result := make([]types.TweakIndexDust, len(pairs))
 	// Convert each Pair to a TweakIndex and assign it to the new slice
 	for i, pair := range pairs {
-		if pairPtr, ok := pair.(*types.TweakIndex); ok {
+		if pairPtr, ok := pair.(*types.TweakIndexDust); ok {
 			result[i] = *pairPtr
 		} else {
 			common.ErrorLogger.Printf("%+v\n", pair)

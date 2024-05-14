@@ -9,6 +9,9 @@ const ConfigFileName string = "blindbit.toml"
 const DefaultBaseDirectory = "~/.blindbit-oracle"
 
 var TweaksOnly bool
+var TweakIndexFullNoDust bool
+var TweakIndexFullIncludingDust bool
+var TweaksCutThroughWithDust bool
 
 var (
 	RpcEndpoint = "http://127.0.0.1:8332" // default local node
@@ -16,7 +19,7 @@ var (
 	RpcUser     = ""
 	RpcPass     = ""
 
-	BaseDirectory = "./.blindbit-oracle"
+	BaseDirectory = ""
 	DBPath        = ""
 	LogsPath      = ""
 
@@ -55,12 +58,13 @@ var (
 
 // one has to call SetDirectories otherwise common.DBPath will be empty
 var (
-	DBPathHeaders    = DBPath + "/headers"
-	DBPathHeadersInv = DBPath + "/headers-inv" // for height to blockHash mapping
-	DBPathFilters    = DBPath + "/filters"
-	DBPathTweaks     = DBPath + "/tweaks"
-	DBPathTweakIndex = DBPath + "/tweak-index"
-	DBPathUTXOs      = DBPath + "/utxos"
+	DBPathHeaders        string
+	DBPathHeadersInv     string
+	DBPathFilters        string
+	DBPathTweaks         string
+	DBPathTweakIndex     string
+	DBPathTweakIndexDust string
+	DBPathUTXOs          string
 )
 
 // NumsH = 0x50929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0
@@ -77,6 +81,7 @@ func SetDirectories() {
 	DBPathFilters = DBPath + "/filters"
 	DBPathTweaks = DBPath + "/tweaks"
 	DBPathTweakIndex = DBPath + "/tweak-index"
+	DBPathTweakIndexDust = DBPath + "/tweak-index-dust"
 	DBPathUTXOs = DBPath + "/utxos"
 }
 

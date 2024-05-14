@@ -3,10 +3,10 @@
 host = "127.0.0.1:8000"
 
 # Defines on which chain the wallet runs. Allowed values: main, testnet, signet, regtest.
-# Default: signet
+# default: signet
 chain = "signet"
 
-# (defaults to http://127.0.0.1:8332)
+# default: http://127.0.0.1:8332
 rpc_endpoint = "http://127.0.0.1:18443"
 
 # required, unless rpc_user and rpc_pass are set
@@ -28,7 +28,23 @@ max_parallel_tweak_computations = 4
 # (depends on max-rpc-workers of the underlying full node)
 max_parallel_requests = 4
 
-# 
 # optional - will only generate tweaks (still both cut-through and full-index)
-# default: 0 set to 1 to activate
+# default: 0
 tweaks_only = 0
+
+# The base index. Only includes the tweaks. No dust filtering or cut-through possible
+# default: 1
+tweaks_full_basic = 1
+
+# if this is set a full non-cut-through index will be created.
+# This index can be used to filter for dust (?dustLimit=). If this is active the base index will not be created.
+# All full index queries will be served from this with or without (?dustLimit=) set in the query.
+# default 0
+tweaks_full_with_dust_filter = 0
+
+# This index applies cut-through and dust filtering.
+# Beware that it will be stored in addition to any full index (with or without dust) if activated.
+# It has more storage requirments than the simple indices.
+# Currently still requires tweaks_only=1.
+# default: 0
+tweaks_cut_through_with_dust_filter = 0

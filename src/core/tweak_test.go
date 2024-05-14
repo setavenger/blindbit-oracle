@@ -92,8 +92,8 @@ func TestComputeAllReceivingTweaks(t *testing.T) {
 				continue
 			}
 
-			if caseDetail.Expected.Tweak != hex.EncodeToString(tweakPerTx[:]) {
-				t.Errorf("incorrect tweak: %s - %s", caseDetail.Expected.Tweak, hex.EncodeToString(tweakPerTx[:]))
+			if caseDetail.Expected.Tweak != hex.EncodeToString(tweakPerTx.TweakData[:]) {
+				t.Errorf("incorrect tweak: %s - %s", caseDetail.Expected.Tweak, hex.EncodeToString(tweakPerTx.TweakData[:]))
 				return
 			}
 		}
@@ -156,7 +156,7 @@ func TestV3NoTxs(t *testing.T) {
 
 }
 
-//TestAllTweakVersionsOutputs all tweak computations should match the computed length of tweaks from the V1
+// TestAllTweakVersionsOutputs all tweak computations should match the computed length of tweaks from the V1
 func TestAllTweakVersionsOutputs(t *testing.T) {
 	compareForBlock(t, &block833000)
 	compareForBlock(t, &block833010)

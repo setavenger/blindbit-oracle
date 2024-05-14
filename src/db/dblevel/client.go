@@ -19,12 +19,13 @@ func (e NoEntryErr) Error() string {
 }
 
 var (
-	HeadersDB    *leveldb.DB
-	HeadersInvDB *leveldb.DB
-	FiltersDB    *leveldb.DB
-	TweaksDB     *leveldb.DB
-	TweakIndexDB *leveldb.DB
-	UTXOsDB      *leveldb.DB
+	HeadersDB        *leveldb.DB
+	HeadersInvDB     *leveldb.DB
+	FiltersDB        *leveldb.DB
+	TweaksDB         *leveldb.DB
+	TweakIndexDB     *leveldb.DB
+	TweakIndexDustDB *leveldb.DB
+	UTXOsDB          *leveldb.DB
 )
 
 // OpenDBConnection opens a connection to the through path specified db instance

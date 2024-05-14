@@ -74,6 +74,8 @@ You still have to set up a config file in any case as the rpc users can't and **
 - [ ] Remove unnecessary panics.
 - [ ] Convert hardcoded serialisation assertions into constants (?)
 - [x] Use x-only 32 byte public keys instead of scriptPubKey
+- [ ] Don't create all DBs by default, only those which are needed and activated
+- [ ] Check import paths (SilentPaymentBackend/.../...)
 
 ### Low Priority
 

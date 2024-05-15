@@ -7,7 +7,7 @@ matches [other implementations](https://github.com/bitcoin/bitcoin/pull/28241#is
 
 ## Setup
 
-The installation process is still very manual. Will be improved based on feedback and new findings.
+The installation process is still very manual. Will be improved based on feedback and new findings. It is advised to look at the example [blindbit.toml](blindbit.example.toml). As new config options appear they will be listed and explained there.
 
 ### Requirements
 
@@ -17,7 +17,7 @@ The installation process is still very manual. Will be improved based on feedbac
       You might also want to allow more rpc workers on your node to speed things up.
 - Processing a block takes ~100ms-300ms
 - Disk space (~10Gb)
-- go 1.18 installed
+- go 1.20 installed
 
 ### Build
 
@@ -39,14 +39,11 @@ $ <path/to/new/binary/file> --datadir <path/to/datadir/with/blindbit.toml>
 Note that the program will automatically default `--datadir` to `~/.blindbit-oracle` if not set.
 You still have to set up a config file in any case as the rpc users can't and **should** not be defaulted.
 
+You can now also decide which index you want to run. This setting can be set in the config file (blindbit.toml).
+
 ## Known Errors
 
-- [Should be fixed] block 727506 no tweaks but still one utxo listed (this should not happen)
-    - REASON: UTXOs are currently blindly added based on being taproot. There is no check whether the inputs are
-      eligible. Will be fixed asap.
-- [Should be fixed] cleanup has an error on block 712,517 as per
-  this [issue](https://github.com/setavenger/blindbit-oracle/issues/2#issuecomment-2069827679). Needs fixing asap.
-    - program can only be run in tweak only mode for the time being
+All known errors resolved.
 
 ## Todos
 

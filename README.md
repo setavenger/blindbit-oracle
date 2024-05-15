@@ -17,7 +17,7 @@ The installation process is still very manual. Will be improved based on feedbac
       You might also want to allow more rpc workers on your node to speed things up.
 - Processing a block takes ~100ms-300ms
 - Disk space (~10Gb)
-- go 1.18 installed
+- go 1.20 installed
 
 ### Build
 
@@ -41,12 +41,7 @@ You still have to set up a config file in any case as the rpc users can't and **
 
 ## Known Errors
 
-- [Should be fixed] block 727506 no tweaks but still one utxo listed (this should not happen)
-    - REASON: UTXOs are currently blindly added based on being taproot. There is no check whether the inputs are
-      eligible. Will be fixed asap.
-- [Should be fixed] cleanup has an error on block 712,517 as per
-  this [issue](https://github.com/setavenger/blindbit-oracle/issues/2#issuecomment-2069827679). Needs fixing asap.
-    - program can only be run in tweak only mode for the time being
+All known errors resolved.
 
 ## Todos
 

@@ -6,9 +6,10 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
+
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
-	"log"
 )
 
 // todo change to `var NoEntryErr = errors.new("[no entry found]")`
@@ -94,15 +95,16 @@ func insertBatch(db *leveldb.DB, pairs []types.Pair) error {
 func retrieveByBlockHash(db *leveldb.DB, blockHash string, pair types.Pair) error {
 	blockHashBytes, err := hex.DecodeString(blockHash)
 	if err != nil {
-		log.Println(err)
+		common.ErrorLogger.Println(err)
 		return err
 	}
 
 	data, err := db.Get(blockHashBytes, nil)
-	if err != nil && err.Error() != "leveldb: not found" { // todo this error probably exists as var/type somewhere
+	if err != nil && !errors.Is(err, NoEntryErr{}) { // todo this error probably exists as var/type somewhere
 		common.ErrorLogger.Println(err)
 		return err
-	} else if err != nil && err.Error() == "leveldb: not found" { // todo this error probably exists as var/type somewhere
+	} else if err != nil && errors.Is(err, NoEntryErr{}) { // todo this error probably exists as var/type somewhere
+		// todo we don't need separate patterns if just return the errors anyways? or maybe just to avoid unnecessary logging
 		return NoEntryErr{}
 	}
 	if len(data) == 0 {

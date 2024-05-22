@@ -219,7 +219,6 @@ func (h *ApiHandler) GetTweakIndexDataByHeight(c *gin.Context) {
 
 		var serveTweakData = []string{}
 		for _, tweak := range tweakIndex.Data {
-			common.DebugLogger.Printf("%x- %d", tweak.Tweak(), tweak.HighestValue())
 			if tweak.HighestValue() < dustLimit {
 				continue
 			}
@@ -267,11 +266,16 @@ func (h *ApiHandler) GetSpentOutpointsIndex(c *gin.Context) {
 		return
 	}
 	spentOutpointsIndex, err := dblevel.FetchByBlockHashSpentOutpointIndex(hInv.Hash)
-	if err != nil {
+	if err != nil && !errors.Is(err, dblevel.NoEntryErr{}) {
 		common.ErrorLogger.Println(err)
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "could no get spentOutpointsIndex from db",
+			"error": "could could not retrieve data from database",
 		})
+		return
+	}
+
+	if err != nil && errors.Is(err, dblevel.NoEntryErr{}) {
+		c.JSON(http.StatusOK, []string{})
 		return
 	}
 

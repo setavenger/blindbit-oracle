@@ -39,9 +39,9 @@ $ <path/to/new/binary/file> --datadir <path/to/datadir/with/blindbit.toml>
 Note that the program will automatically default `--datadir` to `~/.blindbit-oracle` if not set.
 You still have to set up a config file in any case as the rpc users can't and **should** not be defaulted.
 
-## Known Errors
+## Known Issues
 
-All known errors resolved.
+Cut-through is currently not implemented in `/tweaks/`. It is functional in dev branch and will be merged shortly.
 
 ## Todos
 

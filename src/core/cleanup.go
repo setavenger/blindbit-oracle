@@ -58,6 +58,11 @@ func markSpentUTXOsAndTweaks(utxos []types.UTXO) error {
 		return err
 	}
 
+	// we can only delete old tweaks if we actually have the index available
+	if !common.TweaksCutThroughWithDust {
+		return err
+	}
+
 	// Now begin process to find the tweaks that need to be deleted
 
 	// we only need to check for one utxo per txid, so we reduce the number of utxos -> fewer lookups in DB
@@ -102,7 +107,7 @@ func markSpentUTXOsAndTweaks(utxos []types.UTXO) error {
 				BlockHash:    utxo.BlockHash,
 				BlockHeight:  0,
 				Txid:         utxo.Txid,
-				Data:         [33]byte{},
+				TweakData:    [33]byte{},
 				HighestValue: *newBiggest,
 			})
 		}

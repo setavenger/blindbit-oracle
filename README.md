@@ -7,7 +7,7 @@ matches [other implementations](https://github.com/bitcoin/bitcoin/pull/28241#is
 
 ## Setup
 
-The installation process is still very manual. Will be improved based on feedback and new findings.
+The installation process is still very manual. Will be improved based on feedback and new findings. It is advised to look at the example [blindbit.toml](blindbit.example.toml). As new config options appear they will be listed and explained there.
 
 ### Requirements
 
@@ -39,9 +39,11 @@ $ <path/to/new/binary/file> --datadir <path/to/datadir/with/blindbit.toml>
 Note that the program will automatically default `--datadir` to `~/.blindbit-oracle` if not set.
 You still have to set up a config file in any case as the rpc users can't and **should** not be defaulted.
 
-## Known Issues
+You can now also decide which index you want to run. This setting can be set in the config file (blindbit.toml).
 
-Cut-through is currently not implemented in `/tweaks/`. It is functional in dev branch and will be merged shortly.
+## Known Errors
+
+No known issues.
 
 ## Todos
 
@@ -69,6 +71,8 @@ Cut-through is currently not implemented in `/tweaks/`. It is functional in dev 
 - [ ] Remove unnecessary panics.
 - [ ] Convert hardcoded serialisation assertions into constants (?)
 - [x] Use x-only 32 byte public keys instead of scriptPubKey
+- [ ] Don't create all DBs by default, only those which are needed and activated
+- [ ] Check import paths (SilentPaymentBackend/.../...)
 
 ### Low Priority
 

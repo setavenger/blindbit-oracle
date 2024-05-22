@@ -137,7 +137,7 @@ func convertTweaksToRecords(data []types.Tweak) ([][]string, error) {
 		records = append(records, []string{
 			pair.BlockHash,
 			pair.Txid,
-			hex.EncodeToString(pair.Data[:]),
+			hex.EncodeToString(pair.TweakData[:]),
 		})
 	}
 	return records, nil

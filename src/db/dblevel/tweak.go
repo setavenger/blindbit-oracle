@@ -9,6 +9,7 @@ import (
 	"math"
 )
 
+// InsertBatchTweaks index implements cut through and dust
 func InsertBatchTweaks(tweaks []types.Tweak) error {
 	common.DebugLogger.Println("Inserting tweaks...")
 	// Create a slice of types.Pair with the same length as pairs
@@ -60,7 +61,7 @@ func OverWriteTweaks(tweaks []types.Tweak) error {
 			common.ErrorLogger.Printf("%+v\n", pairs[0])
 			panic("wrong pair struct returned")
 		}
-		tweak.Data = result.Data
+		tweak.TweakData = result.TweakData
 
 		tweaksToOverwrite = append(tweaksToOverwrite, tweak)
 

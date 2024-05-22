@@ -78,7 +78,7 @@ func convertUTXOsToRecords(utxos []types.UTXO) ([][]string, error) {
 // Filters
 
 func ExportFilters(path string) error {
-	allEntries, err := dblevel.FetchAllFilters()
+	allEntries, err := dblevel.FetchAllNewUTXOsFilters()
 	if err != nil {
 		common.ErrorLogger.Println(err)
 		return err

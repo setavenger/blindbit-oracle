@@ -79,7 +79,7 @@ func LoadConfigs(pathToConfig string) {
 		WarningLogger.Println("make sure your configuration loaded correctly, check example blindbit.toml for configuration")
 	}
 
-	if TweaksCutThroughWithDust && !TweaksOnly {
+	if TweaksCutThroughWithDust && TweaksOnly {
 		err := errors.New("cut through requires tweaks_only to be set to 1")
 		ErrorLogger.Println(err)
 		os.Exit(1)

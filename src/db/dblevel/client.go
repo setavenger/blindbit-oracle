@@ -20,13 +20,15 @@ func (e NoEntryErr) Error() string {
 }
 
 var (
-	HeadersDB        *leveldb.DB
-	HeadersInvDB     *leveldb.DB
-	FiltersDB        *leveldb.DB
-	TweaksDB         *leveldb.DB
-	TweakIndexDB     *leveldb.DB
-	TweakIndexDustDB *leveldb.DB
-	UTXOsDB          *leveldb.DB
+	HeadersDB              *leveldb.DB
+	HeadersInvDB           *leveldb.DB
+	NewUTXOsFiltersDB      *leveldb.DB
+	TweaksDB               *leveldb.DB
+	TweakIndexDB           *leveldb.DB
+	TweakIndexDustDB       *leveldb.DB
+	UTXOsDB                *leveldb.DB
+	SpentOutpointsIndexDB  *leveldb.DB
+	SpentOutpointsFilterDB *leveldb.DB
 )
 
 // OpenDBConnection opens a connection to the through path specified db instance
@@ -100,10 +102,10 @@ func retrieveByBlockHash(db *leveldb.DB, blockHash string, pair types.Pair) erro
 	}
 
 	data, err := db.Get(blockHashBytes, nil)
-	if err != nil && !errors.Is(err, NoEntryErr{}) { // todo this error probably exists as var/type somewhere
+	if err != nil && !errors.Is(err, leveldb.ErrNotFound) { // todo this error probably exists as var/type somewhere
 		common.ErrorLogger.Println(err)
 		return err
-	} else if err != nil && errors.Is(err, NoEntryErr{}) { // todo this error probably exists as var/type somewhere
+	} else if err != nil && errors.Is(err, leveldb.ErrNotFound) { // todo this error probably exists as var/type somewhere
 		// todo we don't need separate patterns if just return the errors anyways? or maybe just to avoid unnecessary logging
 		return NoEntryErr{}
 	}

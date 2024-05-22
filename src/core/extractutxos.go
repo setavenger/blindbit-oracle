@@ -75,7 +75,6 @@ func extractSpentTaprootPubKeysFromTx(tx *types.Transaction, block *types.Block)
 				blockHash = headerInv.Hash
 			}
 
-			//832974
 			spentUTXOs = append(spentUTXOs, types.UTXO{
 				Txid:         vin.Txid,
 				Vout:         vin.Vout,

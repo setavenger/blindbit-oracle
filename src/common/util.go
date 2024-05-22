@@ -2,12 +2,14 @@ package common
 
 import (
 	"crypto/sha256"
-	"github.com/shopspring/decimal"
-	"golang.org/x/crypto/ripemd160"
 	"os/user"
 	"strings"
+
+	"github.com/shopspring/decimal"
+	"golang.org/x/crypto/ripemd160"
 )
 
+// ReverseBytes reverses the bytes inside the byte slice and returns the same slice. It does not return a copy.
 func ReverseBytes(bytes []byte) []byte {
 	for i, j := 0, len(bytes)-1; i < j; i, j = i+1, j-1 {
 		bytes[i], bytes[j] = bytes[j], bytes[i]

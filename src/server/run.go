@@ -2,6 +2,7 @@ package server
 
 import (
 	"SilentPaymentAppBackend/src/common"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -10,10 +11,11 @@ func RunServer(api *ApiHandler) {
 	router := gin.Default()
 
 	router.GET("/block-height", api.GetBestBlockHeight)
-	router.GET("/tweaks/:blockheight", api.GetTweakDataByHeight)
-	router.GET("/tweak-index/:blockheight", api.GetTweakIndexDataByHeight)
-	router.GET("/filter/:blockheight", api.GetCFilterByHeight)
-	router.GET("/utxos/:blockheight", api.GetUtxosByHeight)
+	router.GET("/tweaks/:blockheight", FetchHeaderInvMiddleware, api.GetTweakDataByHeight)
+	router.GET("/tweak-index/:blockheight", FetchHeaderInvMiddleware, api.GetTweakIndexDataByHeight)
+	router.GET("/filter/:type/:blockheight", FetchHeaderInvMiddleware, api.GetCFilterByHeight)
+	router.GET("/utxos/:blockheight", FetchHeaderInvMiddleware, api.GetUtxosByHeight)
+	router.GET("/spent-index/:blockheight", FetchHeaderInvMiddleware, api.GetSpentOutpointsIndex)
 
 	router.POST("/forward-tx", api.ForwardRawTX)
 

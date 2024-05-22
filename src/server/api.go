@@ -7,10 +7,11 @@ import (
 	"bytes"
 	"encoding/hex"
 	"errors"
-	"github.com/gin-gonic/gin"
 	"io"
 	"net/http"
 	"strconv"
+
+	"github.com/gin-gonic/gin"
 )
 
 // ApiHandler todo might not need ApiHandler struct if no data is stored within.
@@ -38,40 +39,50 @@ func (h *ApiHandler) GetBestBlockHeight(c *gin.Context) {
 }
 
 func (h *ApiHandler) GetCFilterByHeight(c *gin.Context) {
-	heightStr := c.Param("blockheight")
-	if heightStr == "" {
-		c.JSON(http.StatusBadRequest, nil)
+	headerInv, exists := c.Get("headerInv")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "headerInv not found"})
 		return
 	}
-	height, err := strconv.ParseUint(heightStr, 10, 32)
-	if err != nil {
-		common.ErrorLogger.Println(err)
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "could not parse height",
-		})
-		return
-	}
-	headerInv, err := dblevel.FetchByBlockHeightBlockHeaderInv(uint32(height))
-	if err != nil {
-		common.ErrorLogger.Println(err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "could not get height mapping from db",
-		})
+	hInv, ok := headerInv.(types.BlockHeaderInv) // Assuming HeaderInventory is the expected type
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid headerInv type"})
 		return
 	}
 
-	cFilter, err := dblevel.FetchByBlockHashFilter(headerInv.Hash)
-	if err != nil {
-		common.ErrorLogger.Println(err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "could not get filter from db",
+	filterType := c.Param("type")
+
+	var cFilter types.Filter
+	var err error
+	switch filterType {
+	case "spent":
+		cFilter, err = dblevel.FetchByBlockHashSpentOutpointsFilter(hInv.Hash)
+		if err != nil {
+			common.ErrorLogger.Println(err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "could not get filter from db",
+			})
+			return
+		}
+	case "new-utxos":
+		cFilter, err = dblevel.FetchByBlockHashNewUTXOsFilter(hInv.Hash)
+		if err != nil {
+			common.ErrorLogger.Println(err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "could not get filter from db",
+			})
+			return
+		}
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "invalid filter type",
 		})
 		return
 	}
 
 	data := gin.H{
 		"filter_type":  cFilter.FilterType,
-		"block_height": height, // saves us a "join" in the query
+		"block_height": hInv.Height,
 		"block_hash":   cFilter.BlockHash,
 		"data":         hex.EncodeToString(cFilter.Data),
 	}
@@ -80,28 +91,17 @@ func (h *ApiHandler) GetCFilterByHeight(c *gin.Context) {
 }
 
 func (h *ApiHandler) GetUtxosByHeight(c *gin.Context) {
-	heightStr := c.Param("blockheight")
-	if heightStr == "" {
-		c.JSON(http.StatusBadRequest, nil)
+	headerInv, exists := c.Get("headerInv")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "headerInv not found"})
 		return
 	}
-	height, err := strconv.ParseUint(heightStr, 10, 32)
-	if err != nil {
-		common.ErrorLogger.Println(err)
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "could not parse height",
-		})
+	hInv, ok := headerInv.(types.BlockHeaderInv) // Assuming HeaderInventory is the expected type
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid headerInv type"})
 		return
 	}
-	headerInv, err := dblevel.FetchByBlockHeightBlockHeaderInv(uint32(height))
-	if err != nil {
-		common.ErrorLogger.Println(err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "could not get height mapping from db",
-		})
-		return
-	}
-	utxos, err := dblevel.FetchByBlockHashUTXOs(headerInv.Hash)
+	utxos, err := dblevel.FetchByBlockHashUTXOs(hInv.Hash)
 	if err != nil && !errors.Is(err, dblevel.NoEntryErr{}) {
 		common.ErrorLogger.Println(err)
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -120,21 +120,18 @@ func (h *ApiHandler) GetUtxosByHeight(c *gin.Context) {
 // todo can be changed to serve with verbosity aka serve with txid or even block data (height, hash)
 func (h *ApiHandler) GetTweakDataByHeight(c *gin.Context) {
 	// todo outsource all the blockHeight extraction and conversion through the inverse header table into middleware
-	heightStr := c.Param("blockheight")
-	if heightStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "bad format: height",
-		})
+	headerInv, exists := c.Get("headerInv")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "headerInv not found"})
 		return
 	}
-	height, err := strconv.ParseUint(heightStr, 10, 32)
-	if err != nil {
-		common.ErrorLogger.Println(err)
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "could not parse height",
-		})
+	hInv, ok := headerInv.(types.BlockHeaderInv) // Assuming HeaderInventory is the expected type
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid headerInv type"})
 		return
 	}
+	var tweaks []types.Tweak
+
 	// Extracting the dustLimit query parameter and converting it to uint64
 	dustLimitStr := c.DefaultQuery("dustLimit", "0") // Default to "0" if not provided
 	dustLimit, err := strconv.ParseUint(dustLimitStr, 10, 64)
@@ -142,20 +139,9 @@ func (h *ApiHandler) GetTweakDataByHeight(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid dustLimit parameter"})
 		return
 	}
-
-	headerInv, err := dblevel.FetchByBlockHeightBlockHeaderInv(uint32(height))
-	if err != nil {
-		common.ErrorLogger.Println(err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "could not get height mapping from db",
-		})
-		return
-	}
-	var tweaks []types.Tweak
-
 	if dustLimit == 0 {
 		// this query should have a better performance due to no required checks
-		tweaks, err = dblevel.FetchByBlockHashTweaks(headerInv.Hash)
+		tweaks, err = dblevel.FetchByBlockHashTweaks(hInv.Hash)
 		if err != nil && !errors.Is(err, dblevel.NoEntryErr{}) {
 			common.ErrorLogger.Println(err)
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -164,7 +150,7 @@ func (h *ApiHandler) GetTweakDataByHeight(c *gin.Context) {
 			return
 		}
 	} else {
-		tweaks, err = dblevel.FetchByBlockHashDustLimitTweaks(headerInv.Hash, dustLimit)
+		tweaks, err = dblevel.FetchByBlockHashDustLimitTweaks(hInv.Hash, dustLimit)
 		if err != nil && !errors.Is(err, dblevel.NoEntryErr{}) {
 			common.ErrorLogger.Println(err)
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -188,28 +174,14 @@ func (h *ApiHandler) GetTweakDataByHeight(c *gin.Context) {
 }
 
 func (h *ApiHandler) GetTweakIndexDataByHeight(c *gin.Context) {
-	heightStr := c.Param("blockheight")
-	if heightStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "bad format: height",
-		})
+	headerInv, exists := c.Get("headerInv")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "headerInv not found"})
 		return
 	}
-	height, err := strconv.ParseUint(heightStr, 10, 32)
-	if err != nil {
-		common.ErrorLogger.Println(err)
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "could not parse height",
-		})
-		return
-	}
-
-	headerInv, err := dblevel.FetchByBlockHeightBlockHeaderInv(uint32(height))
-	if err != nil {
-		common.ErrorLogger.Println(err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "could not get height mapping from db",
-		})
+	hInv, ok := headerInv.(types.BlockHeaderInv) // Assuming HeaderInventory is the expected type
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid headerInv type"})
 		return
 	}
 
@@ -231,7 +203,7 @@ func (h *ApiHandler) GetTweakIndexDataByHeight(c *gin.Context) {
 	// todo basically duplicate code could be simplified and generalised with interface/(generics?)
 	if common.TweakIndexFullIncludingDust {
 		var tweakIndex *types.TweakIndexDust
-		tweakIndex, err = dblevel.FetchByBlockHashTweakIndexDust(headerInv.Hash)
+		tweakIndex, err = dblevel.FetchByBlockHashTweakIndexDust(hInv.Hash)
 		if err != nil && !errors.Is(err, dblevel.NoEntryErr{}) {
 			common.ErrorLogger.Println(err)
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -247,7 +219,6 @@ func (h *ApiHandler) GetTweakIndexDataByHeight(c *gin.Context) {
 
 		var serveTweakData = []string{}
 		for _, tweak := range tweakIndex.Data {
-			common.DebugLogger.Printf("%x- %d", tweak.Tweak(), tweak.HighestValue())
 			if tweak.HighestValue() < dustLimit {
 				continue
 			}
@@ -259,7 +230,7 @@ func (h *ApiHandler) GetTweakIndexDataByHeight(c *gin.Context) {
 		return
 	} else {
 		// this query should have a better performance due to no required checks
-		tweakIndex, err := dblevel.FetchByBlockHashTweakIndex(headerInv.Hash)
+		tweakIndex, err := dblevel.FetchByBlockHashTweakIndex(hInv.Hash)
 		if err != nil && !errors.Is(err, dblevel.NoEntryErr{}) {
 			common.ErrorLogger.Println(err)
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -281,6 +252,55 @@ func (h *ApiHandler) GetTweakIndexDataByHeight(c *gin.Context) {
 		c.JSON(200, serveTweakData)
 		return
 	}
+}
+
+func (h *ApiHandler) GetSpentOutpointsIndex(c *gin.Context) {
+	headerInv, exists := c.Get("headerInv")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "headerInv not found"})
+		return
+	}
+	hInv, ok := headerInv.(types.BlockHeaderInv) // Assuming HeaderInventory is the expected type
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid headerInv type"})
+		return
+	}
+	spentOutpointsIndex, err := dblevel.FetchByBlockHashSpentOutpointIndex(hInv.Hash)
+	if err != nil && !errors.Is(err, dblevel.NoEntryErr{}) {
+		common.ErrorLogger.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "could could not retrieve data from database",
+		})
+		return
+	}
+
+	if err != nil && errors.Is(err, dblevel.NoEntryErr{}) {
+		c.JSON(http.StatusOK, []string{})
+		return
+	}
+
+	var result struct {
+		BlockHash string   `json:"block_hash"`
+		Data      []string `json:"data"`
+	}
+
+	result.BlockHash = spentOutpointsIndex.BlockHash
+
+	if len(spentOutpointsIndex.Data) == 0 {
+		common.WarningLogger.Println("spentOutpointsIndex was empty")
+		result.Data = []string{}
+		c.JSON(http.StatusOK, result)
+		return
+	}
+
+	resultData := make([]string, len(spentOutpointsIndex.Data))
+	for i, hash := range spentOutpointsIndex.Data {
+		resultData[i] = hex.EncodeToString(hash[:])
+	}
+
+	result.Data = resultData
+
+	c.JSON(http.StatusOK, result)
 }
 
 func (h *ApiHandler) ForwardRawTX(c *gin.Context) {

@@ -12,19 +12,17 @@ import (
 func CheckForNewBlockRoutine() {
 	common.InfoLogger.Println("starting check_for_new_block_routine")
 	for {
-		select {
-		case <-time.NewTicker(3 * time.Second).C:
-			blockHash, err := GetBestBlockHash()
-			if err != nil {
-				common.ErrorLogger.Println(err)
-				// todo fail or restart after too many fails?
-				continue
-			}
-			err = FullProcessBlockHash(blockHash)
-			if err != nil {
-				common.ErrorLogger.Println(err)
-				return
-			}
+		<-time.NewTicker(3 * time.Second).C
+		blockHash, err := GetBestBlockHash()
+		if err != nil {
+			common.ErrorLogger.Println(err)
+			// todo fail or restart after too many fails?
+			continue
+		}
+		err = FullProcessBlockHash(blockHash)
+		if err != nil {
+			common.ErrorLogger.Println(err)
+			return
 		}
 	}
 }
@@ -58,7 +56,7 @@ func FullProcessBlockHash(blockHash string) error {
 func PullBlock(blockHash string) (*types.Block, error) {
 	if len(blockHash) != 64 {
 		common.ErrorLogger.Println("block_hash invalid:", blockHash)
-		return nil, errors.New(fmt.Sprintf("block_hash invalid: %s", blockHash))
+		return nil, fmt.Errorf("block_hash invalid: %s", blockHash)
 	}
 	// this method is preferred over lastHeader because then this function can be called for PreviousBlockHash
 	header, err := dblevel.FetchByBlockHashBlockHeader(blockHash)
@@ -213,12 +211,38 @@ func HandleBlock(block *types.Block) error {
 	}
 
 	// create special block filter
-	cFilterTaproot, err := BuildTaprootOnlyFilter(block)
+	cFilterNewUTXOs, err := BuildNewUTXOsFilter(block)
 	if err != nil {
 		common.ErrorLogger.Println(err)
 		return err
 	}
-	err = dblevel.InsertFilter(cFilterTaproot)
+
+	//
+	err = dblevel.InsertNewUTXOsFilter(cFilterNewUTXOs)
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return err
+	}
+
+	spentOutpointsIndex, err := BuildSpentUTXOIndex(taprootSpent, block)
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return err
+	}
+
+	err = dblevel.InsertSpentOutpointsIndex(&spentOutpointsIndex)
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return err
+	}
+
+	cFilterSpentUTXOs, err := BuildSpentUTXOsFilter(spentOutpointsIndex)
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return err
+	}
+
+	err = dblevel.InsertSpentOutpointsFilter(cFilterSpentUTXOs)
 	if err != nil {
 		common.ErrorLogger.Println(err)
 		return err

@@ -5,8 +5,9 @@ import (
 	"SilentPaymentAppBackend/src/common/types"
 	"encoding/hex"
 	"errors"
-	"github.com/syndtr/goleveldb/leveldb/util"
 	"math"
+
+	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
 // InsertBatchTweaks index implements cut through and dust
@@ -239,7 +240,6 @@ func FetchByBlockHashDustLimitTweaks(blockHash string, dustLimit uint64) ([]type
 			}
 			results = append(results, tweak)
 		}
-
 	}
 
 	err = iter.Error()

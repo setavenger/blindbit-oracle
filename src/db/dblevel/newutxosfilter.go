@@ -5,8 +5,8 @@ import (
 	"SilentPaymentAppBackend/src/common/types"
 )
 
-func InsertFilter(pair types.Filter) error {
-	err := insertSimple(FiltersDB, &pair)
+func InsertNewUTXOsFilter(pair types.Filter) error {
+	err := insertSimple(NewUTXOsFiltersDB, &pair)
 	if err != nil {
 		common.ErrorLogger.Println(err)
 		return err
@@ -15,9 +15,9 @@ func InsertFilter(pair types.Filter) error {
 	return nil
 }
 
-func FetchByBlockHashFilter(blockHash string) (types.Filter, error) {
+func FetchByBlockHashNewUTXOsFilter(blockHash string) (types.Filter, error) {
 	var pair types.Filter
-	err := retrieveByBlockHash(FiltersDB, blockHash, &pair)
+	err := retrieveByBlockHash(NewUTXOsFiltersDB, blockHash, &pair)
 	if err != nil {
 		common.ErrorLogger.Println(err)
 		return types.Filter{}, err
@@ -26,8 +26,8 @@ func FetchByBlockHashFilter(blockHash string) (types.Filter, error) {
 }
 
 // FetchAllFilters returns all types.Filter in the DB
-func FetchAllFilters() ([]types.Filter, error) {
-	pairs, err := retrieveAll(FiltersDB, types.PairFactoryFilter)
+func FetchAllNewUTXOsFilters() ([]types.Filter, error) {
+	pairs, err := retrieveAll(NewUTXOsFiltersDB, types.PairFactoryFilter)
 	if err != nil {
 		common.ErrorLogger.Println(err)
 		return nil, err

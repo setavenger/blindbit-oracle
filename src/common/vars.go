@@ -55,12 +55,14 @@ var (
 
 // one has to call SetDirectories otherwise common.DBPath will be empty
 var (
-	DBPathHeaders    = DBPath + "/headers"
-	DBPathHeadersInv = DBPath + "/headers-inv" // for height to blockHash mapping
-	DBPathFilters    = DBPath + "/filters"
-	DBPathTweaks     = DBPath + "/tweaks"
-	DBPathTweakIndex = DBPath + "/tweak-index"
-	DBPathUTXOs      = DBPath + "/utxos"
+	DBPathHeaders              string
+	DBPathHeadersInv           string // for height to blockHash mapping
+	DBPathFilters              string
+	DBPathTweaks               string
+	DBPathTweakIndex           string
+	DBPathUTXOs                string
+	DBPathSpentOutpointsIndex  string
+	DBPathSpentOutpointsFilter string
 )
 
 // NumsH = 0x50929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0
@@ -78,6 +80,8 @@ func SetDirectories() {
 	DBPathTweaks = DBPath + "/tweaks"
 	DBPathTweakIndex = DBPath + "/tweak-index"
 	DBPathUTXOs = DBPath + "/utxos"
+	DBPathSpentOutpointsIndex = DBPath + "/spent-index"
+	DBPathSpentOutpointsFilter = DBPath + "/spent-filter"
 }
 
 func HeaderMustSyncHeight() uint32 {

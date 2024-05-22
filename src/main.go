@@ -167,10 +167,12 @@ func main() {
 func openLevelDBConnections() {
 	dblevel.HeadersDB = dblevel.OpenDBConnection(common.DBPathHeaders)
 	dblevel.HeadersInvDB = dblevel.OpenDBConnection(common.DBPathHeadersInv)
-	dblevel.FiltersDB = dblevel.OpenDBConnection(common.DBPathFilters)
+	dblevel.NewUTXOsFiltersDB = dblevel.OpenDBConnection(common.DBPathFilters)
 	dblevel.TweaksDB = dblevel.OpenDBConnection(common.DBPathTweaks)
 	dblevel.TweakIndexDB = dblevel.OpenDBConnection(common.DBPathTweakIndex)
 	dblevel.UTXOsDB = dblevel.OpenDBConnection(common.DBPathUTXOs)
+	dblevel.SpentOutpointsIndexDB = dblevel.OpenDBConnection(common.DBPathSpentOutpointsIndex)
+	dblevel.SpentOutpointsFilterDB = dblevel.OpenDBConnection(common.DBPathSpentOutpointsFilter)
 }
 
 func closeDBs() {
@@ -182,7 +184,7 @@ func closeDBs() {
 	if err != nil {
 		common.ErrorLogger.Println(err)
 	}
-	err = dblevel.FiltersDB.Close()
+	err = dblevel.NewUTXOsFiltersDB.Close()
 	if err != nil {
 		common.ErrorLogger.Println(err)
 	}
@@ -194,6 +196,15 @@ func closeDBs() {
 	if err != nil {
 		common.ErrorLogger.Println(err)
 	}
+	err = dblevel.SpentOutpointsIndexDB.Close()
+	if err != nil {
+		common.ErrorLogger.Println(err)
+	}
+	err = dblevel.SpentOutpointsFilterDB.Close()
+	if err != nil {
+		common.ErrorLogger.Println(err)
+	}
+
 	common.InfoLogger.Println("DBs closed")
 }
 

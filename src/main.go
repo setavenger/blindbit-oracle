@@ -125,9 +125,6 @@ func main() {
 	//todo create proper handling for exporting data
 	//exportAll()
 
-	// todo print settings
-	common.InfoLogger.Printf("Tweaks only: %t\n", common.TweaksOnly)
-
 	//moved into go routine such that the interrupt signal will apply properly
 	go func() {
 		startSync := time.Now()
@@ -170,6 +167,7 @@ func openLevelDBConnections() {
 	dblevel.NewUTXOsFiltersDB = dblevel.OpenDBConnection(common.DBPathFilters)
 	dblevel.TweaksDB = dblevel.OpenDBConnection(common.DBPathTweaks)
 	dblevel.TweakIndexDB = dblevel.OpenDBConnection(common.DBPathTweakIndex)
+	dblevel.TweakIndexDustDB = dblevel.OpenDBConnection(common.DBPathTweakIndexDust)
 	dblevel.UTXOsDB = dblevel.OpenDBConnection(common.DBPathUTXOs)
 	dblevel.SpentOutpointsIndexDB = dblevel.OpenDBConnection(common.DBPathSpentOutpointsIndex)
 	dblevel.SpentOutpointsFilterDB = dblevel.OpenDBConnection(common.DBPathSpentOutpointsFilter)
@@ -189,6 +187,14 @@ func closeDBs() {
 		common.ErrorLogger.Println(err)
 	}
 	err = dblevel.TweaksDB.Close()
+	if err != nil {
+		common.ErrorLogger.Println(err)
+	}
+	err = dblevel.TweakIndexDB.Close()
+	if err != nil {
+		common.ErrorLogger.Println(err)
+	}
+	err = dblevel.TweakIndexDustDB.Close()
 	if err != nil {
 		common.ErrorLogger.Println(err)
 	}

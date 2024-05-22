@@ -167,7 +167,7 @@ func (h *ApiHandler) GetTweakDataByHeight(c *gin.Context) {
 
 	var serveTweakData []string
 	for _, tweak := range tweaks {
-		serveTweakData = append(serveTweakData, hex.EncodeToString(tweak.Data[:]))
+		serveTweakData = append(serveTweakData, hex.EncodeToString(tweak.TweakData[:]))
 	}
 
 	c.JSON(http.StatusOK, serveTweakData)
@@ -185,27 +185,74 @@ func (h *ApiHandler) GetTweakIndexDataByHeight(c *gin.Context) {
 		return
 	}
 
-	// this query should have a better performance due to no required checks
-	tweakIndex, err := dblevel.FetchByBlockHashTweakIndex(hInv.Hash)
-	if err != nil && !errors.Is(err, dblevel.NoEntryErr{}) {
+	// Extracting the dustLimit query parameter and converting it to uint64
+	dustLimitStr := c.DefaultQuery("dustLimit", "0") // Default to "0" if not provided
+	dustLimit, err := strconv.ParseUint(dustLimitStr, 10, 64)
+	if err != nil {
 		common.ErrorLogger.Println(err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "could could not retrieve data from database",
-		})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid dustLimit parameter"})
 		return
 	}
 
-	if err != nil && errors.Is(err, dblevel.NoEntryErr{}) {
-		c.JSON(http.StatusOK, []string{})
+	if dustLimit != 0 && !common.TweakIndexFullIncludingDust {
+		common.DebugLogger.Println("tried accessing dust limits")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Server does not allow dustLimits"})
 		return
 	}
 
-	var serveTweakData []string
-	for _, tweak := range tweakIndex.Data {
-		serveTweakData = append(serveTweakData, hex.EncodeToString(tweak[:]))
-	}
+	// todo basically duplicate code could be simplified and generalised with interface/(generics?)
+	if common.TweakIndexFullIncludingDust {
+		var tweakIndex *types.TweakIndexDust
+		tweakIndex, err = dblevel.FetchByBlockHashTweakIndexDust(hInv.Hash)
+		if err != nil && !errors.Is(err, dblevel.NoEntryErr{}) {
+			common.ErrorLogger.Println(err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "could could not retrieve data from database",
+			})
+			return
+		}
 
-	c.JSON(200, serveTweakData)
+		if err != nil && errors.Is(err, dblevel.NoEntryErr{}) {
+			c.JSON(http.StatusOK, []string{})
+			return
+		}
+
+		var serveTweakData = []string{}
+		for _, tweak := range tweakIndex.Data {
+			common.DebugLogger.Printf("%x- %d", tweak.Tweak(), tweak.HighestValue())
+			if tweak.HighestValue() < dustLimit {
+				continue
+			}
+			data := tweak.Tweak()
+			serveTweakData = append(serveTweakData, hex.EncodeToString(data[:]))
+		}
+
+		c.JSON(200, serveTweakData)
+		return
+	} else {
+		// this query should have a better performance due to no required checks
+		tweakIndex, err := dblevel.FetchByBlockHashTweakIndex(hInv.Hash)
+		if err != nil && !errors.Is(err, dblevel.NoEntryErr{}) {
+			common.ErrorLogger.Println(err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "could could not retrieve data from database",
+			})
+			return
+		}
+
+		if err != nil && errors.Is(err, dblevel.NoEntryErr{}) {
+			c.JSON(http.StatusOK, []string{})
+			return
+		}
+
+		var serveTweakData []string
+		for _, tweak := range tweakIndex.Data {
+			serveTweakData = append(serveTweakData, hex.EncodeToString(tweak[:]))
+		}
+
+		c.JSON(200, serveTweakData)
+		return
+	}
 }
 
 func (h *ApiHandler) GetSpentOutpointsIndex(c *gin.Context) {

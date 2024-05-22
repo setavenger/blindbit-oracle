@@ -68,7 +68,7 @@ func PullBlock(blockHash string) (*types.Block, error) {
 
 	if header != nil {
 		// todo might not want to constantly log this
-		common.DebugLogger.Printf("Block: %s has already been processed\n", blockHash)
+		// common.DebugLogger.Printf("Block: %s has already been processed\n", blockHash)
 		// if we already processed the header into our DB don't do anything
 		return nil, errors.New("block already processed")
 	}
@@ -128,9 +128,6 @@ func HandleBlock(block *types.Block) error {
 	// todo the next sections can potentially be optimized by combining them into one loop where
 	//  all things are extracted from the blocks transaction data
 
-	// first we need to get the new outputs because some of them might/will be spent in the same block
-	// build light UTXOs
-
 	common.DebugLogger.Println("Computing tweaks...")
 	tweaksForBlock, err := ComputeTweaksForBlock(block)
 	if err != nil {
@@ -138,20 +135,48 @@ func HandleBlock(block *types.Block) error {
 		return err
 	}
 	common.DebugLogger.Println("Tweaks computed...")
-	err = dblevel.InsertBatchTweaks(tweaksForBlock)
-	if err != nil {
-		common.ErrorLogger.Println(err)
-		return err
+
+	if common.TweakIndexFullNoDust || common.TweakIndexFullIncludingDust {
+		// build map for sorting
+		tweaksForBlockMap := map[string]types.Tweak{}
+		for _, tweak := range tweaksForBlock {
+			tweaksForBlockMap[tweak.Txid] = tweak
+		}
+
+		// we only create one of the two filters no dust can be derived from dust but not vice versa
+		// So we build the dust index if dust is needed and no-dust if off but not both
+		if common.TweakIndexFullIncludingDust {
+			// full index with dust filter possibility
+			// todo should we sort, overhead created
+			tweakIndexDust := types.TweakIndexDustFromTweakArray(tweaksForBlockMap, block)
+			tweakIndexDust.BlockHash = block.Hash
+			tweakIndexDust.BlockHeight = block.Height
+
+			err = dblevel.InsertTweakIndexDust(tweakIndexDust)
+			if err != nil {
+				common.ErrorLogger.Println(err)
+				return err
+			}
+		} else {
+			// normal full index no dust
+			// todo should we sort, overhead created
+			tweakIndex := types.TweakIndexFromTweakArray(tweaksForBlockMap, block)
+			tweakIndex.BlockHash = block.Hash
+			tweakIndex.BlockHeight = block.Height
+			err = dblevel.InsertTweakIndex(tweakIndex)
+			if err != nil {
+				common.ErrorLogger.Println(err)
+				return err
+			}
+		}
 	}
-	common.DebugLogger.Println("Constructing full index")
-	// todo we could sort the array here in accordance to the block data which we still have
-	tweakIndex := types.TweakIndexFromTweakArray(tweaksForBlock)
-	tweakIndex.BlockHash = block.Hash
-	tweakIndex.BlockHeight = block.Height
-	err = dblevel.InsertTweakIndex(tweakIndex)
-	if err != nil {
-		common.ErrorLogger.Println(err)
-		return err
+
+	if common.TweaksCutThroughWithDust {
+		err = dblevel.InsertBatchTweaks(tweaksForBlock)
+		if err != nil {
+			common.ErrorLogger.Println(err)
+			return err
+		}
 	}
 
 	// if we only want to generate the tweaks we exit here
@@ -165,6 +190,8 @@ func HandleBlock(block *types.Block) error {
 		eligibleTransaction[tweak.Txid] = struct{}{}
 	}
 
+	// first we need to get the new outputs because some of them might/will be spent in the same block
+	// build light UTXOs
 	newUTXOs := ExtractNewUTXOs(block, eligibleTransaction)
 	err = dblevel.InsertUTXOs(newUTXOs)
 	if err != nil {
@@ -176,6 +203,7 @@ func HandleBlock(block *types.Block) error {
 	taprootSpent := extractSpentTaprootPubKeysFromBlock(block)
 
 	//err = removeSpentUTXOsAndTweaks(taprootSpent)
+	// this will overwrite new UTXOs which were spent in the same block
 	err = markSpentUTXOsAndTweaks(taprootSpent)
 	if err != nil {
 		common.ErrorLogger.Println(err)

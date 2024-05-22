@@ -9,6 +9,9 @@ const ConfigFileName string = "blindbit.toml"
 const DefaultBaseDirectory = "~/.blindbit-oracle"
 
 var TweaksOnly bool
+var TweakIndexFullNoDust bool
+var TweakIndexFullIncludingDust bool
+var TweaksCutThroughWithDust bool
 
 var (
 	RpcEndpoint = "http://127.0.0.1:8332" // default local node
@@ -16,7 +19,7 @@ var (
 	RpcUser     = ""
 	RpcPass     = ""
 
-	BaseDirectory = "./.blindbit-oracle"
+	BaseDirectory = ""
 	DBPath        = ""
 	LogsPath      = ""
 
@@ -61,6 +64,7 @@ var (
 	DBPathTweaks               string
 	DBPathTweakIndex           string
 	DBPathUTXOs                string
+	DBPathTweakIndexDust       string
 	DBPathSpentOutpointsIndex  string
 	DBPathSpentOutpointsFilter string
 )
@@ -79,6 +83,7 @@ func SetDirectories() {
 	DBPathFilters = DBPath + "/filters"
 	DBPathTweaks = DBPath + "/tweaks"
 	DBPathTweakIndex = DBPath + "/tweak-index"
+	DBPathTweakIndexDust = DBPath + "/tweak-index-dust"
 	DBPathUTXOs = DBPath + "/utxos"
 	DBPathSpentOutpointsIndex = DBPath + "/spent-index"
 	DBPathSpentOutpointsFilter = DBPath + "/spent-filter"

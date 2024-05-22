@@ -1,6 +1,9 @@
 package common
 
 import (
+	"errors"
+	"os"
+
 	"github.com/spf13/viper"
 )
 
@@ -23,23 +26,32 @@ func LoadConfigs(pathToConfig string) {
 	// RPC endpoint only. Fails if others are not set
 	viper.SetDefault("rpc_endpoint", RpcEndpoint)
 
-	//Others
+	//Tweaks
 	viper.SetDefault("tweaks_only", false)
+	viper.SetDefault("tweaks_full_basic", true)
+	viper.SetDefault("tweaks_full_with_dust_filter", false)
+	viper.SetDefault("tweaks_cut_through_with_dust_filter", false)
 
 	/* read and set config variables */
+	// General
+	SyncStartHeight = viper.GetUint32("sync_start_height")
 	Host = viper.GetString("host")
 
+	// Performance
 	MaxParallelRequests = viper.GetUint16("max_parallel_requests")
 	MaxParallelTweakComputations = viper.GetInt("max_parallel_tweak_computations")
 
+	// RPC
 	RpcEndpoint = viper.GetString("rpc_endpoint")
 	CookiePath = viper.GetString("cookie_path")
 	RpcPass = viper.GetString("rpc_pass")
 	RpcUser = viper.GetString("rpc_user")
 
-	SyncStartHeight = viper.GetUint32("sync_start_height")
-
+	// Tweaks
 	TweaksOnly = viper.GetBool("tweaks_only")
+	TweakIndexFullNoDust = viper.GetBool("tweaks_full_basic")
+	TweakIndexFullIncludingDust = viper.GetBool("tweaks_full_with_dust_filter")
+	TweaksCutThroughWithDust = viper.GetBool("tweaks_cut_through_with_dust_filter")
 
 	chainInput := viper.GetString("chain")
 
@@ -54,5 +66,22 @@ func LoadConfigs(pathToConfig string) {
 		Chain = Testnet3
 	default:
 		panic("chain undefined")
+	}
+
+	// todo print settings
+	InfoLogger.Printf("tweaks_only: %t\n", TweaksOnly)
+	InfoLogger.Printf("tweaks_full_basic: %t\n", TweakIndexFullNoDust)
+	InfoLogger.Printf("tweaks_full_with_dust_filter: %t\n", TweakIndexFullIncludingDust)
+	InfoLogger.Printf("tweaks_cut_through_with_dust_filter: %t\n", TweaksCutThroughWithDust)
+
+	if !TweakIndexFullNoDust && !TweakIndexFullIncludingDust && !TweaksCutThroughWithDust {
+		WarningLogger.Println("no tweaks are being collected, all tweak settings were set to 0")
+		WarningLogger.Println("make sure your configuration loaded correctly, check example blindbit.toml for configuration")
+	}
+
+	if TweaksCutThroughWithDust && TweaksOnly {
+		err := errors.New("cut through requires tweaks_only to be set to 1")
+		ErrorLogger.Println(err)
+		os.Exit(1)
 	}
 }

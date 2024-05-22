@@ -7,7 +7,11 @@ matches [other implementations](https://github.com/bitcoin/bitcoin/pull/28241#is
 
 ## Setup
 
-The installation process is still very manual. Will be improved based on feedback and new findings.
+The installation process is still very manual. Will be improved based on feedback and new findings. It is advised to look at the example [blindbit.toml](blindbit.example.toml). As new config options appear they will be listed and explained there.
+
+## Breaking changes
+
+- Endpoints were expanded and have a slightly different syntax now [see endpoints](#endpoints)
 
 ### Requirements
 
@@ -39,9 +43,11 @@ $ <path/to/new/binary/file> --datadir <path/to/datadir/with/blindbit.toml>
 Note that the program will automatically default `--datadir` to `~/.blindbit-oracle` if not set.
 You still have to set up a config file in any case as the rpc users can't and **should** not be defaulted.
 
+You can now also decide which index you want to run. This setting can be set in the config file (blindbit.toml).
+
 ## Known Errors
 
-All known errors resolved.
+No known issues.
 
 ## Todos
 
@@ -69,6 +75,8 @@ All known errors resolved.
 - [ ] Remove unnecessary panics.
 - [ ] Convert hardcoded serialisation assertions into constants (?)
 - [x] Use x-only 32 byte public keys instead of scriptPubKey
+- [ ] Don't create all DBs by default, only those which are needed and activated
+- [ ] Check import paths (SilentPaymentBackend/.../...)
 
 ### Low Priority
 
@@ -80,8 +88,10 @@ All known errors resolved.
 ```text
 GET("/block-height")  // returns the height of the indexing server
 GET("/tweaks/:blockheight?dustLimit=<sat_amount>")  // returns tweak data (cut-through); optional parameter dustLimit can be omitted; filtering happens per request, so virtually any amount can be specified
-GET("/tweak-index/:blockheight")  // returns the full tweak index (no cut-through)
-GET("/filter/:blockheight") // returns a custom taproot only filter (the underlying data is subject to change; changing scriptPubKey to x-only pubKey) 
+GET("/tweak-index/:blockheight?dustLimit=<sat_amount>")  // returns the full tweak index (no cut-through); optional parameter dustLimit can be omitted; filtering happens per request, so virtually any amount can be specified
+GET("/spent-index/:blockheight")  // returns the spent outpoints index (see https://github.com/setavenger/BIP0352-light-client-specification?tab=readme-ov-file#spent-utxos)
+GET("/filter/spent/:blockheight") // returns a filter for shortened spent outpoint hashes (see https://github.com/setavenger/BIP0352-light-client-specification?tab=readme-ov-file#filters)
+GET("/filter/new-utxos/:blockheight") // returns a custom taproot only filter of x-only pubkey which received funds
 GET("/utxos/:blockheight")  // UTXO data for that block (cut down to the essentials needed to spend)
 ```
 

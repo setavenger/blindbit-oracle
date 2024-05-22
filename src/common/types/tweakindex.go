@@ -11,9 +11,9 @@ import (
 // there is no transaction cut-through, so it will keep a full history.
 // The tweaks will most likely not be sorted in any meaningful way and have no metadata attached.
 type TweakIndex struct {
-	BlockHash   string     `json:"block_hash"`
-	BlockHeight uint32     `json:"block_height"`
-	Data        [][33]byte `json:"data"`
+	BlockHash   string                  `json:"block_hash"`
+	BlockHeight uint32                  `json:"block_height"`
+	Data        [][TweakDataLength]byte `json:"data"`
 }
 
 func PairFactoryTweakIndex() Pair {
@@ -29,7 +29,7 @@ func (v *TweakIndex) SerialiseKey() ([]byte, error) {
 func (v *TweakIndex) SerialiseData() ([]byte, error) {
 
 	// todo can this be made more efficiently?
-	totalLength := len(v.Data) * 33
+	totalLength := len(v.Data) * TweakDataLength
 	flattened := make([]byte, 0, totalLength)
 
 	for _, byteArray := range v.Data {
@@ -51,27 +51,31 @@ func (v *TweakIndex) DeSerialiseKey(key []byte) error {
 }
 
 func (v *TweakIndex) DeSerialiseData(data []byte) error {
-	if len(data)%33 != 0 {
+	if len(data)%TweakDataLength != 0 {
 		common.ErrorLogger.Printf("wrong data length: %+v", data)
 		return errors.New("data is wrong length. should not happen")
 	}
 
-	numArrays := len(data) / 33
-	v.Data = make([][33]byte, numArrays)
+	numArrays := len(data) / TweakDataLength
+	v.Data = make([][TweakDataLength]byte, numArrays)
 	// Iterate and copy segments from the flat slice into the new array of arrays
 	for i := 0; i < numArrays; i++ {
-		copy(v.Data[i][:], data[i*33:(i+1)*33])
+		copy(v.Data[i][:], data[i*TweakDataLength:(i+1)*TweakDataLength])
 	}
 	return nil
 }
 
 // TweakIndexFromTweakArray builds a TweakIndex from a slice of Tweak
 // comes without blockHash or height
-func TweakIndexFromTweakArray(tweaks []Tweak) *TweakIndex {
+func TweakIndexFromTweakArray(tweaksMap map[string]Tweak, block *Block) *TweakIndex {
+	// todo benchmark the sorting, should not create too much overhead,
+	//  seems more like a nice to have for comparisons across implementations
 	var index TweakIndex
 	// can only panic hence no error output
-	for _, tweak := range tweaks {
-		index.Data = append(index.Data, tweak.Data)
+	for _, tx := range block.Txs {
+		if tweak, exists := tweaksMap[tx.Txid]; exists {
+			index.Data = append(index.Data, tweak.TweakData)
+		}
 	}
 	return &index
 }
@@ -84,7 +88,7 @@ func (v *TweakIndex) ToTweakArray() (tweaks []Tweak) {
 			BlockHash:   v.BlockHash,
 			BlockHeight: v.BlockHeight,
 			Txid:        "",
-			Data:        data,
+			TweakData:   data,
 		})
 	}
 	return

@@ -25,6 +25,7 @@ var (
 	NewUTXOsFiltersDB      *leveldb.DB
 	TweaksDB               *leveldb.DB
 	TweakIndexDB           *leveldb.DB
+	TweakIndexDustDB       *leveldb.DB
 	UTXOsDB                *leveldb.DB
 	SpentOutpointsIndexDB  *leveldb.DB
 	SpentOutpointsFilterDB *leveldb.DB

@@ -52,12 +52,9 @@ func ComputeTweaksForBlockV4(block *types.Block) ([]types.Tweak, error) {
 							break
 						}
 						if tweakPerTx != nil {
-							resultsChannel <- types.Tweak{
-								BlockHash:   block.Hash,
-								BlockHeight: block.Height,
-								Txid:        tx.Txid,
-								Data:        *tweakPerTx,
-							}
+							tweakPerTx.BlockHash = block.Hash
+							tweakPerTx.BlockHeight = block.Height
+							resultsChannel <- *tweakPerTx
 						}
 						break
 					}
@@ -140,12 +137,10 @@ func ComputeTweaksForBlockV3(block *types.Block) ([]types.Tweak, error) {
 							break
 						}
 						if tweakPerTx != nil {
-							localTweaks = append(localTweaks, types.Tweak{
-								BlockHash:   block.Hash,
-								BlockHeight: block.Height,
-								Txid:        _tx.Txid,
-								Data:        *tweakPerTx,
-							})
+							tweakPerTx.BlockHash = block.Hash
+							tweakPerTx.BlockHeight = block.Height
+
+							localTweaks = append(localTweaks, *tweakPerTx)
 						}
 						break
 					}
@@ -208,13 +203,11 @@ func ComputeTweaksForBlockV2(block *types.Block) ([]types.Tweak, error) {
 					// they are not supposed to throw an error
 					// but also don't have a tweak that can be computed
 					if tweakPerTx != nil {
+						tweakPerTx.BlockHash = block.Hash
+						tweakPerTx.BlockHeight = block.Height
+
 						muTweaks.Lock()
-						tweaks = append(tweaks, types.Tweak{
-							BlockHash:   block.Hash,
-							BlockHeight: block.Height,
-							Txid:        _tx.Txid,
-							Data:        *tweakPerTx,
-						})
+						tweaks = append(tweaks, *tweakPerTx)
 						muTweaks.Unlock()
 					}
 					break
@@ -245,12 +238,9 @@ func ComputeTweaksForBlockV1(block *types.Block) ([]types.Tweak, error) {
 				// they are not supposed to throw an error
 				// but also don't have a tweak that can be computed
 				if tweakPerTx != nil {
-					tweaks = append(tweaks, types.Tweak{
-						BlockHash:   block.Hash,
-						BlockHeight: block.Height,
-						Txid:        tx.Txid,
-						Data:        *tweakPerTx,
-					})
+					tweakPerTx.BlockHash = block.Hash
+					tweakPerTx.BlockHeight = block.Height
+					tweaks = append(tweaks, *tweakPerTx)
 				}
 				break
 			}
@@ -260,7 +250,7 @@ func ComputeTweaksForBlockV1(block *types.Block) ([]types.Tweak, error) {
 	return tweaks, nil
 }
 
-func ComputeTweakPerTx(tx types.Transaction) (*[33]byte, error) {
+func ComputeTweakPerTx(tx types.Transaction) (*types.Tweak, error) {
 	//common.DebugLogger.Println("computing tweak for:", tx.Txid)
 	pubKeys := extractPubKeys(tx)
 	if pubKeys == nil {
@@ -302,7 +292,36 @@ func ComputeTweakPerTx(tx types.Transaction) (*[33]byte, error) {
 	tweakBytes := [33]byte{}
 	copy(tweakBytes[:], decodedString)
 
-	return &tweakBytes, nil
+	highestValue, err := FindBiggestOutputFromTx(tx)
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return nil, err
+	}
+
+	tweak := types.Tweak{
+		Txid:         tx.Txid,
+		TweakData:    tweakBytes,
+		HighestValue: highestValue,
+	}
+
+	return &tweak, nil
+}
+
+func FindBiggestOutputFromTx(tx types.Transaction) (uint64, error) {
+	var biggest uint64
+
+	for _, output := range tx.Vout {
+		valueOutput := common.ConvertFloatBTCtoSats(output.Value)
+		if valueOutput > biggest {
+			biggest = valueOutput
+		}
+	}
+
+	if biggest == 0 {
+		common.WarningLogger.Printf("Highest value was 0 txid: %s", tx.Txid)
+	}
+
+	return biggest, nil
 }
 
 func extractPubKeys(tx types.Transaction) []string {

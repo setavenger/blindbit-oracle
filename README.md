@@ -43,7 +43,7 @@ You can now also decide which index you want to run. This setting can be set in 
 
 ## Known Errors
 
-All known errors resolved.
+No known issues.
 
 ## Todos
 

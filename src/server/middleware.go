@@ -32,7 +32,7 @@ func FetchHeaderInvMiddleware(c *gin.Context) {
 		c.Abort()
 		return
 	}
-	common.InfoLogger.Printf("%v\n", headerInv)
+
 	// Store headerInv in Gin context
 	c.Set("headerInv", headerInv)
 	c.Next()

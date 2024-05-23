@@ -129,6 +129,6 @@ func SerialiseToOutpoint(utxo types.UTXO) ([]byte, error) {
 	// err is always nil
 	buf.Write(common.ReverseBytes(txidBytes))
 
-	binary.Write(&buf, binary.LittleEndian, utxo.Value)
+	binary.Write(&buf, binary.LittleEndian, utxo.Vout)
 	return buf.Bytes(), err
 }

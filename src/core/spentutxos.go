@@ -28,7 +28,7 @@ func BuildSpentUTXOIndex(utxos []types.UTXO, block *types.Block) (types.SpentOut
 			return types.SpentOutpointsIndex{}, err
 		}
 
-		hashedOutpoint := sha256.Sum256(append(outpoint, common.ReverseBytes(blockHashBytes)...))
+		hashedOutpoint := sha256.Sum256(append(outpoint, blockHashBytes...))
 		spentOutpointsIndex.Data = append(spentOutpointsIndex.Data, [types.LenOutpointHashShort]byte(hashedOutpoint[:]))
 	}
 

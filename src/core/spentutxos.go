@@ -15,6 +15,9 @@ func BuildSpentUTXOIndex(utxos []types.UTXO, block *types.Block) (types.SpentOut
 		return types.SpentOutpointsIndex{}, err
 	}
 
+	// reverse byte order to make little endian
+	blockHashBytes = common.ReverseBytes(blockHashBytes)
+
 	spentOutpointsIndex := types.SpentOutpointsIndex{
 		BlockHash:   block.Hash,
 		BlockHeight: block.Height,

@@ -37,7 +37,7 @@ func markSpentUTXOsAndTweaks(utxos []types.UTXO) error {
 	if len(utxos) == 0 {
 		if common.Chain == common.Mainnet {
 			// no warnings on other chains as it is very likely to not have any taproot outputs for several blocks on end
-			common.WarningLogger.Println("no utxos to mark as spent")
+			common.DebugLogger.Println("no utxos to mark as spent")
 		}
 		return nil
 	}
@@ -87,13 +87,26 @@ func markSpentUTXOsAndTweaks(utxos []types.UTXO) error {
 			common.ErrorLogger.Println(err)
 			return err
 		} else if err != nil && errors.Is(err, dblevel.NoEntryErr{}) {
-			//	if no UTXOs are left for a certain blockHash-txid combination we can remove the tweak
+			// this case should not even occur at this stage as utxos are not deleted before this query and are only marked as spent
+			common.DebugLogger.Printf("txid: %x\n", utxo.Txid)
+			common.DebugLogger.Println("no UTXOs were found for transaction")
+			continue
+		}
+		var canBeRemoved = true
+		for _, utxo := range remainingUTXOs {
+			if !utxo.Spent {
+				canBeRemoved = false
+				break
+			}
+		}
+		if canBeRemoved {
 			tweaksToDelete = append(tweaksToDelete, types.Tweak{
 				// we only need those Fields to serialise the key
 				BlockHash: utxo.BlockHash,
 				Txid:      utxo.Txid,
 			})
 			continue
+
 		}
 		var newBiggest *uint64
 		newBiggest, err = types.FindBiggestRemainingUTXO(utxo, remainingUTXOs)

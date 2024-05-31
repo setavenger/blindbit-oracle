@@ -133,13 +133,17 @@ func main() {
 			common.ErrorLogger.Fatalln(err)
 			return
 		}
+
+		// so we can start fetching data while not fully synced. Requires headers to be synced to avoid grave errors.
+		go server.RunServer(&server.ApiHandler{})
+
 		// todo buggy for sync catchup from 0, needs to be 1 or higher
 		err = core.SyncChain()
 		if err != nil {
 			common.ErrorLogger.Fatalln(err)
 			return
 		}
-		common.InfoLogger.Printf("Sync took: %s", time.Now().Sub(startSync).String())
+		common.InfoLogger.Printf("Sync took: %s", time.Since(startSync).String())
 		go core.CheckForNewBlockRoutine()
 
 		// only call this if you need to reindex. It doesn't delete anything but takes a couple of minutes to finish
@@ -149,15 +153,12 @@ func main() {
 		//	return
 		//}
 
-		go server.RunServer(&server.ApiHandler{})
 	}()
 
 	for {
-		select {
-		case <-interrupt:
-			common.InfoLogger.Println("Program interrupted")
-			return
-		}
+		<-interrupt
+		common.InfoLogger.Println("Program interrupted")
+		return
 	}
 }
 

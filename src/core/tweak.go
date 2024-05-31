@@ -8,10 +8,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/btcsuite/btcd/btcec/v2"
 	"math/big"
 	"sort"
 	"sync"
+
+	"github.com/btcsuite/btcd/btcec/v2"
 )
 
 func ComputeTweaksForBlock(block *types.Block) ([]types.Tweak, error) {
@@ -311,6 +312,9 @@ func FindBiggestOutputFromTx(tx types.Transaction) (uint64, error) {
 	var biggest uint64
 
 	for _, output := range tx.Vout {
+		if output.ScriptPubKey.Type != "witness_v1_taproot" {
+			continue
+		}
 		valueOutput := common.ConvertFloatBTCtoSats(output.Value)
 		if valueOutput > biggest {
 			biggest = valueOutput
@@ -318,7 +322,9 @@ func FindBiggestOutputFromTx(tx types.Transaction) (uint64, error) {
 	}
 
 	if biggest == 0 {
-		common.WarningLogger.Printf("Highest value was 0 txid: %s", tx.Txid)
+		common.DebugLogger.Printf("%+v\n", tx)
+		common.ErrorLogger.Printf("Highest value was 0 txid: %s", tx.Txid)
+		// panic("highest value was 0") // This should not happen, but we don't kill the program
 	}
 
 	return biggest, nil

@@ -35,8 +35,8 @@ func (t TweakData) Tweak() [33]byte {
 }
 
 func PairFactoryTweakIndexDust() Pair {
-	var filter Pair = &TweakIndexDust{}
-	return filter
+	var pair Pair = &TweakIndexDust{}
+	return pair
 }
 
 const lengthDataTweakIndexDust = TweakDataLength + 8

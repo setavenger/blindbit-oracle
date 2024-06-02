@@ -14,6 +14,7 @@ import (
 	"sync"
 
 	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/setavenger/go-bip352"
 )
 
 func ComputeTweaksForBlock(block *types.Block) ([]types.Tweak, error) {
@@ -482,12 +483,7 @@ func sumPublicKeys(pubKeys []string) (*btcec.PublicKey, error) {
 		} else {
 			x, y := curve.Add(lastPubKey.X(), lastPubKey.Y(), publicKey.X(), publicKey.Y())
 
-			pubkeyBytes := make([]byte, 65)
-			pubkeyBytes[0] = 0x04
-			x.FillBytes(pubkeyBytes[1:33])
-			y.FillBytes(pubkeyBytes[33:])
-
-			lastPubKey, err = btcec.ParsePubKey(pubkeyBytes)
+			lastPubKey, err = bip352.ConvertPointsToPublicKey(x, y)
 			if err != nil {
 				common.ErrorLogger.Println(err)
 				return nil, err

@@ -287,24 +287,15 @@ func ComputeTweakPerTx(tx types.Transaction) (*types.Tweak, error) {
 
 	x, y := curve.ScalarMult(summedKey.X(), summedKey.Y(), hash[:])
 
-	// sometimes an uneven number hex string is returned, so we have to pad the zeros
-	s := fmt.Sprintf("%x", x)
-	s = fmt.Sprintf("%064s", s)
+	tweakBytes := [33]byte{}
 	mod := y.Mod(y, big.NewInt(2))
 	if mod.Cmp(big.NewInt(0)) == 0 {
-		s = "02" + s
+		tweakBytes[0] = 0x02
 	} else {
-		s = "03" + s
+		tweakBytes[0] = 0x03
 	}
 
-	decodedString, err := hex.DecodeString(s)
-
-	if err != nil {
-		common.ErrorLogger.Println(err)
-		return nil, err
-	}
-	tweakBytes := [33]byte{}
-	copy(tweakBytes[:], decodedString)
+	x.FillBytes(tweakBytes[1:])
 
 	highestValue, err := FindBiggestOutputFromTx(tx)
 	if err != nil {
@@ -353,7 +344,7 @@ func extractPubKeys(tx types.Transaction) []string {
 		switch vin.Prevout.ScriptPubKey.Type {
 		case "witness_v1_taproot":
 			// todo needs some extra parsing see reference implementation and bitcoin core wallet
-			pubKey, err := extractPubKeyHashFromP2TR(vin)
+			pubKey, err := extractPubKeyFromP2TR(vin)
 			if err != nil {
 				common.DebugLogger.Println("txid:", tx.Txid)
 				common.DebugLogger.Println("Could not extract public key")
@@ -428,7 +419,7 @@ func extractFromP2PKH(vin types.Vin) ([]byte, error) {
 	return nil, nil
 }
 
-func extractPubKeyHashFromP2TR(vin types.Vin) (string, error) {
+func extractPubKeyFromP2TR(vin types.Vin) (string, error) {
 	witnessStack := vin.Txinwitness
 
 	if len(witnessStack) >= 1 {
@@ -489,21 +480,14 @@ func sumPublicKeys(pubKeys []string) (*btcec.PublicKey, error) {
 		if idx == 0 {
 			lastPubKey = publicKey
 		} else {
-			var decodeString []byte
 			x, y := curve.Add(lastPubKey.X(), lastPubKey.Y(), publicKey.X(), publicKey.Y())
 
-			// in case big int omits leading zero
-			sX := fmt.Sprintf("%x", x)
-			sY := fmt.Sprintf("%x", y)
-			sX = fmt.Sprintf("%064s", sX)
-			sY = fmt.Sprintf("%064s", sY)
-			decodeString, err = hex.DecodeString(fmt.Sprintf("04%s%s", sX, sY))
-			if err != nil {
-				common.ErrorLogger.Println(err)
-				return nil, err
-			}
+			pubkeyBytes := make([]byte, 65)
+			pubkeyBytes[0] = 0x04
+			x.FillBytes(pubkeyBytes[1:33])
+			y.FillBytes(pubkeyBytes[33:])
 
-			lastPubKey, err = btcec.ParsePubKey(decodeString)
+			lastPubKey, err = btcec.ParsePubKey(pubkeyBytes)
 			if err != nil {
 				common.ErrorLogger.Println(err)
 				return nil, err

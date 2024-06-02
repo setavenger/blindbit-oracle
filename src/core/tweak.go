@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"math/big"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/btcsuite/btcd/btcec/v2"
@@ -155,6 +156,10 @@ func ComputeTweaksForBlockV3(block *types.Block) ([]types.Tweak, error) {
 		}(batch)
 	}
 
+	if errG != nil {
+		panic(errG)
+	}
+
 	wg.Wait()
 	return tweaks, nil
 }
@@ -217,11 +222,15 @@ func ComputeTweaksForBlockV2(block *types.Block) ([]types.Tweak, error) {
 		}(tx)
 	}
 
+	if errG != nil {
+		panic(errG)
+	}
 	wg.Wait()
 	//common.InfoLogger.Println("Tweaks computed...")
 	return tweaks, nil
 }
 
+// Deprecated: slowest of them all, do not use anywhere
 func ComputeTweaksForBlockV1(block *types.Block) ([]types.Tweak, error) {
 	//common.InfoLogger.Println("Computing tweaks...")
 	var tweaks []types.Tweak
@@ -260,6 +269,10 @@ func ComputeTweakPerTx(tx types.Transaction) (*types.Tweak, error) {
 	}
 	summedKey, err := sumPublicKeys(pubKeys)
 	if err != nil {
+		if strings.Contains(err.Error(), "not on secp256k1 curve") {
+			common.WarningLogger.Println(err)
+			return nil, nil
+		}
 		common.DebugLogger.Println("tx:", tx.Txid)
 		common.ErrorLogger.Println(err)
 		return nil, err
@@ -459,7 +472,6 @@ func sumPublicKeys(pubKeys []string) (*btcec.PublicKey, error) {
 		if err != nil {
 			common.ErrorLogger.Println(err)
 			// todo remove panics
-			panic(err)
 			return nil, err
 		}
 
@@ -471,7 +483,6 @@ func sumPublicKeys(pubKeys []string) (*btcec.PublicKey, error) {
 		publicKey, err := btcec.ParsePubKey(bytesPubKey)
 		if err != nil {
 			common.ErrorLogger.Println(err)
-			panic(err)
 			return nil, err
 		}
 
@@ -489,14 +500,12 @@ func sumPublicKeys(pubKeys []string) (*btcec.PublicKey, error) {
 			decodeString, err = hex.DecodeString(fmt.Sprintf("04%s%s", sX, sY))
 			if err != nil {
 				common.ErrorLogger.Println(err)
-				panic(err)
 				return nil, err
 			}
 
 			lastPubKey, err = btcec.ParsePubKey(decodeString)
 			if err != nil {
 				common.ErrorLogger.Println(err)
-				panic(err)
 				return nil, err
 			}
 		}

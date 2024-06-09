@@ -28,7 +28,7 @@ func FetchHeaderInvMiddleware(c *gin.Context) {
 	headerInv, err := dblevel.FetchByBlockHeightBlockHeaderInv(uint32(height))
 	if err != nil {
 		common.ErrorLogger.Println(err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not fetch header inventory"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not fetch header inv"})
 		c.Abort()
 		return
 	}

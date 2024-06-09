@@ -5,6 +5,7 @@ import (
 	"SilentPaymentAppBackend/src/common/types"
 	"bytes"
 	"encoding/binary"
+
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
@@ -59,7 +60,6 @@ func FetchHighestBlockHeaderInv() (*types.BlockHeaderInv, error) {
 	var result types.BlockHeaderInv
 
 	if iter.Last() {
-		// Deserialize data first
 		err := result.DeSerialiseData(iter.Value())
 		if err != nil {
 			common.ErrorLogger.Println(err)

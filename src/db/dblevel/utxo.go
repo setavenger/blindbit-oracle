@@ -4,10 +4,12 @@ import (
 	"SilentPaymentAppBackend/src/common"
 	"SilentPaymentAppBackend/src/common/types"
 	"errors"
+
+	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
 func InsertUTXOs(utxos []types.UTXO) error {
-	common.DebugLogger.Println("Inserting UTXOs...")
+	// common.DebugLogger.Println("Inserting UTXOs...")
 	// Create a slice of types.Pair with the same length as pairs
 	pairs := make([]types.Pair, len(utxos))
 
@@ -83,7 +85,7 @@ func FetchByBlockHashAndTxidUTXOs(blockHash, txid string) ([]types.UTXO, error) 
 }
 
 func DeleteBatchUTXOs(utxos []types.UTXO) error {
-	common.DebugLogger.Println("Deleting UTXOs...")
+	// common.DebugLogger.Println("Deleting UTXOs...")
 	// Create a slice of types.Pair with the same length as pairs
 	pairs := make([]types.Pair, len(utxos))
 
@@ -124,4 +126,84 @@ func FetchAllUTXOs() ([]types.UTXO, error) {
 		}
 	}
 	return result, err
+}
+
+// PruneUTXOs iterates over a set of utxos according to a prefix (all if set to nil).
+// The function checks whether the utxos are eligible for removal.
+func PruneUTXOs(prefix []byte) error {
+	iter := UTXOsDB.NewIterator(util.BytesPrefix(prefix), nil)
+	defer iter.Release()
+
+	// totalSet is for the final batch deletion
+	var totalSetToDelete []types.UTXO
+
+	var lastTxid string
+	var canBeRemoved = true
+	var currentSet []types.UTXO
+
+	var err error
+
+	for iter.Next() {
+
+		var value types.UTXO
+
+		err = value.DeSerialiseKey(iter.Key())
+		if err != nil {
+			common.ErrorLogger.Println(err)
+			return err
+		}
+
+		if lastTxid == "" {
+			lastTxid = value.Txid
+		}
+
+		if !canBeRemoved && value.Txid == lastTxid {
+			continue
+		}
+
+		err = value.DeSerialiseData(iter.Value())
+		if err != nil {
+			common.ErrorLogger.Println(err)
+			return err
+		}
+
+		if value.Spent {
+			currentSet = append(currentSet, value)
+		} else {
+			canBeRemoved = false
+		}
+
+		if value.Txid != lastTxid {
+			// delete the current set of UTXOs if eligible
+
+			// do deletion
+			if lastTxid != "" && canBeRemoved {
+				totalSetToDelete = append(totalSetToDelete, currentSet...)
+				// common.DebugLogger.Printf("Added %d UTXOs for deletion - %s\n", len(currentSet), lastTxid)
+			}
+
+			// reset state
+			currentSet = nil
+			canBeRemoved = true
+		}
+		lastTxid = value.Txid
+	}
+
+	// Handle the last batch of UTXOs after the loop
+	if canBeRemoved && len(currentSet) > 0 {
+		totalSetToDelete = append(totalSetToDelete, currentSet...)
+		// common.DebugLogger.Printf("Added %d UTXOs for deletion - %s\n", len(currentSet), lastTxid)
+	}
+	err = iter.Error()
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return err
+	}
+
+	err = DeleteBatchUTXOs(totalSetToDelete)
+	if err != nil {
+		common.ErrorLogger.Println(err)
+		return err
+	}
+	return nil
 }

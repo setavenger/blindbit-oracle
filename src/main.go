@@ -12,7 +12,6 @@ import (
 	"log"
 	"path"
 
-	//_ "net/http/pprof" // Import for side effects: registers pprof handlers with the default mux.
 	"os"
 	"os/signal"
 	"strings"
@@ -21,17 +20,16 @@ import (
 
 var (
 	displayVersion bool
+	pruneOnStart   bool
+	exportData     bool
 	Version        = "0.0.0"
 )
 
 func init() {
-	// for profiling or testing iirc
-	//go func() {
-	//	log.Println(http.ListenAndServe("localhost:6060", nil))
-	//}()
-
 	flag.StringVar(&common.BaseDirectory, "datadir", common.DefaultBaseDirectory, "Set the base directory for blindbit oracle. Default directory is ~/.blindbit-oracle")
 	flag.BoolVar(&displayVersion, "version", false, "show version of blindbit-oracle")
+	flag.BoolVar(&pruneOnStart, "reprune", false, "set this flag if you want to prune on startup")
+	flag.BoolVar(&exportData, "export-data", false, "export the databases")
 	flag.Parse()
 
 	if displayVersion {
@@ -123,10 +121,20 @@ func main() {
 	// make sure everything is ready before we receive data
 
 	//todo create proper handling for exporting data
-	//exportAll()
+
+	if exportData {
+		common.InfoLogger.Println("Exporting data")
+		dataexport.ExportUTXOs(fmt.Sprintf("%s/export/utxos.csv", common.BaseDirectory))
+		return
+	}
 
 	//moved into go routine such that the interrupt signal will apply properly
 	go func() {
+		if pruneOnStart {
+			startPrune := time.Now()
+			core.PruneAllUTXOs()
+			common.InfoLogger.Printf("Pruning took: %s", time.Since(startPrune).String())
+		}
 		startSync := time.Now()
 		err := core.PreSyncHeaders()
 		if err != nil {

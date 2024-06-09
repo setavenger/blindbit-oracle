@@ -84,10 +84,12 @@ func PullBlock(blockHash string) (*types.Block, error) {
 
 // CheckBlock checks whether the block hash has already been processed and will process the block if needed
 func CheckBlock(block *types.Block) {
+	// todo add return type error
 	// todo this should fail at the highest instance were its wrapped in,
 	//  fatal made sense here while it only had one use,
 	//  but might not want to exit the program if used in other locations
 	//common.InfoLogger.Println("Processing block:", block.Height)
+	common.DebugLogger.Println("block:", block.Height)
 
 	err := HandleBlock(block)
 	if err != nil {

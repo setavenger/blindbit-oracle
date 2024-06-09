@@ -11,7 +11,7 @@ func overwriteUTXOsWithLookUp(utxos []types.UTXO) error {
 	var utxosToOverwrite []types.UTXO
 
 	for _, utxo := range utxos {
-		fetchedUTXOs, err := dblevel.FetchByBlockHashAndTxidUTXOs(utxo.BlockHash, utxo.Txid)
+		_, err := dblevel.FetchByBlockHashAndTxidUTXOs(utxo.BlockHash, utxo.Txid)
 		if err != nil && !errors.Is(err, dblevel.NoEntryErr{}) {
 			common.ErrorLogger.Println(err)
 			return err
@@ -19,12 +19,30 @@ func overwriteUTXOsWithLookUp(utxos []types.UTXO) error {
 			// we skip if no entry was found. We don't want to insert those
 			continue
 		}
-		// we actually don't have to check the fetched UTXOs. if any utxos were found for this transaction it means that it was eligible.
+		// we actually don't have to check the fetched UTXOs. If any utxos were found for this transaction it means that it was eligible.
 		// hence all taproot utxos have to be present
-		_ = fetchedUTXOs
 		utxosToOverwrite = append(utxosToOverwrite, utxo)
 	}
 	err := dblevel.InsertUTXOs(utxosToOverwrite)
+	alreadyCheckedTxids := make(map[string]struct{})
+	for _, utxo := range utxosToOverwrite {
+		if _, ok := alreadyCheckedTxids[utxo.Txid]; ok {
+			continue
+		}
+		var key []byte
+		key, err = utxo.SerialiseKey()
+		if err != nil {
+			common.ErrorLogger.Println(err)
+			return err
+		}
+		_ = key
+		err = dblevel.PruneUTXOs(key[:64])
+		if err != nil {
+			common.ErrorLogger.Println(err)
+			return err
+		}
+		alreadyCheckedTxids[utxo.Txid] = struct{}{}
+	}
 	if err != nil {
 		common.ErrorLogger.Println(err)
 		return err
@@ -88,7 +106,7 @@ func markSpentUTXOsAndTweaks(utxos []types.UTXO) error {
 			return err
 		} else if err != nil && errors.Is(err, dblevel.NoEntryErr{}) {
 			// this case should not even occur at this stage as utxos are not deleted before this query and are only marked as spent
-			common.DebugLogger.Printf("txid: %x\n", utxo.Txid)
+			common.DebugLogger.Printf("txid: %s\n", utxo.Txid)
 			common.DebugLogger.Println("no UTXOs were found for transaction")
 			continue
 		}
@@ -151,12 +169,11 @@ func ReindexDustLimitsOnly() error {
 	}
 	common.InfoLogger.Println("Reindexing dust limit done")
 	return nil
-
 }
 
-// Prune
-// This function checks the utxo set and deletes all utxos of a transaction where all utxos are marked as spent.
-// it can then also remove the tweak of completely spent transaction
-func Prune() error {
-	return nil
+// PruneUTXOs
+// This function searches the UTXO set for transactions where all UTXOs are marked as spent, and removes those UTXOs.
+func PruneAllUTXOs() error {
+	common.InfoLogger.Println("Pruning All UTXOs")
+	return dblevel.PruneUTXOs(nil)
 }

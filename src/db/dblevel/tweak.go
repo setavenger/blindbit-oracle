@@ -12,7 +12,7 @@ import (
 
 // InsertBatchTweaks index implements cut through and dust
 func InsertBatchTweaks(tweaks []types.Tweak) error {
-	common.DebugLogger.Println("Inserting tweaks...")
+	// common.DebugLogger.Println("Inserting tweaks...")
 	// Create a slice of types.Pair with the same length as pairs
 	pairs := make([]types.Pair, len(tweaks))
 
@@ -45,7 +45,7 @@ func OverWriteTweaks(tweaks []types.Tweak) error {
 			return err // keep this as an error. if this happens we have to know
 		}
 
-		// this will be removed as we still check
+		// this will be removed as we still test, see below
 		if len(pairs) != 1 {
 			// this scenario should never happen. The database should not have >1 entries for one transaction. <1 (0) should give no entry error
 			// prev

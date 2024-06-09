@@ -6,6 +6,7 @@ import (
 	"SilentPaymentAppBackend/src/db/dblevel"
 	"encoding/csv"
 	"encoding/hex"
+	"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -13,6 +14,7 @@ import (
 
 func writeToCSV(path string, records [][]string) error {
 	// Create a new file
+	os.MkdirAll(fmt.Sprintf("%s/export", common.BaseDirectory), 0750)
 	file, err := os.Create(path)
 	if err != nil {
 		log.Fatalf("failed creating file: %s", err)

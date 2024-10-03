@@ -270,7 +270,7 @@ func ComputeTweakPerTx(tx types.Transaction) (*types.Tweak, error) {
 	summedKey, err := sumPublicKeys(pubKeys)
 	if err != nil {
 		if strings.Contains(err.Error(), "not on secp256k1 curve") {
-			common.WarningLogger.Println(err)
+			common.WarningLogger.Println(err, "-", tx.Txid)
 			return nil, nil
 		}
 		common.DebugLogger.Println("tx:", tx.Txid)

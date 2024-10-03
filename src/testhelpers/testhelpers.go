@@ -6,8 +6,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
+	"os"
 	"testing"
 )
 
@@ -91,7 +91,7 @@ func LoadCaseData(t *testing.T) ([]TestCase, error) {
 	filePath := "../test_data/send_and_receive_test_vectors_with_type.json"
 
 	// Read the JSON file
-	data, err := ioutil.ReadFile(filePath)
+	data, err := os.ReadFile(filePath)
 	if err != nil {
 		t.Errorf("Error reading JSON file: %s", err)
 		return nil, err
@@ -109,10 +109,21 @@ func LoadCaseData(t *testing.T) ([]TestCase, error) {
 	return testCases, err
 }
 
-func LoadAndUnmarshalBlockFromFile(filePath string, block *types.Block) error {
-
+func LoadBlockFromFile(filePath string, block *types.Block) error {
 	// Read the JSON file
-	data, err := ioutil.ReadFile(filePath)
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+
+	// Unmarshal the JSON data into the struct
+	return json.Unmarshal(data, &block)
+}
+
+func LoadAndUnmarshalBlockFromFile(filePath string, block *types.Block) error {
+	// Read the JSON file
+	data, err := os.ReadFile(filePath)
 	if err != nil {
 		log.Println(err)
 		return err

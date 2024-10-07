@@ -13,8 +13,7 @@ func LoadConfigs(pathToConfig string) {
 
 	// Handle errors reading the config file
 	if err := viper.ReadInConfig(); err != nil {
-		ErrorLogger.Println("No config file detected", err.Error())
-		return
+		WarningLogger.Println("No config file detected", err.Error())
 	}
 
 	/* set defaults */
@@ -31,6 +30,22 @@ func LoadConfigs(pathToConfig string) {
 	viper.SetDefault("tweaks_full_basic", true)
 	viper.SetDefault("tweaks_full_with_dust_filter", false)
 	viper.SetDefault("tweaks_cut_through_with_dust_filter", false)
+
+	// Bind viper keys to environment variables (optional, for backup)
+	viper.AutomaticEnv()
+	viper.BindEnv("host", "HOST")
+	viper.BindEnv("chain", "CHAIN")
+	viper.BindEnv("rpc_endpoint", "RPC_ENDPOINT")
+	viper.BindEnv("cookie_path", "COOKIE_PATH")
+	viper.BindEnv("rpc_pass", "RPC_PASS")
+	viper.BindEnv("rpc_user", "RPC_USER")
+	viper.BindEnv("sync_start_height", "SYNC_START_HEIGHT")
+	viper.BindEnv("max_parallel_requests", "MAX_PARALLEL_REQUESTS")
+	viper.BindEnv("max_parallel_tweak_computations", "MAX_PARALLEL_TWEAK_COMPUTATIONS")
+	viper.BindEnv("tweaks_only", "TWEAKS_ONLY")
+	viper.BindEnv("tweaks_full_basic", "TWEAKS_FULL_BASIC")
+	viper.BindEnv("tweaks_full_with_dust_filter", "TWEAKS_FULL_WITH_DUST_FILTER")
+	viper.BindEnv("tweaks_cut_through_with_dust_filter", "TWEAKS_CUT_THROUGH_WITH_DUST_FILTER")
 
 	/* read and set config variables */
 	// General
@@ -80,7 +95,7 @@ func LoadConfigs(pathToConfig string) {
 	}
 
 	if TweaksCutThroughWithDust && TweaksOnly {
-		err := errors.New("cut through requires tweaks_only to be set to 1")
+		err := errors.New("cut through requires tweaks_only to be set to 0")
 		ErrorLogger.Println(err)
 		os.Exit(1)
 	}

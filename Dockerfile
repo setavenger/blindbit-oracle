@@ -1,4 +1,3 @@
-
 FROM golang as buildstage
 
 RUN mkdir /app
@@ -14,5 +13,4 @@ COPY --from=buildstage /app/main .
 
 # CA certificates
 COPY --from=buildstage /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-RUN mkdir "logs"
 CMD ["./main"]

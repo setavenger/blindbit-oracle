@@ -45,6 +45,6 @@ tweaks_full_with_dust_filter = 0
 # This index applies cut-through and dust filtering.
 # Beware that it will be stored in addition to any full index (with or without dust) if activated.
 # It has more storage requirements than the simple indices.
-# Currently still requires tweaks_only=1.
+# Currently still requires tweaks_only=0.
 # default: 0
 tweaks_cut_through_with_dust_filter = 0

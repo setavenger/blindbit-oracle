@@ -2,6 +2,8 @@ name: Build and Push Docker Image
 
 on:
   push:
+    branches:
+      - dev
     tags: 
       - 'v*' # Trigger on tags'
 
@@ -9,28 +11,48 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     steps:
-      # Step 1: Checkout the repository code
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # Step 2: Set up QEMU for multi-platform builds
+      - id: commit
+        uses: prompt/actions-commit-hash@v3
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
         with:
           platforms: linux/amd64,linux/arm64
 
-      # Step 3: Set up Docker Buildx
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
-      # Step 4: Log in to Docker Hub
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # Step 5: Build and push the Docker image
+      # Build and push the Docker image (dev)
+      - name: Build and push Docker image (dev)
+        if: github.ref == 'refs/heads/dev'
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: --progress=plain
+          tags: setavenger/blindbit-oracle:dev-${{ steps.commit.outputs.short }} # Use the short SHA to distinguish dev images
+
+      # Build and push the Docker image (tags)
+      - name: Build and push Docker image
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: --progress=plain
+          tags: setavenger/blindbit-oracle:${{ github.ref_name }}
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v4
         with:

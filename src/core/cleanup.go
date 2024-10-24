@@ -8,6 +8,7 @@ import (
 )
 
 func overwriteUTXOsWithLookUp(utxos []types.UTXO) error {
+	common.DebugLogger.Println("overwriting utxos with lookup")
 	var utxosToOverwrite []types.UTXO
 
 	for _, utxo := range utxos {
@@ -35,7 +36,7 @@ func overwriteUTXOsWithLookUp(utxos []types.UTXO) error {
 			common.ErrorLogger.Println(err)
 			return err
 		}
-		_ = key
+
 		err = dblevel.PruneUTXOs(key[:64])
 		if err != nil {
 			common.ErrorLogger.Println(err)
@@ -52,6 +53,7 @@ func overwriteUTXOsWithLookUp(utxos []types.UTXO) error {
 
 // todo construct the subsequent deletion of all utxos per transaction once all per transaction are spent
 func markSpentUTXOsAndTweaks(utxos []types.UTXO) error {
+	common.DebugLogger.Println("marking utxos")
 	if len(utxos) == 0 {
 		if common.Chain == common.Mainnet {
 			// no warnings on other chains as it is very likely to not have any taproot outputs for several blocks on end
@@ -105,9 +107,13 @@ func markSpentUTXOsAndTweaks(utxos []types.UTXO) error {
 			common.ErrorLogger.Println(err)
 			return err
 		} else if err != nil && errors.Is(err, dblevel.NoEntryErr{}) {
-			// this case should not even occur at this stage as utxos are not deleted before this query and are only marked as spent
-			common.DebugLogger.Printf("txid: %s\n", utxo.Txid)
-			common.DebugLogger.Println("no UTXOs were found for transaction")
+			// utxos can be already deleted at this point.
+			// all utxos gone means we can remove the tweak
+			tweaksToDelete = append(tweaksToDelete, types.Tweak{
+				// we only need those Fields to serialise the key
+				BlockHash: utxo.BlockHash,
+				Txid:      utxo.Txid,
+			})
 			continue
 		}
 		var canBeRemoved = true
@@ -124,8 +130,8 @@ func markSpentUTXOsAndTweaks(utxos []types.UTXO) error {
 				Txid:      utxo.Txid,
 			})
 			continue
-
 		}
+
 		var newBiggest *uint64
 		newBiggest, err = types.FindBiggestRemainingUTXO(utxo, remainingUTXOs)
 		if err != nil {

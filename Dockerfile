@@ -1,4 +1,4 @@
-FROM golang as buildstage
+FROM golang AS buildstage
 
 RUN mkdir /app
 ADD . /app

@@ -165,7 +165,7 @@ func (h *ApiHandler) GetTweakDataByHeight(c *gin.Context) {
 		return
 	}
 
-	var serveTweakData []string
+	var serveTweakData = []string{}
 	for _, tweak := range tweaks {
 		serveTweakData = append(serveTweakData, hex.EncodeToString(tweak.TweakData[:]))
 	}
@@ -244,7 +244,7 @@ func (h *ApiHandler) GetTweakIndexDataByHeight(c *gin.Context) {
 			return
 		}
 
-		var serveTweakData []string
+		var serveTweakData = []string{}
 		for _, tweak := range tweakIndex.Data {
 			serveTweakData = append(serveTweakData, hex.EncodeToString(tweak[:]))
 		}

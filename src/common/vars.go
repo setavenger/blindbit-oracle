@@ -105,3 +105,19 @@ func HeaderMustSyncHeight() uint32 {
 		return 1
 	}
 }
+
+func ChainToString(c chain) string {
+	switch Chain {
+	case Mainnet:
+		return "main"
+	case Signet:
+		return "signet"
+	case Regtest:
+		return "regtest"
+	case Testnet3:
+		return "testnet"
+	default:
+		panic("chain not defined")
+	}
+
+}

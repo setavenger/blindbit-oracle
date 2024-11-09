@@ -86,6 +86,7 @@ No known issues.
 ## Endpoints
 
 ```text
+GET("/info")  // returns basic information about the oracle instance
 GET("/block-height")  // returns the height of the indexing server
 GET("/tweaks/:blockheight?dustLimit=<sat_amount>")  // returns tweak data (cut-through); optional parameter dustLimit can be omitted; filtering happens per request, so virtually any amount can be specified
 GET("/tweak-index/:blockheight?dustLimit=<sat_amount>")  // returns the full tweak index (no cut-through); optional parameter dustLimit can be omitted; filtering happens per request, so virtually any amount can be specified

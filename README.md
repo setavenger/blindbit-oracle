@@ -21,7 +21,7 @@ The installation process is still very manual. Will be improved based on feedbac
       You might also want to allow more rpc workers on your node to speed things up.
 - Processing a block takes ~100ms-300ms
 - Disk space (~10Gb)
-- go 1.20 installed
+- go 1.21 installed
 
 ### Build
 

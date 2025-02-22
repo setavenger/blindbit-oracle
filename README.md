@@ -13,7 +13,7 @@ The installation process is still very manual. Will be improved based on feedbac
 
 - Endpoints were expanded and have a slightly different syntax now [see endpoints](#endpoints)
 
-### Requirements
+## Requirements
 
 - RPC access to a bitcoin full node
     - unpruned because we need the prevouts for every transaction in the block with a taproot output
@@ -44,10 +44,6 @@ Note that the program will automatically default `--datadir` to `~/.blindbit-ora
 You still have to set up a config file in any case as the rpc users can't and **should** not be defaulted.
 
 You can now also decide which index you want to run. This setting can be set in the config file (blindbit.toml).
-
-## Known Errors
-
-No known issues.
 
 ## Todos
 
@@ -88,6 +84,7 @@ No known issues.
 ```text
 GET("/info")  // returns basic information about the oracle instance
 GET("/block-height")  // returns the height of the indexing server
+GET("/block-hash/:blockheight")  // returns the block-hash for a certain block-height
 GET("/tweaks/:blockheight?dustLimit=<sat_amount>")  // returns tweak data (cut-through); optional parameter dustLimit can be omitted; filtering happens per request, so virtually any amount can be specified
 GET("/tweak-index/:blockheight?dustLimit=<sat_amount>")  // returns the full tweak index (no cut-through); optional parameter dustLimit can be omitted; filtering happens per request, so virtually any amount can be specified
 GET("/spent-index/:blockheight")  // returns the spent outpoints index (see https://github.com/setavenger/BIP0352-light-client-specification?tab=readme-ov-file#spent-utxos)

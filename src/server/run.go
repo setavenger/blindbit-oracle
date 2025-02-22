@@ -22,6 +22,7 @@ func RunServer(api *ApiHandler) {
 
 	router.GET("/info", api.GetInfo)
 	router.GET("/block-height", api.GetBestBlockHeight)
+	router.GET("/block-hash/:blockheight", FetchHeaderInvMiddleware, api.GetBlockHashByHeight)
 	router.GET("/tweaks/:blockheight", FetchHeaderInvMiddleware, api.GetTweakDataByHeight)
 	router.GET("/tweak-index/:blockheight", FetchHeaderInvMiddleware, api.GetTweakIndexDataByHeight)
 	router.GET("/filter/:type/:blockheight", FetchHeaderInvMiddleware, api.GetCFilterByHeight)

@@ -8,7 +8,6 @@ import (
 	"SilentPaymentAppBackend/src/server"
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"path"
 
@@ -49,22 +48,22 @@ func init() {
 		log.Fatal(err)
 	}
 
-	file, err := os.OpenFile(fmt.Sprintf("%s/logs.log", common.LogsPath), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
-	if err != nil {
-		log.Fatal(err)
-	}
-	fileDebug, err := os.OpenFile(fmt.Sprintf("%s/logs-debug.log", common.LogsPath), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
-	if err != nil {
-		log.Fatal(err)
-	}
+	// file, err := os.OpenFile(fmt.Sprintf("%s/logs.log", common.LogsPath), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+	// fileDebug, err := os.OpenFile(fmt.Sprintf("%s/logs-debug.log", common.LogsPath), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
 
-	multi := io.MultiWriter(file, os.Stdout)
+	// multi := io.MultiWriter(file, os.Stdout)
 	//multiDebug := io.MultiWriter(fileDebug, os.Stdout)
 
-	common.DebugLogger = log.New(fileDebug, "[DEBUG] ", log.Ldate|log.Lmicroseconds|log.Lshortfile|log.Lmsgprefix)
-	common.InfoLogger = log.New(multi, "[INFO] ", log.Ldate|log.Lmicroseconds|log.Lshortfile|log.Lmsgprefix)
-	common.WarningLogger = log.New(multi, "[WARNING] ", log.Ldate|log.Lmicroseconds|log.Lshortfile|log.Lmsgprefix)
-	common.ErrorLogger = log.New(multi, "[ERROR] ", log.Ldate|log.Lmicroseconds|log.Llongfile|log.Lmsgprefix)
+	// common.DebugLogger = log.New(fileDebug, "[DEBUG] ", log.Ldate|log.Lmicroseconds|log.Lshortfile|log.Lmsgprefix)
+	// common.InfoLogger = log.New(multi, "[INFO] ", log.Ldate|log.Lmicroseconds|log.Lshortfile|log.Lmsgprefix)
+	// common.WarningLogger = log.New(multi, "[WARNING] ", log.Ldate|log.Lmicroseconds|log.Lshortfile|log.Lmsgprefix)
+	// common.ErrorLogger = log.New(multi, "[ERROR] ", log.Ldate|log.Lmicroseconds|log.Llongfile|log.Lmsgprefix)
 
 	common.InfoLogger.Println("base directory", common.BaseDirectory)
 

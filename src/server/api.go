@@ -62,6 +62,21 @@ func (h *ApiHandler) GetBestBlockHeight(c *gin.Context) {
 	})
 }
 
+func (h *ApiHandler) GetBlockHashByHeight(c *gin.Context) {
+	headerInv, exists := c.Get("headerInv")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "headerInv not found"})
+		return
+	}
+	hInv, ok := headerInv.(types.BlockHeaderInv) // Assuming HeaderInventory is the expected type
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid headerInv type"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"block_hash": hInv.Hash})
+}
+
 func (h *ApiHandler) GetCFilterByHeight(c *gin.Context) {
 	headerInv, exists := c.Get("headerInv")
 	if !exists {

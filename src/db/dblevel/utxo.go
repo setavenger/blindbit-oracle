@@ -99,7 +99,7 @@ func DeleteBatchUTXOs(utxos []types.UTXO) error {
 		common.ErrorLogger.Println(err)
 		return err
 	}
-	common.DebugLogger.Printf("Deleted %d UTXOs\n", len(utxos))
+	// common.DebugLogger.Printf("Deleted %d UTXOs\n", len(utxos))
 	return nil
 }
 

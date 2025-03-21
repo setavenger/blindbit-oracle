@@ -43,7 +43,7 @@ jobs:
           tags: setavenger/blindbit-oracle:dev-${{ steps.commit.outputs.short }} # Use the short SHA to distinguish dev images
 
       # Build and push the Docker image (tags)
-      - name: Build and push Docker image
+      - name: Build and push Docker image (tags)
         if: startsWith(github.ref, 'refs/tags/')
         uses: docker/build-push-action@v4
         with:
@@ -61,5 +61,3 @@ jobs:
           push: true
           build-args: --progress=plain
           tags: setavenger/blindbit-oracle:${{ github.ref_name }}
-
-

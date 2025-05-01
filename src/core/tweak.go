@@ -1,8 +1,6 @@
 package core
 
 import (
-	"SilentPaymentAppBackend/src/common"
-	"SilentPaymentAppBackend/src/common/types"
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
@@ -12,6 +10,9 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/setavenger/blindbit-oracle/src/common"
+	"github.com/setavenger/blindbit-oracle/src/common/types"
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/setavenger/go-bip352"

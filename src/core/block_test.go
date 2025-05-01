@@ -1,11 +1,12 @@
 package core
 
 import (
-	"SilentPaymentAppBackend/src/common/types"
-	"SilentPaymentAppBackend/src/testhelpers"
 	"fmt"
 	"log"
 	"testing"
+
+	"github.com/setavenger/blindbit-oracle/src/common/types"
+	"github.com/setavenger/blindbit-oracle/src/testhelpers"
 )
 
 func TestBlockAnalysis(t *testing.T) {

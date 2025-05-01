@@ -1,10 +1,11 @@
 package core
 
 import (
-	"SilentPaymentAppBackend/src/common"
-	"SilentPaymentAppBackend/src/common/types"
 	"crypto/sha256"
 	"encoding/hex"
+
+	"github.com/setavenger/blindbit-oracle/src/common"
+	"github.com/setavenger/blindbit-oracle/src/common/types"
 )
 
 func BuildSpentUTXOIndex(utxos []types.UTXO, block *types.Block) (types.SpentOutpointsIndex, error) {

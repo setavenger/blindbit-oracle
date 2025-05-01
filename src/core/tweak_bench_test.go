@@ -1,18 +1,20 @@
 package core
 
 import (
-	"SilentPaymentAppBackend/src/common/types"
-	"SilentPaymentAppBackend/src/testhelpers"
 	"log"
 	"testing"
+
+	"github.com/setavenger/blindbit-oracle/src/common/types"
+	"github.com/setavenger/blindbit-oracle/src/testhelpers"
 )
 
 /*
 todo blocks to test
- 000000000000000000030fcdb1ee03e49a5c50c0d457441a7bf4215920048824 ~4.8k txs
- 000000000000000000027bd4698820dc77142b578a0bb824af9bdc799e731b85 ~5.2k txs
- 000000000000000000028988a6b092b1bd1aa64211495e280ed274985fbfada5 ~6.1k txs
- 00000000000000000000d1b78dabafed74c4483fdde4d899952274fafb70998c ~0.9k txs but 19k taproot UTXOs
+
+	000000000000000000030fcdb1ee03e49a5c50c0d457441a7bf4215920048824 ~4.8k txs
+	000000000000000000027bd4698820dc77142b578a0bb824af9bdc799e731b85 ~5.2k txs
+	000000000000000000028988a6b092b1bd1aa64211495e280ed274985fbfada5 ~6.1k txs
+	00000000000000000000d1b78dabafed74c4483fdde4d899952274fafb70998c ~0.9k txs but 19k taproot UTXOs
 */
 var (
 	block833000, block833010, block833013, block834469 types.Block

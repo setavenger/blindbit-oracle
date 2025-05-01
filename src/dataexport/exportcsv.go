@@ -1,15 +1,16 @@
 package dataexport
 
 import (
-	"SilentPaymentAppBackend/src/common"
-	"SilentPaymentAppBackend/src/common/types"
-	"SilentPaymentAppBackend/src/db/dblevel"
 	"encoding/csv"
 	"encoding/hex"
 	"fmt"
 	"log"
 	"os"
 	"strconv"
+
+	"github.com/setavenger/blindbit-oracle/src/common"
+	"github.com/setavenger/blindbit-oracle/src/common/types"
+	"github.com/setavenger/blindbit-oracle/src/db/dblevel"
 )
 
 func writeToCSV(path string, records [][]string) error {

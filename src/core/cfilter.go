@@ -1,11 +1,12 @@
 package core
 
 import (
-	"SilentPaymentAppBackend/src/common"
-	"SilentPaymentAppBackend/src/common/types"
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
+
+	"github.com/setavenger/blindbit-oracle/src/common"
+	"github.com/setavenger/blindbit-oracle/src/common/types"
 
 	"github.com/btcsuite/btcd/btcutil/gcs/builder"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"

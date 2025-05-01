@@ -32,7 +32,7 @@ The functions can be found [here](./src/core/tweak.go).
 ```text
 goos: darwin
 goarch: amd64
-pkg: SilentPaymentAppBackend/src/core
+pkg: github.com/setavenger/blindbit-oracle/src/core
 cpu: Intel(R) Core(TM) i9-9880H CPU @ 2.30GHz
 BenchmarkTweakV4Block833000-16                66          18221455 ns/op
 BenchmarkTweakV3Block833000-16                51          23240305 ns/op
@@ -51,7 +51,7 @@ BenchmarkTweakV3Block834469-16                91          12260387 ns/op
 BenchmarkTweakV2Block834469-16                82          13145223 ns/op
 BenchmarkTweakV1Block834469-16                15          75665007 ns/op
 PASS
-ok      SilentPaymentAppBackend/src/core        25.640s
+ok      github.com/setavenger/blindbit-oracle/src/core        25.640s
 ```
 
 ### 6 Goroutines
@@ -61,7 +61,7 @@ Allowed number of parallel processes (`common.MaxParallelTweakComputations`) was
 
 goos: darwin
 goarch: amd64
-pkg: SilentPaymentAppBackend/src/core
+pkg: github.com/setavenger/blindbit-oracle/src/core
 cpu: Intel(R) Core(TM) i9-9880H CPU @ 2.30GHz
 BenchmarkTweakV4Block833000-16                34          37608796 ns/op
 BenchmarkTweakV3Block833000-16                31          37644976 ns/op
@@ -80,5 +80,5 @@ BenchmarkTweakV3Block834469-16                67          16031086 ns/op
 BenchmarkTweakV2Block834469-16                50          20486003 ns/op
 BenchmarkTweakV1Block834469-16                15          68968977 ns/op
 PASS
-ok      SilentPaymentAppBackend/src/core        27.134s
+ok      github.com/setavenger/blindbit-oracle/src/core        27.134s
 ```

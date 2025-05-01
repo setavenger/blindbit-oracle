@@ -1,8 +1,8 @@
 package dblevel
 
 import (
-	"SilentPaymentAppBackend/src/common"
-	"SilentPaymentAppBackend/src/common/types"
+	"github.com/setavenger/blindbit-oracle/src/common"
+	"github.com/setavenger/blindbit-oracle/src/common/types"
 )
 
 func InsertNewUTXOsFilter(pair types.Filter) error {

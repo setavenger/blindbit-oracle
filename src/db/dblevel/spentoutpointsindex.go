@@ -1,9 +1,10 @@
 package dblevel
 
 import (
-	"SilentPaymentAppBackend/src/common"
-	"SilentPaymentAppBackend/src/common/types"
 	"errors"
+
+	"github.com/setavenger/blindbit-oracle/src/common"
+	"github.com/setavenger/blindbit-oracle/src/common/types"
 )
 
 func InsertSpentOutpointsIndex(pair *types.SpentOutpointsIndex) error {

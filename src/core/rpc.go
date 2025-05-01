@@ -1,8 +1,6 @@
 package core
 
 import (
-	"SilentPaymentAppBackend/src/common"
-	"SilentPaymentAppBackend/src/common/types"
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
@@ -10,6 +8,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+
+	"github.com/setavenger/blindbit-oracle/src/common"
+	"github.com/setavenger/blindbit-oracle/src/common/types"
 )
 
 // todo might need to unify common.types and the types here for consistency

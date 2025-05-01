@@ -1,15 +1,16 @@
 package server
 
 import (
-	"SilentPaymentAppBackend/src/common"
-	"SilentPaymentAppBackend/src/common/types"
-	"SilentPaymentAppBackend/src/db/dblevel"
 	"bytes"
 	"encoding/hex"
 	"errors"
 	"io"
 	"net/http"
 	"strconv"
+
+	"github.com/setavenger/blindbit-oracle/src/common"
+	"github.com/setavenger/blindbit-oracle/src/common/types"
+	"github.com/setavenger/blindbit-oracle/src/db/dblevel"
 
 	"github.com/gin-gonic/gin"
 )

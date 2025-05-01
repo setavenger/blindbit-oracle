@@ -1,13 +1,14 @@
 package core
 
 import (
-	"SilentPaymentAppBackend/src/common"
-	"SilentPaymentAppBackend/src/common/types"
-	"SilentPaymentAppBackend/src/testhelpers"
 	"encoding/hex"
 	"log"
 	"os"
 	"testing"
+
+	"github.com/setavenger/blindbit-oracle/src/common"
+	"github.com/setavenger/blindbit-oracle/src/common/types"
+	"github.com/setavenger/blindbit-oracle/src/testhelpers"
 )
 
 var b833000 types.Block

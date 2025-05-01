@@ -1,12 +1,13 @@
 package core
 
 import (
-	"SilentPaymentAppBackend/src/common"
-	"SilentPaymentAppBackend/src/common/types"
-	"SilentPaymentAppBackend/src/db/dblevel"
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/setavenger/blindbit-oracle/src/common"
+	"github.com/setavenger/blindbit-oracle/src/common/types"
+	"github.com/setavenger/blindbit-oracle/src/db/dblevel"
 )
 
 func CheckForNewBlockRoutine() {

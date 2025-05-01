@@ -1,7 +1,7 @@
 package server
 
 import (
-	"SilentPaymentAppBackend/src/common"
+	"github.com/setavenger/blindbit-oracle/src/common"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-contrib/gzip"

@@ -1,10 +1,11 @@
 package types
 
 import (
-	"SilentPaymentAppBackend/src/common"
 	"bytes"
 	"encoding/hex"
 	"errors"
+
+	"github.com/setavenger/blindbit-oracle/src/common"
 )
 
 // TweakIndex stores a full index per blockHash and not separate entries like Tweak

@@ -1,15 +1,16 @@
 package main
 
 import (
-	"SilentPaymentAppBackend/src/common"
-	"SilentPaymentAppBackend/src/core"
-	"SilentPaymentAppBackend/src/dataexport"
-	"SilentPaymentAppBackend/src/db/dblevel"
-	"SilentPaymentAppBackend/src/server"
 	"flag"
 	"fmt"
 	"log"
 	"path"
+
+	"github.com/setavenger/blindbit-oracle/src/common"
+	"github.com/setavenger/blindbit-oracle/src/core"
+	"github.com/setavenger/blindbit-oracle/src/dataexport"
+	"github.com/setavenger/blindbit-oracle/src/db/dblevel"
+	"github.com/setavenger/blindbit-oracle/src/server"
 
 	"os"
 	"os/signal"

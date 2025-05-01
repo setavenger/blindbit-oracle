@@ -1,14 +1,15 @@
 package testhelpers
 
 import (
-	"SilentPaymentAppBackend/src/common"
-	"SilentPaymentAppBackend/src/common/types"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"testing"
+
+	"github.com/setavenger/blindbit-oracle/src/common"
+	"github.com/setavenger/blindbit-oracle/src/common/types"
 )
 
 type TestCase struct {

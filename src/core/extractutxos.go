@@ -1,9 +1,9 @@
 package core
 
 import (
-	"SilentPaymentAppBackend/src/common"
-	"SilentPaymentAppBackend/src/common/types"
-	"SilentPaymentAppBackend/src/db/dblevel"
+	"github.com/setavenger/blindbit-oracle/src/common"
+	"github.com/setavenger/blindbit-oracle/src/common/types"
+	"github.com/setavenger/blindbit-oracle/src/db/dblevel"
 )
 
 func ExtractNewUTXOs(block *types.Block, eligible map[string]struct{}) []types.UTXO {

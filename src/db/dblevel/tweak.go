@@ -1,11 +1,12 @@
 package dblevel
 
 import (
-	"SilentPaymentAppBackend/src/common"
-	"SilentPaymentAppBackend/src/common/types"
 	"encoding/hex"
 	"errors"
 	"math"
+
+	"github.com/setavenger/blindbit-oracle/src/common"
+	"github.com/setavenger/blindbit-oracle/src/common/types"
 
 	"github.com/syndtr/goleveldb/leveldb/util"
 )

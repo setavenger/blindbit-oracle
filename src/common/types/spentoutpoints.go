@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 
-	"SilentPaymentAppBackend/src/common"
+	"github.com/setavenger/blindbit-oracle/src/common"
 )
 
 const LenOutpointHashShort = 8

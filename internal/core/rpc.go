@@ -212,3 +212,32 @@ func GetBlockchainInfo() (*types.BlockchainInfo, error) {
 
 	return &rpcResponse.Result, nil
 }
+
+func GetRawTransaction(txid string, blockhash ...string) (*types.Transaction, error) {
+	var params = []any{txid, 2} // verbosity level 2 so we easily get the prevouts for tweaking
+	if len(blockhash) > 0 {
+		params = append(params, blockhash[0])
+	}
+
+	rpcData := types.RPCRequest{
+		JSONRPC: "1.0",
+		ID:      "blindbit-silent-payment-backend-v0",
+		Method:  "getrawtransaction",
+		Params:  params,
+	}
+
+	var rpcResponse types.RPCResponseGetRawTransaction
+
+	err := makeRPCRequest(rpcData, &rpcResponse)
+	if err != nil {
+		common.ErrorLogger.Printf("%v\n", err)
+		return nil, err
+	}
+
+	if rpcResponse.Error != nil {
+		common.ErrorLogger.Printf("RPC Error: %v\n", rpcResponse.Error)
+		return nil, fmt.Errorf("RPC Error: %v", rpcResponse.Error)
+	}
+
+	return &rpcResponse.Result, nil
+}

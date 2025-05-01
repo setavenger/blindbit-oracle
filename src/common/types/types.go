@@ -109,3 +109,9 @@ type BlockchainInfo struct {
 	Headers       uint32 `json:"headers"`
 	BestBlockHash string `json:"bestblockhash"`
 }
+
+type RPCResponseGetRawTransaction struct {
+	Id     string      `json:"id"`
+	Result Transaction `json:"result,omitempty"`
+	Error  interface{} `json:"error,omitempty"`
+}

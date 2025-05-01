@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	txid := flag.String("txid", "", "give tx hex")
+	txid := flag.String("txid", "", "give tx-id")
 	blockhash := flag.String("blockhash", "", "blockhash might be needed if txindex is not enabled on the node")
 	rpcUser := flag.String("rpc-user", "", "the nodes rpc user")
 	rpcPass := flag.String("rpc-pass", "", "the nodes rpc password")

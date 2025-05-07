@@ -184,18 +184,19 @@ func DustOverwriteRoutine() error {
 			common.ErrorLogger.Println(err)
 			return err
 		}
-		// todo highestValue might be nil here
-		tweak.HighestValue = *highestValue
-		tweaksForBatchInsert = append(tweaksForBatchInsert, tweak)
-		if counter%2_500 == 0 {
-			common.InfoLogger.Println("Inserting for", counter)
-			// we use insert instead of overwrite because we already have all the information ready
-			err = InsertBatchTweaks(tweaksForBatchInsert)
-			if err != nil {
-				common.ErrorLogger.Println(err)
-				return err
+		if highestValue != nil {
+			tweak.HighestValue = *highestValue
+			tweaksForBatchInsert = append(tweaksForBatchInsert, tweak)
+			if counter%2_500 == 0 {
+				common.InfoLogger.Println("Inserting for", counter)
+				// we use insert instead of overwrite because we already have all the information ready
+				err = InsertBatchTweaks(tweaksForBatchInsert)
+				if err != nil {
+					common.ErrorLogger.Println(err)
+					return err
+				}
+				tweaksForBatchInsert = []types.Tweak{}
 			}
-			tweaksForBatchInsert = []types.Tweak{}
 		}
 	}
 

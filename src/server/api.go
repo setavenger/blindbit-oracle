@@ -3,6 +3,7 @@ package server
 import (
 	"SilentPaymentAppBackend/src/common"
 	"SilentPaymentAppBackend/src/common/types"
+	"SilentPaymentAppBackend/src/core"
 	"SilentPaymentAppBackend/src/db/dblevel"
 	"bytes"
 	"encoding/hex"
@@ -353,13 +354,17 @@ func (h *ApiHandler) ForwardRawTX(c *gin.Context) {
 		c.Status(http.StatusBadRequest)
 		return
 	}
-	err := forwardTxToMemPool(txRequest.Data)
+	txid, err := forwardTxToNode(txRequest.Data)
 	if err != nil {
 		common.ErrorLogger.Println(err)
 		c.Status(http.StatusInternalServerError)
 		return
 	}
-	c.Status(http.StatusOK)
+	c.JSON(http.StatusOK, txid)
+}
+
+func forwardTxToNode(txHex string) (*string, error) {
+	return core.PostRawTransaction(txHex)
 }
 
 func forwardTxToMemPool(txHex string) error {

@@ -200,3 +200,27 @@ func GetBlockchainInfo() (*types.BlockchainInfo, error) {
 
 	return &rpcResponse.Result, nil
 }
+
+func PostRawTransaction(hex string) (*string, error) {
+	rpcData := types.RPCRequest{
+		JSONRPC: "1.0",
+		ID:      "blindbit-silent-payment-backend-v0",
+		Method:  "sendrawtransaction",
+		Params:  []interface{}{hex},
+	}
+
+	var rpcResponse types.RPCResponseSendRawTransaction
+
+	err := makeRPCRequest(rpcData, &rpcResponse)
+	if err != nil {
+		common.ErrorLogger.Printf("%v\n", err)
+		return nil, err
+	}
+
+	if rpcResponse.Error != nil {
+		common.ErrorLogger.Printf("RPC Error: %v\n", rpcResponse.Error)
+		return nil, fmt.Errorf("RPC Error: %v", rpcResponse.Error)
+	}
+
+	return &rpcResponse.Result, nil
+}

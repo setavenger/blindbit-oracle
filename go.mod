@@ -1,4 +1,4 @@
-module SilentPaymentAppBackend
+module github.com/setavenger/blindbit-oracle
 
 go 1.20
 

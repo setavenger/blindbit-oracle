@@ -1,28 +1,29 @@
 package dataexport
 
 import (
-	"SilentPaymentAppBackend/src/common"
-	"SilentPaymentAppBackend/src/common/types"
-	"SilentPaymentAppBackend/src/db/dblevel"
 	"encoding/csv"
 	"encoding/hex"
 	"fmt"
-	"log"
 	"os"
 	"strconv"
+
+	"github.com/setavenger/blindbit-lib/logging"
+	"github.com/setavenger/blindbit-oracle/internal/config"
+	"github.com/setavenger/blindbit-oracle/internal/dblevel"
+	"github.com/setavenger/blindbit-oracle/internal/types"
 )
 
 func writeToCSV(path string, records [][]string) error {
 	// Create a new file
-	os.MkdirAll(fmt.Sprintf("%s/export", common.BaseDirectory), 0750)
+	os.MkdirAll(fmt.Sprintf("%s/export", config.BaseDirectory), 0750)
 	file, err := os.Create(path)
 	if err != nil {
-		log.Fatalf("failed creating file: %s", err)
+		logging.L.Fatal().Err(err).Msg("failed creating file")
 	}
 	defer func(file *os.File) {
 		err = file.Close()
 		if err != nil {
-			common.ErrorLogger.Println(err)
+			logging.L.Err(err).Msg("error closing file")
 		}
 	}(file) // Ensure the file is closed at the end
 
@@ -33,7 +34,7 @@ func writeToCSV(path string, records [][]string) error {
 	// Write all CSV records
 	err = writer.WriteAll(records) // calls Flush internally
 	if err != nil {
-		common.ErrorLogger.Println("error writing record to csv:", err)
+		logging.L.Err(err).Msg("error writing record to csv")
 		return err
 	}
 	return err
@@ -44,12 +45,12 @@ func writeToCSV(path string, records [][]string) error {
 func ExportUTXOs(path string) error {
 	allEntries, err := dblevel.FetchAllUTXOs()
 	if err != nil {
-		common.ErrorLogger.Println(err)
+		logging.L.Err(err).Msg("error fetching all utxos")
 		return err
 	}
 	records, err := convertUTXOsToRecords(allEntries)
 	if err != nil {
-		common.ErrorLogger.Println(err)
+		logging.L.Err(err).Msg("error converting utxos to records")
 		return err
 	}
 	return writeToCSV(path, records)
@@ -82,12 +83,12 @@ func convertUTXOsToRecords(utxos []types.UTXO) ([][]string, error) {
 func ExportFilters(path string) error {
 	allEntries, err := dblevel.FetchAllNewUTXOsFilters()
 	if err != nil {
-		common.ErrorLogger.Println(err)
+		logging.L.Err(err).Msg("error fetching all new utxos filters")
 		return err
 	}
 	records, err := convertFiltersToRecords(allEntries)
 	if err != nil {
-		common.ErrorLogger.Println(err)
+		logging.L.Err(err).Msg("error converting filters to records")
 		return err
 	}
 	return writeToCSV(path, records)
@@ -116,12 +117,12 @@ func convertFiltersToRecords(data []types.Filter) ([][]string, error) {
 func ExportTweaks(path string) error {
 	allEntries, err := dblevel.FetchAllTweaks()
 	if err != nil {
-		common.ErrorLogger.Println(err)
+		logging.L.Err(err).Msg("error fetching all tweaks")
 		return err
 	}
 	records, err := convertTweaksToRecords(allEntries)
 	if err != nil {
-		common.ErrorLogger.Println(err)
+		logging.L.Err(err).Msg("error converting tweaks to records")
 		return err
 	}
 	return writeToCSV(path, records)
@@ -150,12 +151,12 @@ func convertTweaksToRecords(data []types.Tweak) ([][]string, error) {
 func ExportTweakIndices(path string) error {
 	allEntries, err := dblevel.FetchAllTweakIndices()
 	if err != nil {
-		common.ErrorLogger.Println(err)
+		logging.L.Err(err).Msg("error fetching all tweak indices")
 		return err
 	}
 	records, err := convertTweakIndicesToRecords(allEntries)
 	if err != nil {
-		common.ErrorLogger.Println(err)
+		logging.L.Err(err).Msg("error converting tweak indices to records")
 		return err
 	}
 	return writeToCSV(path, records)
@@ -190,12 +191,12 @@ func convertTweakIndicesToRecords(data []types.TweakIndex) ([][]string, error) {
 func ExportHeadersInv(path string) error {
 	allEntries, err := dblevel.FetchAllHeadersInv()
 	if err != nil {
-		common.ErrorLogger.Println(err)
+		logging.L.Err(err).Msg("error fetching all headers inv")
 		return err
 	}
 	records, err := convertHeadersInvToRecords(allEntries)
 	if err != nil {
-		common.ErrorLogger.Println(err)
+		logging.L.Err(err).Msg("error converting headers inv to records")
 		return err
 	}
 	return writeToCSV(path, records)

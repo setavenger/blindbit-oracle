@@ -8,9 +8,9 @@ import (
 	"github.com/setavenger/blindbit-oracle/internal/types"
 )
 
-func ExtractNewUTXOs(block *types.Block, eligible map[string]struct{}) []types.UTXO {
+func ExtractNewUTXOs(block *types.Block, eligible map[string]struct{}) []*types.UTXO {
 	logging.L.Trace().Msg("Getting new UTXOs")
-	var utxos []types.UTXO
+	var utxos []*types.UTXO
 	for _, tx := range block.Txs {
 		// only transactions with tweaks (pre-filtered by tweak computation) are going to be added
 		_, ok := eligible[tx.Txid]
@@ -20,7 +20,7 @@ func ExtractNewUTXOs(block *types.Block, eligible map[string]struct{}) []types.U
 		for _, vout := range tx.Vout {
 			if vout.ScriptPubKey.Type == "witness_v1_taproot" {
 				value := utils.ConvertFloatBTCtoSats(vout.Value)
-				utxos = append(utxos, types.UTXO{
+				utxos = append(utxos, &types.UTXO{
 					Txid:         tx.Txid,
 					Vout:         vout.N,
 					Value:        value,
@@ -69,8 +69,8 @@ func extractSpentTaprootPubKeysFromTx(tx *types.Transaction, block *types.Block)
 					logging.L.Err(err).Msg("Failed to fetch by block height block header inv")
 					logging.L.Debug().Any("tx", tx).Any("prevout", vin.Prevout).Msg("Failed to fetch by block height block header inv")
 					// panic because if this fails it means we have incomplete data which requires a sync
-					logging.L.Panic().Msg("Headers not synced from first taproot like occurrence. Either build complete index or fully sync headers only.")
-					panic(err)
+					logging.L.Panic().Err(err).Msg("Headers not synced from first taproot like occurrence. Either build complete index or fully sync headers only.")
+					return nil
 				}
 				blockHash = headerInv.Hash
 			}

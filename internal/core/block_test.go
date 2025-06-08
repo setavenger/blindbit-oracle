@@ -23,13 +23,13 @@ func TestBlockAnalysis(t *testing.T) {
 	}
 
 	for _, tweak := range tweaks {
-		logging.L.Info().Bytes("tweak", tweak.TweakData).Str("txid", tweak.Txid).Msg("tweak")
+		logging.L.Info().Hex("tweak", tweak.TweakData[:]).Str("txid", tweak.Txid).Msg("tweak")
 	}
 
 	for _, tx := range block.Txs {
 		for _, tweak := range tweaks {
 			if tx.Txid == tweak.Txid {
-				logging.L.Info().Hex("tweak", tweak.TweakData).Msg("tweak")
+				logging.L.Info().Hex("tweak", tweak.TweakData[:]).Msg("tweak")
 			}
 		}
 	}

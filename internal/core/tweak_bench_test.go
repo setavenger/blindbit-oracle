@@ -1,9 +1,9 @@
 package core
 
 import (
-	"log"
 	"testing"
 
+	"github.com/setavenger/blindbit-lib/logging"
 	"github.com/setavenger/blindbit-oracle/internal/testhelpers"
 	"github.com/setavenger/blindbit-oracle/internal/types"
 )
@@ -21,21 +21,21 @@ var (
 )
 
 func init() {
-	err := testhelpers.LoadAndUnmarshalBlockFromFile("../test_data/block_833000.json", &block833000)
+	err := testhelpers.LoadAndUnmarshalBlockFromFile("../../test_data/block_833000.json", &block833000)
 	if err != nil {
-		log.Fatalln(err)
+		logging.L.Fatal().Err(err).Msg("error loading block 833000")
 	}
-	err = testhelpers.LoadAndUnmarshalBlockFromFile("../test_data/block_833010.json", &block833010)
+	err = testhelpers.LoadAndUnmarshalBlockFromFile("../../test_data/block_833010.json", &block833010)
 	if err != nil {
-		log.Fatalln(err)
+		logging.L.Fatal().Err(err).Msg("error loading block 833010")
 	}
-	err = testhelpers.LoadAndUnmarshalBlockFromFile("../test_data/block_833013.json", &block833013)
+	err = testhelpers.LoadAndUnmarshalBlockFromFile("../../test_data/block_833013.json", &block833013)
 	if err != nil {
-		log.Fatalln(err)
+		logging.L.Fatal().Err(err).Msg("error loading block 833013")
 	}
-	err = testhelpers.LoadAndUnmarshalBlockFromFile("../test_data/block_834469.json", &block834469)
+	err = testhelpers.LoadAndUnmarshalBlockFromFile("../../test_data/block_834469.json", &block834469)
 	if err != nil {
-		log.Fatalln(err)
+		logging.L.Fatal().Err(err).Msg("error loading block 834469")
 	}
 }
 
@@ -43,7 +43,7 @@ func BenchmarkTweakV4Block833000(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_, err := ComputeTweaksForBlockV4(&block833000)
 		if err != nil {
-			log.Fatalln(err)
+			logging.L.Fatal().Err(err).Msg("error computing tweaks for block 833000")
 		}
 	}
 }
@@ -52,7 +52,7 @@ func BenchmarkTweakV3Block833000(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_, err := ComputeTweaksForBlockV3(&block833000)
 		if err != nil {
-			log.Fatalln(err)
+			logging.L.Fatal().Err(err).Msg("error computing tweaks for block 833000")
 		}
 	}
 }
@@ -61,7 +61,7 @@ func BenchmarkTweakV2Block833000(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_, err := ComputeTweaksForBlockV2(&block833000)
 		if err != nil {
-			log.Fatalln(err)
+			logging.L.Fatal().Err(err).Msg("error computing tweaks for block 833000")
 		}
 	}
 }
@@ -70,7 +70,7 @@ func BenchmarkTweakV1Block833000(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_, err := ComputeTweaksForBlockV1(&block833000)
 		if err != nil {
-			log.Fatalln(err)
+			logging.L.Fatal().Err(err).Msg("error computing tweaks for block 833000")
 		}
 	}
 }
@@ -79,7 +79,7 @@ func BenchmarkTweakV4Block833010(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_, err := ComputeTweaksForBlockV4(&block833010)
 		if err != nil {
-			log.Fatalln(err)
+			logging.L.Fatal().Err(err).Msg("error computing tweaks for block 833010")
 		}
 	}
 }
@@ -88,7 +88,7 @@ func BenchmarkTweakV3Block833010(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_, err := ComputeTweaksForBlockV3(&block833010)
 		if err != nil {
-			log.Fatalln(err)
+			logging.L.Fatal().Err(err).Msg("error computing tweaks for block 833010")
 		}
 	}
 }
@@ -97,7 +97,7 @@ func BenchmarkTweakV2Block833010(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_, err := ComputeTweaksForBlockV2(&block833010)
 		if err != nil {
-			log.Fatalln(err)
+			logging.L.Fatal().Err(err).Msg("error computing tweaks for block 833010")
 		}
 	}
 }
@@ -106,7 +106,7 @@ func BenchmarkTweakV1Block833010(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_, err := ComputeTweaksForBlockV1(&block833010)
 		if err != nil {
-			log.Fatalln(err)
+			logging.L.Fatal().Err(err).Msg("error computing tweaks for block 833010")
 		}
 	}
 }
@@ -115,7 +115,7 @@ func BenchmarkTweakV4Block833013(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_, err := ComputeTweaksForBlockV4(&block833013)
 		if err != nil {
-			log.Fatalln(err)
+			logging.L.Fatal().Err(err).Msg("error computing tweaks for block 833013")
 		}
 	}
 }
@@ -124,7 +124,7 @@ func BenchmarkTweakV3Block833013(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_, err := ComputeTweaksForBlockV3(&block833013)
 		if err != nil {
-			log.Fatalln(err)
+			logging.L.Fatal().Err(err).Msg("error computing tweaks for block 833013")
 		}
 	}
 }
@@ -133,7 +133,7 @@ func BenchmarkTweakV2Block833013(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_, err := ComputeTweaksForBlockV2(&block833013)
 		if err != nil {
-			log.Fatalln(err)
+			logging.L.Fatal().Err(err).Msg("error computing tweaks for block 833013")
 		}
 	}
 }
@@ -142,7 +142,7 @@ func BenchmarkTweakV1Block833013(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_, err := ComputeTweaksForBlockV1(&block833013)
 		if err != nil {
-			log.Fatalln(err)
+			logging.L.Fatal().Err(err).Msg("error computing tweaks for block 833013")
 		}
 	}
 }
@@ -151,7 +151,7 @@ func BenchmarkTweakV4Block834469(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_, err := ComputeTweaksForBlockV4(&block834469)
 		if err != nil {
-			log.Fatalln(err)
+			logging.L.Fatal().Err(err).Msg("error computing tweaks for block 834469")
 		}
 	}
 }
@@ -160,7 +160,7 @@ func BenchmarkTweakV3Block834469(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_, err := ComputeTweaksForBlockV3(&block834469)
 		if err != nil {
-			log.Fatalln(err)
+			logging.L.Fatal().Err(err).Msg("error computing tweaks for block 834469")
 		}
 	}
 }
@@ -169,7 +169,7 @@ func BenchmarkTweakV2Block834469(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_, err := ComputeTweaksForBlockV2(&block834469)
 		if err != nil {
-			log.Fatalln(err)
+			logging.L.Fatal().Err(err).Msg("error computing tweaks for block 834469")
 		}
 	}
 }
@@ -178,7 +178,7 @@ func BenchmarkTweakV1Block834469(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_, err := ComputeTweaksForBlockV1(&block834469)
 		if err != nil {
-			log.Fatalln(err)
+			logging.L.Fatal().Err(err).Msg("error computing tweaks for block 834469")
 		}
 	}
 }

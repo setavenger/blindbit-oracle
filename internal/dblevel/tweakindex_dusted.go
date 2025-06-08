@@ -13,7 +13,7 @@ func InsertTweakIndexDust(pair *types.TweakIndexDust) error {
 		logging.L.Err(err).Msg("error inserting tweak index with dust filter")
 		return err
 	}
-	logging.L.Debug().Msg("tweak index with dust filter inserted")
+	logging.L.Trace().Msg("tweak index with dust filter inserted")
 	return nil
 }
 

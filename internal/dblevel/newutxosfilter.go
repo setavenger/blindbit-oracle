@@ -11,7 +11,7 @@ func InsertNewUTXOsFilter(pair types.Filter) error {
 		logging.L.Err(err).Msg("error inserting new utxos filter")
 		return err
 	}
-	logging.L.Info().Msg("Taproot Filter inserted")
+	logging.L.Trace().Msg("Taproot Filter inserted")
 	return nil
 }
 

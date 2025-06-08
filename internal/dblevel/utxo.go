@@ -8,15 +8,14 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
-func InsertUTXOs(utxos []types.UTXO) error {
-	// common.DebugLogger.Println("Inserting UTXOs...")
+func InsertUTXOs(utxos []*types.UTXO) error {
 	// Create a slice of types.Pair with the same length as pairs
 	pairs := make([]types.Pair, len(utxos))
 
 	// Convert each UTXO to a Pair and assign it to the new slice
 	for i, pair := range utxos {
 		pairCopy := pair // Create a new variable that is a copy of pair
-		pairs[i] = &pairCopy
+		pairs[i] = pairCopy
 	}
 
 	err := insertBatch(UTXOsDB, pairs)
@@ -24,12 +23,11 @@ func InsertUTXOs(utxos []types.UTXO) error {
 		logging.L.Err(err).Msg("error inserting utxos")
 		return err
 	}
-	logging.L.Info().Msgf("Inserted %d UTXOs", len(utxos))
+	logging.L.Trace().Msgf("Inserted %d UTXOs", len(utxos))
 	return nil
 }
 
 func FetchByBlockHashUTXOs(blockHash string) ([]types.UTXO, error) {
-	//common.InfoLogger.Println("Fetching UTXOs")
 	pairs, err := retrieveManyByBlockHash(UTXOsDB, blockHash, types.PairFactoryUTXO)
 	if err != nil {
 		logging.L.Err(err).Msg("error fetching utxos by block hash")
@@ -49,13 +47,11 @@ func FetchByBlockHashUTXOs(blockHash string) ([]types.UTXO, error) {
 			panic("wrong pair struct returned")
 		}
 	}
-	//common.InfoLogger.Printf("Fetched %d UTXOs\n", len(result))
 
 	return result, nil
 }
 
 func FetchByBlockHashAndTxidUTXOs(blockHash, txid string) ([]types.UTXO, error) {
-	//common.InfoLogger.Println("Fetching UTXOs")
 	pairs, err := retrieveManyByBlockHashAndTxid(UTXOsDB, blockHash, txid, types.PairFactoryUTXO)
 	if err != nil {
 		if errors.Is(err, NoEntryErr{}) {
@@ -79,13 +75,11 @@ func FetchByBlockHashAndTxidUTXOs(blockHash, txid string) ([]types.UTXO, error) 
 			panic("wrong pair struct returned")
 		}
 	}
-	//common.InfoLogger.Printf("Fetched %d UTXOs\n", len(result))
 
 	return result, nil
 }
 
 func DeleteBatchUTXOs(utxos []types.UTXO) error {
-	// common.DebugLogger.Println("Deleting UTXOs...")
 	// Create a slice of types.Pair with the same length as pairs
 	pairs := make([]types.Pair, len(utxos))
 
@@ -99,7 +93,6 @@ func DeleteBatchUTXOs(utxos []types.UTXO) error {
 		logging.L.Err(err).Msg("error deleting utxos")
 		return err
 	}
-	// common.DebugLogger.Printf("Deleted %d UTXOs\n", len(utxos))
 	return nil
 }
 
@@ -178,7 +171,6 @@ func PruneUTXOs(prefix []byte) error {
 			// do deletion
 			if lastTxid != "" && canBeRemoved {
 				totalSetToDelete = append(totalSetToDelete, currentSet...)
-				// common.DebugLogger.Printf("Added %d UTXOs for deletion - %s\n", len(currentSet), lastTxid)
 			}
 
 			// reset state
@@ -191,7 +183,6 @@ func PruneUTXOs(prefix []byte) error {
 	// Handle the last batch of UTXOs after the loop
 	if canBeRemoved && len(currentSet) > 0 {
 		totalSetToDelete = append(totalSetToDelete, currentSet...)
-		// common.DebugLogger.Printf("Added %d UTXOs for deletion - %s\n", len(currentSet), lastTxid)
 	}
 	err = iter.Error()
 	if err != nil {

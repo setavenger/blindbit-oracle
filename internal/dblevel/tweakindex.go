@@ -13,7 +13,7 @@ func InsertTweakIndex(pair *types.TweakIndex) error {
 		logging.L.Err(err).Msg("error inserting tweak index")
 		return err
 	}
-	logging.L.Debug().Msg("tweak index inserted")
+	logging.L.Trace().Msg("tweak index inserted")
 	return nil
 }
 

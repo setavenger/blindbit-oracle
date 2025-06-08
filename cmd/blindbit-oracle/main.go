@@ -1,9 +1,9 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
-	"log"
 	"path"
 
 	"os"
@@ -27,27 +27,41 @@ var (
 )
 
 func init() {
-	flag.StringVar(&config.BaseDirectory, "datadir", config.DefaultBaseDirectory, "Set the base directory for blindbit oracle. Default directory is ~/.blindbit-oracle")
-	flag.BoolVar(&displayVersion, "version", false, "show version of blindbit-oracle")
-	flag.BoolVar(&pruneOnStart, "reprune", false, "set this flag if you want to prune on startup")
-	flag.BoolVar(&exportData, "export-data", false, "export the databases")
+	flag.StringVar(
+		&config.BaseDirectory,
+		"datadir",
+		config.DefaultBaseDirectory,
+		"Set the base directory for blindbit oracle. Default directory is ~/.blindbit-oracle",
+	)
+	flag.BoolVar(
+		&displayVersion,
+		"version",
+		false,
+		"show version of blindbit-oracle",
+	)
+	flag.BoolVar(
+		&pruneOnStart,
+		"reprune",
+		false,
+		"set this flag if you want to prune on startup",
+	)
+	flag.BoolVar(
+		&exportData,
+		"export-data",
+		false,
+		"export the databases",
+	)
 	flag.Parse()
 
 	if displayVersion {
 		// we only need the version for this
 		return
 	}
+
 	config.SetDirectories() // todo a proper set settings function which does it all would be good to avoid several small function calls
 	err := os.Mkdir(config.BaseDirectory, 0750)
-	if err != nil && !strings.Contains(err.Error(), "file exists") {
-		fmt.Println(err.Error())
-		log.Fatal(err)
-	}
-
-	err = os.Mkdir(config.LogsPath, 0750)
-	if err != nil && !strings.Contains(err.Error(), "file exists") {
-		fmt.Println(err.Error())
-		log.Fatal(err)
+	if err != nil && !errors.Is(err, os.ErrExist) {
+		logging.L.Fatal().Err(err).Msg("error creating base directory")
 	}
 
 	logging.L.Info().Msgf("base directory %s", config.BaseDirectory)
@@ -59,7 +73,7 @@ func init() {
 	err = os.Mkdir(config.DBPath, 0750)
 	if err != nil && !strings.Contains(err.Error(), "file exists") {
 		logging.L.Err(err).Msg("error creating db path")
-		panic(err)
+		os.Exit(1)
 	}
 
 	// open levelDB connections
@@ -68,23 +82,23 @@ func init() {
 	if config.CookiePath != "" {
 		data, err := os.ReadFile(config.CookiePath)
 		if err != nil {
-			panic(err)
+			logging.L.Fatal().Err(err).Msg("error reading cookie file")
 		}
 
 		credentials := strings.Split(string(data), ":")
 		if len(credentials) != 2 {
-			panic("cookie file is invalid")
+			logging.L.Fatal().Msg("cookie file is invalid")
 		}
 		config.RpcUser = credentials[0]
 		config.RpcPass = credentials[1]
 	}
 
 	if config.RpcUser == "" {
-		panic("rpc user not set") // todo use cookie file to circumvent this requirement
+		logging.L.Fatal().Msg("rpc user not set") // todo use cookie file to circumvent this requirement
 	}
 
 	if config.RpcPass == "" {
-		panic("rpc pass not set") // todo use cookie file to circumvent this requirement
+		logging.L.Fatal().Msg("rpc pass not set") // todo use cookie file to circumvent this requirement
 	}
 }
 
@@ -96,7 +110,6 @@ func main() {
 	defer logging.L.Info().Msg("Program shut down")
 	defer dblevel.CloseDBs()
 
-	//log.SetFlags(log.LstdFlags | log.Lshortfile | log.Lmicroseconds)
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 
@@ -108,7 +121,8 @@ func main() {
 
 	if exportData {
 		logging.L.Info().Msg("Exporting data")
-		dataexport.ExportUTXOs(fmt.Sprintf("%s/export/utxos.csv", config.BaseDirectory))
+		dataexport.ExportAll()
+		// dataexport.ExportUTXOs(fmt.Sprintf("%s/export/utxos.csv", config.BaseDirectory))
 		return
 	}
 
@@ -141,10 +155,9 @@ func main() {
 		// only call this if you need to reindex. It doesn't delete anything but takes a couple of minutes to finish
 		//err := core.ReindexDustLimitsOnly()
 		//if err != nil {
-		//	common.ErrorLogger.Fatalln(err)
+		//	logging.L.Err(err).Msg("error reindexing dust limits")
 		//	return
 		//}
-
 	}()
 
 	for {

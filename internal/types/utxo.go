@@ -162,11 +162,6 @@ func FindBiggestRemainingUTXO(utxoSpent UTXO, utxos []UTXO) (*uint64, error) {
 	}
 
 	if spentIsMax {
-		// if valueMax == 0 {
-		// 	common.ErrorLogger.Printf("%+v", utxoSpent)
-		// 	common.ErrorLogger.Printf("%+v", utxos)
-		// 	return nil, errors.New("valueMax was 0. this should not happen")
-		// }
 		// If the spent UTXO was the largest, return the max value among the remaining UTXOs.
 		return &valueMax, nil
 	} else {

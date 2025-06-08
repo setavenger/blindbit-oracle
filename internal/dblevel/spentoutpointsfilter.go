@@ -11,7 +11,7 @@ func InsertSpentOutpointsFilter(pair types.Filter) error {
 		logging.L.Err(err).Msg("error inserting spent outpoints filter")
 		return err
 	}
-	logging.L.Debug().Msg("Taproot Filter inserted")
+	logging.L.Trace().Msg("Taproot Filter inserted")
 	return nil
 }
 

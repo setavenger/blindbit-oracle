@@ -13,7 +13,7 @@ func InsertBlockHeader(pair types.BlockHeader) error {
 		logging.L.Err(err).Msg("error inserting block header")
 		return err
 	}
-	logging.L.Info().Msg("block_header inserted")
+	logging.L.Trace().Msg("block_header inserted")
 	return nil
 }
 
@@ -24,7 +24,8 @@ func FetchByBlockHashBlockHeader(blockHash string) (*types.BlockHeader, error) {
 		logging.L.Err(err).Msg("error fetching block header")
 		return nil, err
 	} else if errors.Is(err, NoEntryErr{}) { // todo why do we return the error anyways?
-		logging.L.Err(err).Msg("error fetching block header")
+		// todo find good solution, muted because it will show up for every pull we make
+		// logging.L.Err(err).Msg("error fetching block header")
 		return nil, err
 	}
 	return &pair, nil

@@ -4,13 +4,13 @@ import (
 	"errors"
 
 	"github.com/setavenger/blindbit-lib/logging"
-	config "github.com/setavenger/blindbit-oracle/internal/conig"
+	"github.com/setavenger/blindbit-oracle/internal/config"
 	"github.com/setavenger/blindbit-oracle/internal/dblevel"
 	"github.com/setavenger/blindbit-oracle/internal/types"
 )
 
 func overwriteUTXOsWithLookUp(utxos []types.UTXO) error {
-	logging.L.Info().Msg("overwriting utxos with lookup")
+	logging.L.Trace().Msg("overwriting utxos with lookup")
 	var utxosToOverwrite []*types.UTXO
 
 	for _, utxo := range utxos {
@@ -56,7 +56,7 @@ func overwriteUTXOsWithLookUp(utxos []types.UTXO) error {
 
 // todo construct the subsequent deletion of all utxos per transaction once all per transaction are spent
 func markSpentUTXOsAndTweaks(utxos []types.UTXO) error {
-	logging.L.Info().Msg("marking utxos")
+	logging.L.Trace().Msg("marking utxos")
 	if len(utxos) == 0 {
 		if config.Chain == config.Mainnet {
 			// no warnings on other chains as it is very likely to not have any taproot outputs for several blocks on end

@@ -70,8 +70,6 @@ func PullBlock(blockHash string) (*types.Block, error) {
 	}
 
 	if header != nil {
-		// todo might not want to constantly log this
-		// common.DebugLogger.Printf("Block: %s has already been processed\n", blockHash)
 		// if we already processed the header into our DB don't do anything
 		return nil, errors.New("block already processed")
 	}
@@ -81,7 +79,6 @@ func PullBlock(blockHash string) (*types.Block, error) {
 		logging.L.Err(err).Msg("error getting full block per block hash")
 		return nil, err
 	}
-	//common.InfoLogger.Println("Received block:", blockHash)
 	return block, nil
 }
 
@@ -143,13 +140,13 @@ func HandleBlock(block *types.Block) error {
 	// todo the next sections can potentially be optimized by combining them into one loop where
 	//  all things are extracted from the blocks transaction data
 
-	logging.L.Info().Msg("Computing tweaks...")
+	logging.L.Debug().Msg("Computing tweaks...")
 	tweaksForBlock, err := ComputeTweaksForBlock(block)
 	if err != nil {
 		logging.L.Err(err).Msg("error computing tweaks")
 		return err
 	}
-	logging.L.Trace().Msg("Tweaks computed...")
+	logging.L.Debug().Msg("Tweaks computed...")
 
 	if config.TweakIndexFullNoDust || config.TweakIndexFullIncludingDust {
 		// build map for sorting

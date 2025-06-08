@@ -13,7 +13,7 @@ func InsertSpentOutpointsIndex(pair *types.SpentOutpointsIndex) error {
 		logging.L.Err(err).Msg("error inserting spent outpoints index")
 		return err
 	}
-	logging.L.Debug().Msg("tweak index inserted")
+	logging.L.Trace().Msg("spent outpoints index inserted")
 	return nil
 }
 

@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/setavenger/blindbit-lib/api"
 	"github.com/setavenger/blindbit-lib/logging"
 	"github.com/setavenger/blindbit-oracle/internal/config"
 	"github.com/setavenger/blindbit-oracle/internal/dblevel"
@@ -20,15 +21,6 @@ import (
 //	Will keep for now just in case, so I don't have to refactor twice
 type ApiHandler struct{}
 
-type Info struct {
-	Network                        string `json:"network"`
-	Height                         uint32 `json:"height"`
-	TweaksOnly                     bool   `json:"tweaks_only"`
-	TweaksFullBasic                bool   `json:"tweaks_full_basic"`
-	TweaksFullWithDustFilter       bool   `json:"tweaks_full_with_dust_filter"`
-	TweaksCutThroughWithDustFilter bool   `json:"tweaks_cut_through_with_dust_filter"`
-}
-
 func (h *ApiHandler) GetInfo(c *gin.Context) {
 	lastHeader, err := dblevel.FetchHighestBlockHeaderInvByFlag(true)
 	if err != nil {
@@ -38,7 +30,7 @@ func (h *ApiHandler) GetInfo(c *gin.Context) {
 		})
 		return
 	}
-	c.JSON(http.StatusOK, Info{
+	c.JSON(http.StatusOK, api.InfoResponseOracle{
 		Network:                        config.ChainToString(config.Chain),
 		Height:                         lastHeader.Height,
 		TweaksOnly:                     config.TweaksOnly,
@@ -58,8 +50,8 @@ func (h *ApiHandler) GetBestBlockHeight(c *gin.Context) {
 		})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
-		"block_height": lastHeader.Height,
+	c.JSON(http.StatusOK, api.BlockHeightResponseOracle{
+		BlockHeight: lastHeader.Height,
 	})
 }
 
@@ -75,7 +67,9 @@ func (h *ApiHandler) GetBlockHashByHeight(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"block_hash": hInv.Hash})
+	c.JSON(http.StatusOK, api.BlockHashResponseOracle{
+		BlockHash: hInv.Hash,
+	})
 }
 
 func (h *ApiHandler) GetCFilterByHeight(c *gin.Context) {
@@ -120,11 +114,11 @@ func (h *ApiHandler) GetCFilterByHeight(c *gin.Context) {
 		return
 	}
 
-	data := gin.H{
-		"filter_type":  cFilter.FilterType,
-		"block_height": hInv.Height,
-		"block_hash":   cFilter.BlockHash,
-		"data":         hex.EncodeToString(cFilter.Data),
+	data := api.FilterResponseOracle{
+		FilterType:  cFilter.FilterType,
+		BlockHeight: hInv.Height,
+		BlockHash:   cFilter.BlockHash,
+		Data:        hex.EncodeToString(cFilter.Data),
 	}
 
 	c.JSON(200, data)
@@ -152,7 +146,7 @@ func (h *ApiHandler) GetUtxosByHeight(c *gin.Context) {
 	if utxos != nil {
 		c.JSON(200, utxos)
 	} else {
-		c.JSON(200, []interface{}{})
+		c.JSON(200, []any{})
 	}
 }
 
@@ -216,11 +210,13 @@ func (h *ApiHandler) GetTweakDataByHeight(c *gin.Context) {
 func (h *ApiHandler) GetTweakIndexDataByHeight(c *gin.Context) {
 	headerInv, exists := c.Get("headerInv")
 	if !exists {
+		logging.L.Error().Msg("headerInv not found")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "headerInv not found"})
 		return
 	}
 	hInv, ok := headerInv.(types.BlockHeaderInv) // Assuming HeaderInventory is the expected type
 	if !ok {
+		logging.L.Error().Msg("invalid headerInv type")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid headerInv type"})
 		return
 	}

@@ -15,7 +15,7 @@ func InsertBlockHeaderInv(pair types.BlockHeaderInv) error {
 		logging.L.Err(err).Msg("error inserting block header inv")
 		return err
 	}
-	logging.L.Info().Msg("header-inv inserted")
+	logging.L.Trace().Msg("header-inv inserted")
 	return nil
 }
 
@@ -36,10 +36,7 @@ func InsertBatchBlockHeaderInv(headersInv []types.BlockHeaderInv) error {
 		logging.L.Err(err).Msg("error inserting block header inv")
 		return err
 	}
-	//for _, headerInv := range headersInv {
-	//	common.InfoLogger.Printf("Inserted height: %d\n", headerInv.Height)
-	//}
-	logging.L.Debug().Msgf("Inserted %d headers-inv", len(headersInv))
+	logging.L.Trace().Msgf("Inserted %d headers-inv", len(headersInv))
 	return nil
 }
 

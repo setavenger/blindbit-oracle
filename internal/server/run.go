@@ -1,15 +1,18 @@
 package server
 
 import (
-	"SilentPaymentAppBackend/src/common"
+	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
+
+	"github.com/setavenger/blindbit-lib/logging"
+	"github.com/setavenger/blindbit-oracle/internal/config"
 )
 
 func RunServer(api *ApiHandler) {
-	// todo merge gin logging into common logging
+	// todo merge gin logging into blindbit lib logging
 	router := gin.Default()
 	router.Use(gzip.Gzip(gzip.DefaultCompression))
 
@@ -17,6 +20,7 @@ func RunServer(api *ApiHandler) {
 		AllowOrigins:     []string{"*"},
 		AllowMethods:     []string{"GET", "PUT"},
 		AllowHeaders:     []string{"Content-Type", "Authorization"},
+		MaxAge:           12 * time.Hour,
 		AllowCredentials: true,
 	}))
 
@@ -31,7 +35,7 @@ func RunServer(api *ApiHandler) {
 
 	router.POST("/forward-tx", api.ForwardRawTX)
 
-	if err := router.Run(common.Host); err != nil {
-		common.ErrorLogger.Fatal(err)
+	if err := router.Run(config.Host); err != nil {
+		logging.L.Err(err).Msg("could not run server")
 	}
 }

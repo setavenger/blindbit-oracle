@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 
+	"github.com/rs/zerolog"
 	"github.com/setavenger/blindbit-lib/logging"
 	"github.com/spf13/viper"
 )
@@ -30,7 +31,7 @@ func LoadConfigs(pathToConfig string) {
 	viper.SetDefault("tweaks_full_basic", true)
 	viper.SetDefault("tweaks_full_with_dust_filter", false)
 	viper.SetDefault("tweaks_cut_through_with_dust_filter", false)
-
+	viper.SetDefault("log_level", "info")
 	// Bind viper keys to environment variables (optional, for backup)
 	viper.AutomaticEnv()
 	viper.BindEnv("host", "HOST")
@@ -46,12 +47,13 @@ func LoadConfigs(pathToConfig string) {
 	viper.BindEnv("tweaks_full_basic", "TWEAKS_FULL_BASIC")
 	viper.BindEnv("tweaks_full_with_dust_filter", "TWEAKS_FULL_WITH_DUST_FILTER")
 	viper.BindEnv("tweaks_cut_through_with_dust_filter", "TWEAKS_CUT_THROUGH_WITH_DUST_FILTER")
+	viper.BindEnv("log_level", "LOG_LEVEL")
 
 	/* read and set config variables */
 	// General
 	SyncStartHeight = viper.GetUint32("sync_start_height")
 	Host = viper.GetString("host")
-
+	LogLevel = viper.GetString("log_level")
 	// Performance
 	MaxParallelRequests = viper.GetUint16("max_parallel_requests")
 	MaxParallelTweakComputations = viper.GetInt("max_parallel_tweak_computations")
@@ -80,7 +82,21 @@ func LoadConfigs(pathToConfig string) {
 	case "testnet":
 		Chain = Testnet3
 	default:
-		panic("chain undefined")
+		logging.L.Fatal().Msg("chain undefined")
+		return
+	}
+
+	switch LogLevel {
+	case "trace":
+		logging.SetLogLevel(zerolog.TraceLevel)
+	case "info":
+		logging.SetLogLevel(zerolog.InfoLevel)
+	case "debug":
+		logging.SetLogLevel(zerolog.DebugLevel)
+	case "warn":
+		logging.SetLogLevel(zerolog.WarnLevel)
+	case "error":
+		logging.SetLogLevel(zerolog.ErrorLevel)
 	}
 
 	// todo print settings

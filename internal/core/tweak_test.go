@@ -2,20 +2,21 @@ package core
 
 import (
 	"encoding/hex"
-	"log"
 	"testing"
 
 	"github.com/setavenger/blindbit-lib/logging"
+	"github.com/setavenger/blindbit-lib/utils"
 	"github.com/setavenger/blindbit-oracle/internal/testhelpers"
 	"github.com/setavenger/blindbit-oracle/internal/types"
+	"github.com/setavenger/go-bip352"
 )
 
 var b833000 types.Block
 
 func init() {
-	err := testhelpers.LoadAndUnmarshalBlockFromFile("../test_data/block_833000.json", &b833000)
+	err := testhelpers.LoadAndUnmarshalBlockFromFile("../../test_data/block_833000.json", &b833000)
 	if err != nil {
-		log.Fatalln(err)
+		logging.L.Fatal().Err(err).Msg("error loading block 833000")
 	}
 }
 
@@ -40,18 +41,20 @@ func TestSimpleInputHash(t *testing.T) {
 		return
 	}
 
-	summedKey, err := sumPublicKeys(pubKeys)
+	fixSizePubKeys := utils.ConvertPubkeySliceToFixedLength33(pubKeys)
+
+	summedKey, err := bip352.SumPublicKeys(fixSizePubKeys)
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	logging.L.Debug().Hex("summed_key", summedKey.SerializeCompressed()).Msg("summed key")
+	// logging.L.Debug().Hex("summed_key", summedKey[:]).Msg("summed key")
 	inputHash, err := ComputeInputHash(tx, summedKey)
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	logging.L.Debug().Hex("input_hash", inputHash[:]).Msg("input hash")
+	// logging.L.Debug().Hex("input_hash", inputHash[:]).Msg("input hash")
 	inputHashHex := hex.EncodeToString(inputHash[:])
 	if inputHashHex != controlInputHash {
 		t.Errorf("computed input hash does not match: %s - %s\n", inputHashHex, controlInputHash)

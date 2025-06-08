@@ -3,9 +3,9 @@ package dataexport
 import (
 	"encoding/csv"
 	"encoding/hex"
-	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/setavenger/blindbit-lib/logging"
 	"github.com/setavenger/blindbit-oracle/internal/config"
@@ -15,32 +15,21 @@ import (
 
 func writeToCSV(path string, records [][]string) error {
 	// Create a new file
-	os.MkdirAll(fmt.Sprintf("%s/export", config.BaseDirectory), 0750)
+	os.MkdirAll(path[:strings.LastIndex(path, "/")], 0750)
+	logging.L.Info().Msgf("Writing to %s", path)
 	file, err := os.Create(path)
 	if err != nil {
 		logging.L.Fatal().Err(err).Msg("failed creating file")
 	}
-	defer func(file *os.File) {
-		err = file.Close()
-		if err != nil {
-			logging.L.Err(err).Msg("error closing file")
-		}
-	}(file) // Ensure the file is closed at the end
+	defer file.Close()
 
-	// Create a new CSV writer
 	writer := csv.NewWriter(file)
-	defer writer.Flush() // Flush writes any buffered data to the underlying io.Writer
+	defer writer.Flush()
 
-	// Write all CSV records
-	err = writer.WriteAll(records) // calls Flush internally
-	if err != nil {
-		logging.L.Err(err).Msg("error writing record to csv")
-		return err
-	}
-	return err
+	return writer.WriteAll(records)
 }
 
-// UTXOS
+/* UTXOS */
 
 func ExportUTXOs(path string) error {
 	allEntries, err := dblevel.FetchAllUTXOs()
@@ -78,7 +67,7 @@ func convertUTXOsToRecords(utxos []types.UTXO) ([][]string, error) {
 	return records, nil
 }
 
-// Filters
+/* Filters */
 
 func ExportFilters(path string) error {
 	allEntries, err := dblevel.FetchAllNewUTXOsFilters()
@@ -112,7 +101,7 @@ func convertFiltersToRecords(data []types.Filter) ([][]string, error) {
 	return records, nil
 }
 
-// Tweaks
+/* Tweaks */
 
 func ExportTweaks(path string) error {
 	allEntries, err := dblevel.FetchAllTweaks()
@@ -135,20 +124,26 @@ func convertTweaksToRecords(data []types.Tweak) ([][]string, error) {
 		"blockHash",
 		"txid",
 		"data",
+		"highestValue",
 	})
 	for _, pair := range data {
 		records = append(records, []string{
 			pair.BlockHash,
 			pair.Txid,
 			hex.EncodeToString(pair.TweakData[:]),
+			strconv.FormatUint(pair.HighestValue, 10),
 		})
 	}
 	return records, nil
 }
 
-// TweakIndex
+/* TweakIndex */
 
 func ExportTweakIndices(path string) error {
+	// we skip this because there will be no data
+	if config.TweakIndexFullIncludingDust {
+		return nil
+	}
 	allEntries, err := dblevel.FetchAllTweakIndices()
 	if err != nil {
 		logging.L.Err(err).Msg("error fetching all tweak indices")
@@ -186,7 +181,7 @@ func convertTweakIndicesToRecords(data []types.TweakIndex) ([][]string, error) {
 	return records, nil
 }
 
-// HeadersInv
+/* HeadersInv */
 
 func ExportHeadersInv(path string) error {
 	allEntries, err := dblevel.FetchAllHeadersInv()

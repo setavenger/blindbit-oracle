@@ -1,12 +1,12 @@
 package server
 
 import (
-	"SilentPaymentAppBackend/src/common"
-	"SilentPaymentAppBackend/src/db/dblevel"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/setavenger/blindbit-lib/logging"
+	"github.com/setavenger/blindbit-oracle/internal/dblevel"
 )
 
 func FetchHeaderInvMiddleware(c *gin.Context) {
@@ -19,7 +19,7 @@ func FetchHeaderInvMiddleware(c *gin.Context) {
 
 	height, err := strconv.ParseUint(heightStr, 10, 32)
 	if err != nil {
-		common.ErrorLogger.Println(err)
+		logging.L.Err(err).Msg("could not parse block height")
 		c.JSON(http.StatusBadRequest, gin.H{"error": "could not parse block height"})
 		c.Abort()
 		return
@@ -27,7 +27,7 @@ func FetchHeaderInvMiddleware(c *gin.Context) {
 
 	headerInv, err := dblevel.FetchByBlockHeightBlockHeaderInv(uint32(height))
 	if err != nil {
-		common.ErrorLogger.Println(err)
+		logging.L.Err(err).Msg("could not fetch header inv")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not fetch header inv"})
 		c.Abort()
 		return

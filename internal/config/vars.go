@@ -1,11 +1,18 @@
 package config
 
-import "github.com/setavenger/blindbit-lib/utils"
+import (
+	"github.com/setavenger/blindbit-lib/logging"
+	"github.com/setavenger/blindbit-lib/utils"
+)
 
 // TaprootActivation
 // todo might be inapplicable due to transactions that have taproot prevouts from before the activation
 //
 //	is relevant for the height-to-hash lookup in the db
+
+var (
+	LogLevel = "info"
+)
 
 const (
 	TaprootActivation    uint32 = 709632
@@ -63,7 +70,7 @@ var (
 	PruneFrequency = 72
 )
 
-// one has to call SetDirectories otherwise common.DBPath will be empty
+// one has to call SetDirectories otherwise config.DBPath will be empty
 var (
 	DBPathHeaders              string
 	DBPathHeadersInv           string // for height to blockHash mapping
@@ -99,6 +106,7 @@ func SetDirectories() {
 func HeaderMustSyncHeight() uint32 {
 	switch Chain {
 	case Mainnet:
+		// height based on heuristic checks to see where no old taproot style coins were locked
 		return 500_000
 	case Signet:
 		return 1
@@ -107,7 +115,8 @@ func HeaderMustSyncHeight() uint32 {
 	case Testnet3:
 		return 1
 	case Unknown:
-		panic("chain not defined")
+		logging.L.Panic().Msg("chain not defined")
+		return 0
 	default:
 		return 1
 	}
@@ -124,7 +133,8 @@ func ChainToString(c chain) string {
 	case Testnet3:
 		return "testnet"
 	default:
-		panic("chain not defined")
+		logging.L.Panic().Msg("chain not defined")
+		return ""
 	}
 
 }

@@ -14,8 +14,6 @@ import (
 	"github.com/setavenger/blindbit-oracle/internal/types"
 )
 
-// todo might need to unify common.types and the types here for consistency
-
 func makeRPCRequest(rpcData interface{}, result interface{}) error {
 	payload, err := json.Marshal(rpcData)
 	if err != nil {
@@ -32,7 +30,8 @@ func makeRPCRequest(rpcData interface{}, result interface{}) error {
 
 	// Set headers and auth...
 	req.Header.Set("Content-Type", "application/json")
-	auth := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", config.RpcUser, config.RpcPass)))
+	authText := fmt.Sprintf("%s:%s", config.RpcUser, config.RpcPass)
+	auth := base64.StdEncoding.EncodeToString([]byte(authText))
 	req.Header.Add("Authorization", "Basic "+auth)
 
 	// Make the HTTP request...
@@ -51,7 +50,15 @@ func makeRPCRequest(rpcData interface{}, result interface{}) error {
 			Int("status_code", resp.StatusCode).
 			Str("body", string(body)).
 			Msg("error reading response body")
+		return err
+	}
 
+	if resp.StatusCode >= 400 {
+		err = fmt.Errorf("request failed")
+		logging.L.Err(err).
+			Int("status_code", resp.StatusCode).
+			Str("body", string(body)).
+			Msg("error unmarshaling response")
 		return err
 	}
 
@@ -69,7 +76,6 @@ func makeRPCRequest(rpcData interface{}, result interface{}) error {
 }
 
 func GetFullBlockPerBlockHash(blockHash string) (*types.Block, error) {
-	//common.InfoLogger.Println("Fetching block:", blockHash)
 	rpcData := types.RPCRequest{
 		JSONRPC: "1.0",
 		ID:      "blindbit-silent-payment-backend-v0",
@@ -100,12 +106,6 @@ func GetBestBlockHash() (string, error) {
 		Method:  "getbestblockhash",
 		Params:  []interface{}{},
 	}
-
-	// var rpcResponse struct { // Anonymous struct for this specific response
-	// 	ID     string      `json:"id"`
-	// 	Result string      `json:"result,omitempty"`
-	// 	Error  interface{} `json:"error,omitempty"`
-	// }
 
 	var rpcResponse types.RPCResponseHighestHash
 	err := makeRPCRequest(rpcData, &rpcResponse)

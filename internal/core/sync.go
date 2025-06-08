@@ -126,7 +126,6 @@ func processHeaders(headers []types.BlockHeader) error {
 
 			semaphore <- struct{}{} // Acquire a slot
 			go func(_header types.BlockHeader) {
-				//start := time.Now()
 				defer func() {
 					<-semaphore // Release the slot
 				}()
@@ -151,7 +150,6 @@ func processHeaders(headers []types.BlockHeader) error {
 				} else {
 					fetchedBlocks <- block // Send the fetched block to the channel
 				}
-				//common.InfoLogger.Printf("It took %d ms to pull block %d\n", time.Now().Sub(start).Milliseconds(), _header.Height)
 			}(header)
 		}
 	}()
@@ -181,39 +179,38 @@ func processHeaders(headers []types.BlockHeader) error {
 		if nextExpectedBlock == 0 {
 			break
 		}
-		select {
-		case block := <-fetchedBlocks:
-			//common.InfoLogger.Println("Got block:", block.Height)
-			// check whether the block is a filler block with only the height
-			if block.Height != nextExpectedBlock {
-				// Temporarily store out-of-order block header
-				outOfOrderBlocks[block.Height] = block
-			} else {
-				if block.Hash == "" {
-					nextExpectedBlock = nextExpectedBlockMap[nextExpectedBlock]
-				} else {
-					// Process block using its hash
-					CheckBlock(block)
-					nextExpectedBlock = nextExpectedBlockMap[nextExpectedBlock]
-				}
-			}
 
-			var ok = true
-			for ok {
-				if block, ok = outOfOrderBlocks[nextExpectedBlock]; ok {
-					if block.Hash == "" {
-						delete(outOfOrderBlocks, nextExpectedBlock)
-						nextExpectedBlock = nextExpectedBlockMap[nextExpectedBlock]
-						continue
-					}
-					CheckBlock(block)
+		block := <-fetchedBlocks
+		// check whether the block is a filler block with only the height
+		if block.Height != nextExpectedBlock {
+			// Temporarily store out-of-order block header
+			outOfOrderBlocks[block.Height] = block
+		} else {
+			if block.Hash == "" {
+				nextExpectedBlock = nextExpectedBlockMap[nextExpectedBlock]
+			} else {
+				// Process block using its hash
+				CheckBlock(block)
+				nextExpectedBlock = nextExpectedBlockMap[nextExpectedBlock]
+			}
+		}
+
+		var ok = true
+		for ok {
+			if block, ok = outOfOrderBlocks[nextExpectedBlock]; ok {
+				if block.Hash == "" {
 					delete(outOfOrderBlocks, nextExpectedBlock)
-					// Update next expected block
 					nextExpectedBlock = nextExpectedBlockMap[nextExpectedBlock]
+					continue
 				}
+				CheckBlock(block)
+				delete(outOfOrderBlocks, nextExpectedBlock)
+				// Update next expected block
+				nextExpectedBlock = nextExpectedBlockMap[nextExpectedBlock]
 			}
 		}
 	}
+
 	return nil
 }
 

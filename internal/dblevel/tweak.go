@@ -12,7 +12,6 @@ import (
 
 // InsertBatchTweaks index implements cut through and dust
 func InsertBatchTweaks(tweaks []types.Tweak) error {
-	// common.DebugLogger.Println("Inserting tweaks...")
 	// Create a slice of types.Pair with the same length as pairs
 	pairs := make([]types.Pair, len(tweaks))
 
@@ -27,7 +26,7 @@ func InsertBatchTweaks(tweaks []types.Tweak) error {
 		logging.L.Err(err).Msg("error inserting tweaks")
 		return err
 	}
-	logging.L.Info().Msgf("Inserted %d tweaks", len(tweaks))
+	logging.L.Trace().Msgf("Inserted %d tweaks", len(tweaks))
 	return nil
 }
 
@@ -77,7 +76,7 @@ func OverWriteTweaks(tweaks []types.Tweak) error {
 }
 
 func FetchByBlockHashTweaks(blockHash string) ([]types.Tweak, error) {
-	logging.L.Info().Msg("Fetching tweaks")
+	logging.L.Trace().Msg("Fetching tweaks")
 	pairs, err := retrieveManyByBlockHash(TweaksDB, blockHash, types.PairFactoryTweak)
 	if err != nil {
 		logging.L.Err(err).Msg("error fetching tweaks")
@@ -97,15 +96,15 @@ func FetchByBlockHashTweaks(blockHash string) ([]types.Tweak, error) {
 			panic("wrong pair struct returned")
 		}
 	}
-	logging.L.Info().Msgf("Fetched %d tweaks", len(result))
+	logging.L.Trace().Msgf("Fetched %d tweaks", len(result))
 
 	return result, nil
 }
 
 func DeleteBatchTweaks(tweaks []types.Tweak) error {
-	logging.L.Info().Msg("Deleting Tweaks...")
+	logging.L.Trace().Msg("Deleting Tweaks...")
 	if len(tweaks) == 0 {
-		logging.L.Info().Msg("no tweaks to delete")
+		logging.L.Debug().Msg("no tweaks to delete")
 		return nil
 	}
 	// Create a slice of types.Pair with the same length as pairs
@@ -121,7 +120,7 @@ func DeleteBatchTweaks(tweaks []types.Tweak) error {
 		logging.L.Err(err).Msg("error deleting tweaks")
 		return err
 	}
-	logging.L.Info().Msgf("Deleted %d Tweaks", len(tweaks))
+	logging.L.Trace().Msgf("Deleted %d Tweaks", len(tweaks))
 	return err
 }
 
@@ -143,8 +142,8 @@ func FetchAllTweaks() ([]types.Tweak, error) {
 		if pairPtr, ok := pair.(*types.Tweak); ok {
 			result[i] = *pairPtr
 		} else {
-			logging.L.Err(err).Any("pair", pair).Msg("wrong pair struct returned")
-			panic("wrong pair struct returned")
+			logging.L.Panic().Err(err).Any("pair", pair).Msg("wrong pair struct returned")
+			return nil, err
 		}
 	}
 	return result, err

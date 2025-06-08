@@ -5,17 +5,16 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
-	"math/big"
 	"sort"
 	"strings"
 	"sync"
 
-	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/setavenger/blindbit-lib/logging"
 	"github.com/setavenger/blindbit-lib/utils"
 	"github.com/setavenger/blindbit-oracle/internal/config"
 	"github.com/setavenger/blindbit-oracle/internal/types"
 	"github.com/setavenger/go-bip352"
+	golibsecp256k1 "github.com/setavenger/go-libsecp256k1"
 )
 
 func ComputeTweaksForBlock(block *types.Block) ([]types.Tweak, error) {
@@ -91,7 +90,7 @@ func ComputeTweaksForBlockV4(block *types.Block) ([]types.Tweak, error) {
 
 // ComputeTweaksForBlockV3 performs worse for high tx count but faster for low tx count <800-1000 txs
 func ComputeTweaksForBlockV3(block *types.Block) ([]types.Tweak, error) {
-	if block.Txs == nil || len(block.Txs) == 0 {
+	if len(block.Txs) == 0 {
 		logging.L.Debug().Any("block", block).Msg("Block had zero transactions")
 		logging.L.Warn().Msg("Block had zero transactions")
 		return []types.Tweak{}, nil
@@ -159,7 +158,8 @@ func ComputeTweaksForBlockV3(block *types.Block) ([]types.Tweak, error) {
 	}
 
 	if errG != nil {
-		panic(errG)
+		logging.L.Panic().Err(errG).Msg("error computing tweaks")
+		return nil, errG
 	}
 
 	wg.Wait()
@@ -168,7 +168,6 @@ func ComputeTweaksForBlockV3(block *types.Block) ([]types.Tweak, error) {
 
 func ComputeTweaksForBlockV2(block *types.Block) ([]types.Tweak, error) {
 	// moved outside of function avoid issues with benchmarking
-	//common.InfoLogger.Println("Computing tweaks...")
 	var tweaks []types.Tweak
 
 	semaphore := make(chan struct{}, config.MaxParallelTweakComputations)
@@ -188,7 +187,6 @@ func ComputeTweaksForBlockV2(block *types.Block) ([]types.Tweak, error) {
 		semaphore <- struct{}{} // Acquire a slot
 		wg.Add(1)               // make the function wait for this slot
 		go func(_tx types.Transaction) {
-			//start := time.Now()
 			defer func() {
 				<-semaphore // Release the slot
 				wg.Done()
@@ -225,16 +223,15 @@ func ComputeTweaksForBlockV2(block *types.Block) ([]types.Tweak, error) {
 	}
 
 	if errG != nil {
-		panic(errG)
+		logging.L.Panic().Err(errG).Msg("error computing tweaks")
+		return nil, errG
 	}
 	wg.Wait()
-	//common.InfoLogger.Println("Tweaks computed...")
 	return tweaks, nil
 }
 
 // Deprecated: slowest of them all, do not use anywhere
 func ComputeTweaksForBlockV1(block *types.Block) ([]types.Tweak, error) {
-	//common.InfoLogger.Println("Computing tweaks...")
 	var tweaks []types.Tweak
 
 	for _, tx := range block.Txs {
@@ -258,18 +255,19 @@ func ComputeTweaksForBlockV1(block *types.Block) ([]types.Tweak, error) {
 			}
 		}
 	}
-	//common.InfoLogger.Println("Tweaks computed...")
 	return tweaks, nil
 }
 
 func ComputeTweakPerTx(tx types.Transaction) (*types.Tweak, error) {
-	//common.DebugLogger.Println("computing tweak for:", tx.Txid)
 	pubKeys := extractPubKeys(tx)
 	if pubKeys == nil {
 		// for example if coinbase transaction does not return any pubKeys (as it should)
 		return nil, nil
 	}
-	summedKey, err := sumPublicKeys(pubKeys)
+
+	fixSizePubKeys := utils.ConvertPubkeySliceToFixedLength33(pubKeys)
+
+	summedKey, err := bip352.SumPublicKeys(fixSizePubKeys)
 	if err != nil {
 		if strings.Contains(err.Error(), "not on secp256k1 curve") {
 			logging.L.Warn().Str("txid", tx.Txid).Err(err).Msg("error computing tweak per tx")
@@ -285,19 +283,10 @@ func ComputeTweakPerTx(tx types.Transaction) (*types.Tweak, error) {
 		logging.L.Err(err).Msg("error computing tweak per tx")
 		return nil, err
 	}
-	curve := btcec.S256()
 
-	x, y := curve.ScalarMult(summedKey.X(), summedKey.Y(), hash[:])
+	golibsecp256k1.PubKeyTweakMul(summedKey, &hash)
 
-	tweakBytes := [33]byte{}
-	mod := y.Mod(y, big.NewInt(2))
-	if mod.Cmp(big.NewInt(0)) == 0 {
-		tweakBytes[0] = 0x02
-	} else {
-		tweakBytes[0] = 0x03
-	}
-
-	x.FillBytes(tweakBytes[1:])
+	tweakBytes := summedKey
 
 	highestValue, err := FindBiggestOutputFromTx(tx)
 	if err != nil {
@@ -307,7 +296,7 @@ func ComputeTweakPerTx(tx types.Transaction) (*types.Tweak, error) {
 
 	tweak := types.Tweak{
 		Txid:         tx.Txid,
-		TweakData:    tweakBytes,
+		TweakData:    *tweakBytes,
 		HighestValue: highestValue,
 	}
 
@@ -335,8 +324,8 @@ func FindBiggestOutputFromTx(tx types.Transaction) (uint64, error) {
 	return biggest, nil
 }
 
-func extractPubKeys(tx types.Transaction) []string {
-	var pubKeys []string
+func extractPubKeys(tx types.Transaction) [][]byte {
+	var pubKeys [][]byte
 
 	for _, vin := range tx.Vin {
 		if vin.Coinbase != "" {
@@ -353,22 +342,47 @@ func extractPubKeys(tx types.Transaction) []string {
 			}
 			// todo what to do if none is matched
 			if pubKey != "" {
-				pubKeys = append(pubKeys, pubKey)
+				pubKeyBytes, _ := hex.DecodeString(pubKey)
+
+				// pubKeyBytes, err := hex.DecodeString(pubKey)
+				// // todo: can we ignore this error? RPC of Bitcoin Core should not return invalid hex formatted pubkeys
+				// if err != nil {
+				// 	logging.L.Err(err).Msg("error decoding public key")
+				// 	return nil
+				// }
+				pubKeys = append(pubKeys, pubKeyBytes)
 			}
+
 		case "witness_v0_keyhash":
 			// last element in the witness data is public key; skip uncompressed
 			if len(vin.Txinwitness[len(vin.Txinwitness)-1]) == 66 {
-				pubKeys = append(pubKeys, vin.Txinwitness[len(vin.Txinwitness)-1])
+				pubKeyBytes, _ := hex.DecodeString(vin.Txinwitness[len(vin.Txinwitness)-1])
+				// pubKeyBytes, err := hex.DecodeString(vin.Txinwitness[len(vin.Txinwitness)-1])
+				// // todo: can we ignore this error? RPC of Bitcoin Core should not return invalid hex formatted pubkeys
+				// if err != nil {
+				// 	logging.L.Err(err).Msg("error decoding public key")
+				// 	return nil
+				// }
+				pubKeys = append(pubKeys, pubKeyBytes)
 			}
 
 		case "scripthash":
 			if len(vin.ScriptSig.Hex) == 46 {
 				if vin.ScriptSig.Hex[:6] == "160014" {
 					if len(vin.Txinwitness[len(vin.Txinwitness)-1]) == 66 {
-						pubKeys = append(pubKeys, vin.Txinwitness[len(vin.Txinwitness)-1])
+						pubKeyBytes, _ := hex.DecodeString(vin.Txinwitness[len(vin.Txinwitness)-1])
+
+						// pubKeyBytes, err := hex.DecodeString(vin.Txinwitness[len(vin.Txinwitness)-1])
+						// // todo: can we ignore this error? RPC of Bitcoin Core should not return invalid hex formatted pubkeys
+						// if err != nil {
+						// 	logging.L.Err(err).Msg("error decoding public key")
+						// 	return nil
+						// }
+						pubKeys = append(pubKeys, pubKeyBytes)
 					}
 				}
 			}
+
 		case "pubkeyhash":
 			pubKey, err := extractFromP2PKH(vin)
 			if err != nil {
@@ -379,7 +393,7 @@ func extractPubKeys(tx types.Transaction) []string {
 
 			// todo what to do if none is matched
 			if pubKey != nil {
-				pubKeys = append(pubKeys, hex.EncodeToString(pubKey))
+				pubKeys = append(pubKeys, pubKey)
 			}
 
 		default:
@@ -453,46 +467,8 @@ func extractPubKeyFromP2TR(vin types.Vin) (string, error) {
 	return "", nil
 }
 
-func sumPublicKeys(pubKeys []string) (*btcec.PublicKey, error) {
-	var lastPubKey *btcec.PublicKey
-	curve := btcec.KoblitzCurve{}
-
-	for idx, pubKey := range pubKeys {
-		bytesPubKey, err := hex.DecodeString(pubKey)
-		if err != nil {
-			logging.L.Err(err).Msg("error decoding public key")
-			// todo remove panics
-			return nil, err
-		}
-
-		// for extracted keys which are only 32 bytes (taproot) we assume even parity
-		// as we don't need the y-coordinate for any computation we can simply prepend 0x02
-		if len(bytesPubKey) == 32 {
-			bytesPubKey = bytes.Join([][]byte{{0x02}, bytesPubKey}, []byte{})
-		}
-		publicKey, err := btcec.ParsePubKey(bytesPubKey)
-		if err != nil {
-			logging.L.Err(err).Msg("error parsing public key")
-			return nil, err
-		}
-
-		if idx == 0 {
-			lastPubKey = publicKey
-		} else {
-			x, y := curve.Add(lastPubKey.X(), lastPubKey.Y(), publicKey.X(), publicKey.Y())
-
-			lastPubKey, err = bip352.ConvertPointsToPublicKey(x, y)
-			if err != nil {
-				logging.L.Err(err).Msg("error converting points to public key")
-				return nil, err
-			}
-		}
-	}
-	return lastPubKey, nil
-}
-
 // ComputeInputHash computes the input_hash for a transaction as per the specification.
-func ComputeInputHash(tx types.Transaction, sumPublicKeys *btcec.PublicKey) ([32]byte, error) {
+func ComputeInputHash(tx types.Transaction, sumPublicKeys *[33]byte) ([32]byte, error) {
 	smallestOutpoint, err := findSmallestOutpoint(tx)
 	if err != nil {
 		logging.L.Err(err).Msg("error finding smallest outpoint")
@@ -503,7 +479,7 @@ func ComputeInputHash(tx types.Transaction, sumPublicKeys *btcec.PublicKey) ([32
 	var buffer bytes.Buffer
 	buffer.Write(smallestOutpoint)
 	// Serialize the x-coordinate of the sumPublicKeys
-	buffer.Write(sumPublicKeys.SerializeCompressed())
+	buffer.Write(sumPublicKeys[:])
 
 	inputHash := bip352.HashTagged("BIP0352/Inputs", buffer.Bytes())
 

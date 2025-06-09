@@ -148,7 +148,8 @@ func main() {
 			syncHeightEndU32 := uint32(syncHeightEnd)
 			endHeight = &syncHeightEndU32
 		}
-		err := bitcoinkernel.SyncToTipFromHeight(context.Background(), uint32(syncHeightStart), endHeight)
+		// err := bitcoinkernel.SyncToTipFromHeight(context.Background(), uint32(syncHeightStart), endHeight)
+		err := bitcoinkernel.SyncWithAsyncBlockPreparationAndComputation(context.Background(), uint32(syncHeightStart), endHeight)
 		if err != nil {
 			logging.L.Fatal().Err(err).Msg("error syncing to tip from height")
 		}

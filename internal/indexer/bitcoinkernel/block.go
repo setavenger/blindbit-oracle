@@ -17,6 +17,7 @@ type KernelBlock struct {
 	blockHeight  uint32
 	blockUndo    *bitcoinkernel.BlockUndo
 	transactions []indexer.Transaction // for caching once computed already
+	numWorkers   int                   // number of concurrent workers
 }
 
 func NewKernelBlock(blockData []byte, height uint32, blockUndo *bitcoinkernel.BlockUndo) *KernelBlock {
@@ -29,7 +30,16 @@ func NewKernelBlock(blockData []byte, height uint32, blockUndo *bitcoinkernel.Bl
 		Block:       *block,
 		blockHeight: height,
 		blockUndo:   blockUndo,
+		numWorkers:  8, // default number of workers
 	}
+}
+
+// SetNumWorkers sets the number of concurrent workers for processing transactions
+func (b *KernelBlock) SetNumWorkers(num int) {
+	if num < 1 {
+		num = 1
+	}
+	b.numWorkers = num
 }
 
 func (b *KernelBlock) GetBlockHash() [32]byte {
@@ -58,68 +68,88 @@ func (b *KernelBlock) GetTransactions() []indexer.Transaction {
 	txs := make([]indexer.Transaction, len(b.Transactions())-1)
 	txsBlock := b.Transactions()
 	// Skip coinbase transaction ([1:])
+	// Create a channel to receive results
+	type result struct {
+		index int
+		tx    indexer.Transaction
+	}
+	resultChan := make(chan result, len(txsBlock)-1)
+
+	// Create a channel to limit concurrent goroutines
+	semaphore := make(chan struct{}, b.numWorkers)
+
+	// Process transactions in parallel
 	for i, tx := range txsBlock[1:] {
-		// var hasTaprootOuts bool
-		msgTx := tx.MsgTx()
-		kernelTx := &KernelBitcoinTransaction{
-			tx: msgTx,
-		}
+		semaphore <- struct{}{} // Acquire semaphore
+		go func(i int, tx *btcutil.Tx) {
+			defer func() { <-semaphore }() // Release semaphore
 
-		kernelTx.outputs = make([]*KernelBitcoinTxOut, len(msgTx.TxOut))
-		for j, out := range msgTx.TxOut {
-			kernelTx.outputs[j] = &KernelBitcoinTxOut{
-				txOut: out,
-				outpoint: &wire.OutPoint{
-					Hash:  msgTx.TxHash(),
-					Index: uint32(j),
-				},
-				parentTx: kernelTx,
-			}
-			// hasTaprootOuts = hasTaprootOuts || indexer.IsP2TR(kernelTx.outputs[j].GetPkScript())
-		}
-
-		kernelTx.inputs = make([]*KernelBitcoinTxIn, len(msgTx.TxIn))
-		for j, in := range msgTx.TxIn {
-			// Get prevout data from block undo
-			txUndo, err := b.blockUndo.GetPrevoutByIndex(uint64(i), uint64(j))
-			if err != nil {
-				logging.L.Panic().
-					Err(err).
-					Hex("txid", kernelTx.GetTxIdSlice()).
-					Msgf("Failed to get prevout by index (tx: %d, input: %d)", i, j)
-				return nil
+			msgTx := tx.MsgTx()
+			kernelTx := &KernelBitcoinTransaction{
+				tx: msgTx,
 			}
 
-			scriptPubkeyPrevout, err := txUndo.GetScriptPubkey()
-			if err != nil {
-				logging.L.
-					Err(err).
-					Hex("txid", kernelTx.GetTxIdSlice()).
-					Msgf("Failed to get script pubkey (tx: %d, input: %d)", i, j)
-				txUndo.Close()
-				continue
+			kernelTx.outputs = make([]*KernelBitcoinTxOut, len(msgTx.TxOut))
+			for j, out := range msgTx.TxOut {
+				kernelTx.outputs[j] = &KernelBitcoinTxOut{
+					txOut: out,
+					outpoint: &wire.OutPoint{
+						Hash:  msgTx.TxHash(),
+						Index: uint32(j),
+					},
+					parentTx: kernelTx,
+				}
 			}
 
-			scriptPubkeyPrevoutBytes, err := scriptPubkeyPrevout.GetData()
-			if err != nil {
-				logging.L.Err(err).Msgf("Failed to get script pubkey data (tx: %d, input: %d)", i, j)
+			kernelTx.inputs = make([]*KernelBitcoinTxIn, len(msgTx.TxIn))
+			for j, in := range msgTx.TxIn {
+				// Get prevout data from block undo
+				txUndo, err := b.blockUndo.GetPrevoutByIndex(uint64(i), uint64(j))
+				if err != nil {
+					logging.L.Panic().
+						Err(err).
+						Hex("txid", kernelTx.GetTxIdSlice()).
+						Msgf("Failed to get prevout by index (tx: %d, input: %d)", i, j)
+					return
+				}
+
+				scriptPubkeyPrevout, err := txUndo.GetScriptPubkey()
+				if err != nil {
+					logging.L.
+						Err(err).
+						Hex("txid", kernelTx.GetTxIdSlice()).
+						Msgf("Failed to get script pubkey (tx: %d, input: %d)", i, j)
+					txUndo.Close()
+					continue
+				}
+
+				scriptPubkeyPrevoutBytes, err := scriptPubkeyPrevout.GetData()
+				if err != nil {
+					logging.L.Err(err).Msgf("Failed to get script pubkey data (tx: %d, input: %d)", i, j)
+					scriptPubkeyPrevout.Close()
+					txUndo.Close()
+					continue
+				}
+
+				kernelTx.inputs[j] = &KernelBitcoinTxIn{
+					txIn:     in,
+					pkScript: scriptPubkeyPrevoutBytes,
+					parentTx: kernelTx,
+				}
+
 				scriptPubkeyPrevout.Close()
 				txUndo.Close()
-				continue
 			}
 
-			kernelTx.inputs[j] = &KernelBitcoinTxIn{
-				txIn:     in,
-				pkScript: scriptPubkeyPrevoutBytes,
-				parentTx: kernelTx,
-			}
-
-			scriptPubkeyPrevout.Close()
-			txUndo.Close()
-		}
-		txs[i] = kernelTx
+			resultChan <- result{index: i, tx: kernelTx}
+		}(i, tx)
 	}
 
+	// Collect results
+	for i := 0; i < len(txsBlock)-1; i++ {
+		result := <-resultChan
+		txs[result.index] = result.tx
+	}
 	// todo: should we always return a copy?
 	b.transactions = txs
 

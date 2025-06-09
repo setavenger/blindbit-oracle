@@ -3,6 +3,7 @@ package indexer
 import (
 	"context"
 	"encoding/hex"
+	"sync"
 
 	"github.com/setavenger/blindbit-lib/logging"
 	"github.com/setavenger/blindbit-oracle/internal/dblevel"
@@ -15,34 +16,75 @@ import (
 // 	blockHeight uint32,
 // 	txs []Transaction,
 // ) error {
-
 // }
+
+var numTweakWorkers = 12 // number of concurrent workers for tweak computation
 
 func ComputeTweaksForBlock(
 	ctx context.Context,
 	block BlockData,
 ) ([]types.Tweak, error) {
-	var tweaks []types.Tweak
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
 	txs := block.GetTransactions()
 
+	// Create channels for results and semaphore
+	type result struct {
+		tweak *types.Tweak
+		err   error
+	}
+	resultChan := make(chan result, len(txs))
+	semaphore := make(chan struct{}, numTweakWorkers)
+	var wg sync.WaitGroup
+
+	// Process transactions in parallel
 	for i := range txs {
+		// we only compute tweaks for transactions with taproot outputs
+		if !TxHasTaprootOutputs(txs[i]) {
+			continue
+		}
+
+		wg.Add(1)
+		semaphore <- struct{}{} // Acquire semaphore
+		go func(tx Transaction) {
+			defer wg.Done()
+			defer func() { <-semaphore }() // Release semaphore
+
+			tweak, err := ComputeTweakForTx(tx)
+			if err != nil {
+				resultChan <- result{err: err}
+				return
+			}
+
+			tweak.BlockHash = hex.EncodeToString(block.GetBlockHashSlice())
+			tweak.BlockHeight = block.GetBlockHeight()
+			resultChan <- result{tweak: tweak}
+		}(txs[i])
+	}
+
+	// Start a goroutine to close the result channel when all workers are done
+	go func() {
+		wg.Wait()
+		close(resultChan)
+	}()
+
+	// Collect results
+	var tweaks []types.Tweak
+	for result := range resultChan {
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		default:
+			if result.err != nil {
+				return nil, result.err
+			}
+			if result.tweak != nil {
+				tweaks = append(tweaks, *result.tweak)
+			}
 		}
-
-		if !TxHasTaprootOutputs(txs[i]) {
-			continue
-		}
-		tweak, err := ComputeTweakForTx(txs[i])
-		if err != nil {
-			return nil, err
-		}
-		tweak.BlockHash = hex.EncodeToString(block.GetBlockHashSlice())
-		tweak.BlockHeight = block.GetBlockHeight()
-		// logging.L.Debug().Any("tweak", tweak).Msg("Tweak")
-		tweaks = append(tweaks, *tweak)
 	}
 
 	return tweaks, nil
@@ -69,6 +111,7 @@ func HandleBlock(
 ) error {
 	// todo the next sections can potentially be optimized by combining them into one loop where
 	//  all things are extracted from the blocks transaction data
+
 	logging.L.Debug().Msg("Computing tweaks...")
 	blockHash := block.GetBlockHash()
 	blockHeight := block.GetBlockHeight()
@@ -79,11 +122,6 @@ func HandleBlock(
 		return err
 	}
 
-	// for _, tweak := range tweaksForBlock {
-	// 	fmt.Printf("%s %x\n", tweak.Txid, tweak.TweakData)
-	// }
-
-	logging.L.Debug().Msg("Tweaks computed...")
 	tweakIndex := BuildPerBlockTweakIndex(blockHash, blockHeight, tweaksForBlock)
 	err = dblevel.InsertTweakIndex(tweakIndex)
 	if err != nil {
@@ -105,6 +143,7 @@ func BuildPerBlockTweakIndex(
 	for i := 0; i < len(tweaks); i++ {
 		tweakData[i] = tweaks[i].TweakData
 	}
+
 	return &types.TweakIndex{
 		BlockHash:   blockHashString,
 		BlockHeight: blockHeight,

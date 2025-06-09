@@ -23,7 +23,11 @@ var (
 )
 
 var (
-	height uint64
+	height        uint64
+	kernelDatadir string
+
+	syncHeightStart uint64
+	syncHeightEnd   uint64
 )
 
 func init() {
@@ -57,12 +61,32 @@ func init() {
 		0,
 		"height to start the indexer at",
 	)
+	flag.StringVar(
+		&kernelDatadir,
+		"kernel-datadir",
+		"",
+		"path to the bitcoin core datadir",
+	)
+	flag.Uint64Var(
+		&syncHeightStart,
+		"sync-height-start",
+		0,
+		"height to sync to tip from",
+	)
+	flag.Uint64Var(
+		&syncHeightEnd,
+		"sync-height-end",
+		0,
+		"height to sync to tip from",
+	)
 	flag.Parse()
 
 	if displayVersion {
 		// we only need the version for this
 		return
 	}
+
+	bitcoinkernel.SetDatadir(kernelDatadir)
 
 	config.SetDirectories() // todo a proper set settings function which does it all would be good to avoid several small function calls
 	err := os.Mkdir(config.BaseDirectory, 0750)
@@ -115,6 +139,18 @@ func main() {
 		err := bitcoinkernel.SyncHeight(ctx, uint32(height))
 		if err != nil {
 			logging.L.Fatal().Err(err).Msg("error syncing height")
+		}
+	}
+
+	if syncHeightStart > 0 {
+		var endHeight *uint32
+		if syncHeightEnd > 0 {
+			syncHeightEndU32 := uint32(syncHeightEnd)
+			endHeight = &syncHeightEndU32
+		}
+		err := bitcoinkernel.SyncToTipFromHeight(context.Background(), uint32(syncHeightStart), endHeight)
+		if err != nil {
+			logging.L.Fatal().Err(err).Msg("error syncing to tip from height")
 		}
 	}
 }

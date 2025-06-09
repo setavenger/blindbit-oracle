@@ -4,7 +4,9 @@ import (
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/setavenger/blindbit-lib/logging"
+	"github.com/setavenger/blindbit-lib/utils"
 	"github.com/setavenger/blindbit-oracle/internal/indexer"
+	"github.com/setavenger/go-bitcoinkernel/pkg/bitcoinkernel"
 )
 
 // Ensure KernelBlock implements indexer.BlockData
@@ -12,10 +14,12 @@ var _ indexer.BlockData = (*KernelBlock)(nil)
 
 type KernelBlock struct {
 	btcutil.Block
-	blockHeight uint32
+	blockHeight  uint32
+	blockUndo    *bitcoinkernel.BlockUndo
+	transactions []indexer.Transaction // for caching once computed already
 }
 
-func NewKernelBlock(blockData []byte, height uint32) *KernelBlock {
+func NewKernelBlock(blockData []byte, height uint32, blockUndo *bitcoinkernel.BlockUndo) *KernelBlock {
 	block, err := btcutil.NewBlockFromBytes(blockData)
 	if err != nil {
 		logging.L.Err(err).Msg("Failed to create block from bytes")
@@ -24,6 +28,7 @@ func NewKernelBlock(blockData []byte, height uint32) *KernelBlock {
 	return &KernelBlock{
 		Block:       *block,
 		blockHeight: height,
+		blockUndo:   blockUndo,
 	}
 }
 
@@ -44,8 +49,17 @@ func (b *KernelBlock) GetBlockHeight() uint32 {
 }
 
 func (b *KernelBlock) GetTransactions() []indexer.Transaction {
-	txs := make([]indexer.Transaction, len(b.Transactions()))
-	for i, tx := range b.Transactions() {
+	if b.transactions != nil {
+		// todo: should we always return a copy?
+		return b.transactions
+	}
+
+	// skip coinbase tx (-1)
+	txs := make([]indexer.Transaction, len(b.Transactions())-1)
+	txsBlock := b.Transactions()
+	// Skip coinbase transaction ([1:])
+	for i, tx := range txsBlock[1:] {
+		// var hasTaprootOuts bool
 		msgTx := tx.MsgTx()
 		kernelTx := &KernelBitcoinTransaction{
 			tx: msgTx,
@@ -61,18 +75,54 @@ func (b *KernelBlock) GetTransactions() []indexer.Transaction {
 				},
 				parentTx: kernelTx,
 			}
+			// hasTaprootOuts = hasTaprootOuts || indexer.IsP2TR(kernelTx.outputs[j].GetPkScript())
 		}
 
 		kernelTx.inputs = make([]*KernelBitcoinTxIn, len(msgTx.TxIn))
 		for j, in := range msgTx.TxIn {
+			// Get prevout data from block undo
+			txUndo, err := b.blockUndo.GetPrevoutByIndex(uint64(i), uint64(j))
+			if err != nil {
+				logging.L.Panic().
+					Err(err).
+					Hex("txid", kernelTx.GetTxIdSlice()).
+					Msgf("Failed to get prevout by index (tx: %d, input: %d)", i, j)
+				return nil
+			}
+
+			scriptPubkeyPrevout, err := txUndo.GetScriptPubkey()
+			if err != nil {
+				logging.L.
+					Err(err).
+					Hex("txid", kernelTx.GetTxIdSlice()).
+					Msgf("Failed to get script pubkey (tx: %d, input: %d)", i, j)
+				txUndo.Close()
+				continue
+			}
+
+			scriptPubkeyPrevoutBytes, err := scriptPubkeyPrevout.GetData()
+			if err != nil {
+				logging.L.Err(err).Msgf("Failed to get script pubkey data (tx: %d, input: %d)", i, j)
+				scriptPubkeyPrevout.Close()
+				txUndo.Close()
+				continue
+			}
+
 			kernelTx.inputs[j] = &KernelBitcoinTxIn{
 				txIn:     in,
-				pkScript: nil, // This will be populated when we have access to previous outputs
+				pkScript: scriptPubkeyPrevoutBytes,
 				parentTx: kernelTx,
 			}
+
+			scriptPubkeyPrevout.Close()
+			txUndo.Close()
 		}
 		txs[i] = kernelTx
 	}
+
+	// todo: should we always return a copy?
+	b.transactions = txs
+
 	return txs
 }
 
@@ -93,11 +143,13 @@ func (t *KernelBitcoinTransaction) GetTxId() [32]byte {
 	hash := t.tx.TxHash()
 	var result [32]byte
 	copy(result[:], hash[:])
+	utils.ReverseBytes(result[:])
 	return result
 }
 
 func (t *KernelBitcoinTransaction) GetTxIdSlice() []byte {
 	hash := t.tx.TxHash()
+	utils.ReverseBytes(hash[:])
 	return hash[:]
 }
 
@@ -129,11 +181,14 @@ type KernelBitcoinTxIn struct {
 func (in *KernelBitcoinTxIn) GetTxId() [32]byte {
 	var result [32]byte
 	copy(result[:], in.txIn.PreviousOutPoint.Hash[:])
+	utils.ReverseBytes(result[:])
 	return result
 }
 
 func (in *KernelBitcoinTxIn) GetTxIdSlice() []byte {
-	return in.txIn.PreviousOutPoint.Hash[:]
+	hash := in.txIn.PreviousOutPoint.Hash
+	utils.ReverseBytes(hash[:])
+	return hash[:]
 }
 
 func (in *KernelBitcoinTxIn) GetVout() uint32 {
@@ -144,8 +199,8 @@ func (in *KernelBitcoinTxIn) GetPrevoutPkScript() []byte {
 	return in.pkScript
 }
 
-func (in *KernelBitcoinTxIn) SetPrevoutPkScript(script []byte) {
-	in.pkScript = script
+func (in *KernelBitcoinTxIn) GetPkScript() []byte {
+	return in.pkScript
 }
 
 func (in *KernelBitcoinTxIn) GetWitness() [][]byte {
@@ -154,6 +209,11 @@ func (in *KernelBitcoinTxIn) GetWitness() [][]byte {
 
 func (in *KernelBitcoinTxIn) GetScriptSig() []byte {
 	return in.txIn.SignatureScript
+}
+
+func (in *KernelBitcoinTxIn) Valid() bool {
+	// coinbase outpoint index is 0xffffffff
+	return in.txIn.PreviousOutPoint.Index != 0xffffffff
 }
 
 // Ensure KernelBitcoinTxOut implements indexer.TxOut

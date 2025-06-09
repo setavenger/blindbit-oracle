@@ -20,8 +20,11 @@ type TxIn interface {
 	GetVout() uint32
 	// GetValue() uint64
 	GetPrevoutPkScript() []byte // Previous output script
+	GetPkScript() []byte
 	GetWitness() [][]byte
 	GetScriptSig() []byte
+	// used to find coinbase txins, can be used to deactive other types txins as well
+	Valid() bool
 }
 
 type TxOut interface {

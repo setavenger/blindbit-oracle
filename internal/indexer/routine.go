@@ -30,15 +30,37 @@ func ComputeTweaksForBlock(
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		default:
-			tweak, err := ComputeTweakForTx(txs[i])
-			if err != nil {
-				return nil, err
-			}
-			tweaks = append(tweaks, *tweak)
 		}
+
+		if !TxHasTaprootOutputs(txs[i]) {
+			continue
+		}
+		tweak, err := ComputeTweakForTx(txs[i])
+		if err != nil {
+			return nil, err
+		}
+		tweak.BlockHash = hex.EncodeToString(block.GetBlockHashSlice())
+		tweak.BlockHeight = block.GetBlockHeight()
+		// logging.L.Debug().Any("tweak", tweak).Msg("Tweak")
+		tweaks = append(tweaks, *tweak)
 	}
 
 	return tweaks, nil
+}
+
+func TxHasTaprootOutputs(tx Transaction) bool {
+	txOuts := tx.GetTxOuts()
+	for _, txOut := range txOuts {
+		pkScript := txOut.GetPkScript()
+		// pkScripts for taproot outputs are exactly 34 bytes
+		if len(pkScript) != 34 {
+			continue
+		}
+		if IsP2TR(pkScript) {
+			return true
+		}
+	}
+	return false
 }
 
 func HandleBlock(
@@ -56,6 +78,11 @@ func HandleBlock(
 		logging.L.Err(err).Msg("error computing tweaks")
 		return err
 	}
+
+	// for _, tweak := range tweaksForBlock {
+	// 	fmt.Printf("%s %x\n", tweak.Txid, tweak.TweakData)
+	// }
+
 	logging.L.Debug().Msg("Tweaks computed...")
 	tweakIndex := BuildPerBlockTweakIndex(blockHash, blockHeight, tweaksForBlock)
 	err = dblevel.InsertTweakIndex(tweakIndex)

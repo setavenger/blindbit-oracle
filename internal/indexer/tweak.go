@@ -51,22 +51,33 @@ func ComputeTweakForTx(tx Transaction) (*types.Tweak, error) {
 func ExtractPubKeys(txIns []TxIn) [][33]byte {
 	var pubKeys [][33]byte
 	for _, txIn := range txIns {
+		if !txIn.Valid() {
+			continue
+		}
+		// logging.L.Debug().Hex("txid", txIn.GetTxIdSlice()).Uint32("vout", txIn.GetVout()).Any("txin", txIn).Msgf("extracting pubkeys: %+v", txIn)
+		// logging.L.Debug().Hex("prevoutPkScript", txIn.GetPrevoutPkScript()).Msg("prevoutPkScript")
+		// logging.L.Debug().Hex("scriptSig", txIn.GetScriptSig()).Msg("scriptSig")
+		// logging.L.Debug().Any("witness", txIn.GetWitness()).Msg("witness")
+		// logging.L.Debug().Any("valid", txIn.Valid()).Msg("valid")
 		switch {
-		case IsP2TR(txIn):
+		case IsP2TR(txIn.GetPrevoutPkScript()):
 			pubKey, err := extractPubKeyFromP2TR(txIn)
 			if err != nil {
 				logging.L.Err(err).Msg("error extracting public key from P2TR")
 				continue
 			}
-			pubKey = bytes.Join([][]byte{[]byte{0x02}, pubKey}, nil) // prepend for always even parity
+			if len(pubKey) != 32 {
+				continue
+			}
+			pubKey = bytes.Join([][]byte{{0x02}, pubKey}, nil) // prepend for always even parity
 			pubKeys = append(pubKeys, utils.ConvertToFixedLength33(pubKey))
-		case IsP2Wpkh(txIn):
+		case IsP2Wpkh(txIn.GetPrevoutPkScript()):
 			witnessData := txIn.GetWitness()
-			if len(witnessData[len(witnessData)-1]) > 33 {
+			if len(witnessData[len(witnessData)-1]) == 33 {
 				pubKey := witnessData[len(witnessData)-1]
 				pubKeys = append(pubKeys, utils.ConvertToFixedLength33(pubKey))
 			}
-		case IsP2Sh(txIn):
+		case IsP2Sh(txIn.GetPrevoutPkScript()):
 			scriptSig := txIn.GetScriptSig()
 			witnessData := txIn.GetWitness()
 			if len(scriptSig) == 23 {
@@ -76,10 +87,13 @@ func ExtractPubKeys(txIns []TxIn) [][33]byte {
 					}
 				}
 			}
-		case IsP2Pkh(txIn):
+		case IsP2Pkh(txIn.GetPrevoutPkScript()):
 			pubKey, err := extractPubKeyFromP2PKH(txIn)
 			if err != nil {
 				logging.L.Err(err).Msg("error extracting public key from P2Pkh")
+				continue
+			}
+			if len(pubKey) != 33 {
 				continue
 			}
 			pubKeys = append(pubKeys, utils.ConvertToFixedLength33(pubKey))
@@ -92,26 +106,25 @@ func ExtractPubKeys(txIns []TxIn) [][33]byte {
 }
 
 var (
-	P2TrPrefix   = []byte{0x01, 0x51}
+	P2TrPrefix   = []byte{0x51, 0x20}
 	P2WpkhPrefix = []byte{0x00, 0x14}
 )
 
-func IsP2TR(txIn TxIn) bool {
-	return bytes.Equal(txIn.GetPrevoutPkScript()[:2], P2TrPrefix)
+func IsP2TR(script []byte) bool {
+	// logging.L.Debug().Hex("script", script).Msg("IsP2TR")
+	return bytes.Equal(script[:2], P2TrPrefix)
 }
 
-func IsP2Wpkh(txIn TxIn) bool {
-	script := txIn.GetPrevoutPkScript()
+func IsP2Wpkh(script []byte) bool {
+	// logging.L.Debug().Hex("script", script).Msg("IsP2Wpkh")
 	return len(script) == 22 && bytes.Equal(script[:2], P2WpkhPrefix)
 }
 
-func IsP2Sh(txIn TxIn) bool {
-	script := txIn.GetPrevoutPkScript()
+func IsP2Sh(script []byte) bool {
 	return len(script) == 23 && script[0] == 0xa9 && script[1] == 0x14 && script[22] == 0x87
 }
 
-func IsP2Pkh(txIn TxIn) bool {
-	script := txIn.GetPrevoutPkScript()
+func IsP2Pkh(script []byte) bool {
 	return len(script) == 25 &&
 		script[0] == 0x76 && // OP_DUP
 		script[1] == 0xa9 && // OP_HASH160
@@ -176,7 +189,7 @@ func extractPubKeyFromP2TR(vin TxIn) ([]byte, error) {
 func ComputeInputHash(tx Transaction, sumPublicKeys *[33]byte) ([32]byte, error) {
 	smallestOutpoint, err := findSmallestOutpoint(tx)
 	if err != nil {
-		logging.L.Err(err).Msg("error finding smallest outpoint")
+		logging.L.Err(err).Hex("txid", tx.GetTxIdSlice()).Msg("error finding smallest outpoint")
 		return [32]byte{}, err
 	}
 
@@ -202,10 +215,21 @@ func findSmallestOutpoint(tx Transaction) ([]byte, error) {
 	outpoints := make([][]byte, 0, len(vins))
 
 	for _, vin := range vins {
+		// fmt.Printf("vin: %x\n", vin.GetTxId())
+		// fmt.Printf("vin.GetVout(): %d\n", vin.GetVout())
+		// fmt.Printf("vin.GetPrevoutPkScript(): %x\n", vin.GetPrevoutPkScript())
+		// fmt.Printf("vin.GetScriptSig(): %x\n", vin.GetScriptSig())
+		// fmt.Printf("vin.GetWitness(): %x\n", vin.GetWitness())
+		// fmt.Printf("vin.Valid(): %t\n", vin.Valid())
+
 		// Skip coinbase transactions as they do not have a regular prevout
-		if vin.GetPrevoutPkScript() == nil {
+		// make sure this check is still relevant
+		// we might be already excluding coinbase outputs from the get go
+		if !vin.Valid() {
 			continue
 		}
+		// logging.L.Debug().Hex("txid", vin.GetTxIdSlice()).Msg("findSmallestOutpoint")
+		// logging.L.Debug().Uint32("vout", vin.GetVout()).Msg("findSmallestOutpoint")
 
 		// Decode the Txid (hex to bytes) and reverse it to match little-endian format
 		txidBytes := vin.GetTxId()

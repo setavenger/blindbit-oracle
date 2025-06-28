@@ -17,7 +17,7 @@ func InsertTweakIndex(pair *types.TweakIndex) error {
 	return nil
 }
 
-func FetchByBlockHashTweakIndex(blockHash string) (*types.TweakIndex, error) {
+func FetchByBlockHashTweakIndex(blockHash [32]byte) (*types.TweakIndex, error) {
 	var pair types.TweakIndex
 	err := retrieveByBlockHash(TweakIndexDB, blockHash, &pair)
 	if err != nil && !errors.Is(err, NoEntryErr{}) {

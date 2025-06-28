@@ -3,7 +3,6 @@ package dblevel
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/hex"
 	"errors"
 
 	"github.com/setavenger/blindbit-lib/logging"
@@ -94,14 +93,8 @@ func insertBatch(db *leveldb.DB, pairs []types.Pair) error {
 	return err
 }
 
-func retrieveByBlockHash(db *leveldb.DB, blockHash string, pair types.Pair) error {
-	blockHashBytes, err := hex.DecodeString(blockHash)
-	if err != nil {
-		logging.L.Err(err).Msg("error decoding block hash")
-		return err
-	}
-
-	data, err := db.Get(blockHashBytes, nil)
+func retrieveByBlockHash(db *leveldb.DB, blockHash [32]byte, pair types.Pair) error {
+	data, err := db.Get(blockHash[:], nil)
 	if err != nil && !errors.Is(err, leveldb.ErrNotFound) { // todo this error probably exists as var/type somewhere
 		logging.L.Err(err).Msg("error getting block hash")
 		return err
@@ -114,7 +107,7 @@ func retrieveByBlockHash(db *leveldb.DB, blockHash string, pair types.Pair) erro
 		return NoEntryErr{}
 	}
 
-	err = pair.DeSerialiseKey(blockHashBytes)
+	err = pair.DeSerialiseKey(blockHash[:])
 	if err != nil {
 		logging.L.Err(err).Msg("error deserialising key")
 		return err
@@ -193,14 +186,12 @@ func retrieveAll(db *leveldb.DB, factory types.PairFactory) ([]types.Pair, error
 	return results, err
 }
 
-func retrieveManyByBlockHash(db *leveldb.DB, blockHash string, factory types.PairFactory) ([]types.Pair, error) {
-	blockHashBytes, err := hex.DecodeString(blockHash)
-	if err != nil {
-		logging.L.Err(err).Msg("error decoding block hash")
-		return nil, err
-	}
+func retrieveManyByBlockHash(db *leveldb.DB, blockHash [32]byte, factory types.PairFactory) ([]types.Pair, error) {
+	blockHashBytes := blockHash[:]
 	iter := db.NewIterator(util.BytesPrefix(blockHashBytes), nil)
 	defer iter.Release()
+
+	var err error
 	var results []types.Pair
 
 	for iter.Next() {
@@ -226,22 +217,15 @@ func retrieveManyByBlockHash(db *leveldb.DB, blockHash string, factory types.Pai
 	return results, err
 }
 
-func retrieveManyByBlockHashAndTxid(db *leveldb.DB, blockHash, txid string, factory types.PairFactory) ([]types.Pair, error) {
-	blockHashBytes, err := hex.DecodeString(blockHash)
-	if err != nil {
-		logging.L.Err(err).Msg("error decoding block hash")
-		return nil, err
-	}
-	txidBytes, err := hex.DecodeString(txid)
-	if err != nil {
-		logging.L.Err(err).Msg("error decoding txid")
-		return nil, err
-	}
+func retrieveManyByBlockHashAndTxid(db *leveldb.DB, blockHash, txid [32]byte, factory types.PairFactory) ([]types.Pair, error) {
+	var prefix [64]byte
+	copy(prefix[:32], blockHash[:])
+	copy(prefix[32:], txid[:])
 
-	prefix := append(blockHashBytes, txidBytes...)
-
-	iter := db.NewIterator(util.BytesPrefix(prefix), nil)
+	iter := db.NewIterator(util.BytesPrefix(prefix[:]), nil)
 	defer iter.Release()
+
+	var err error
 	var results []types.Pair
 
 	for iter.Next() {

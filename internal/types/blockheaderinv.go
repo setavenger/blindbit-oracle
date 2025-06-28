@@ -4,7 +4,6 @@ package types
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/hex"
 	"errors"
 
 	"github.com/setavenger/blindbit-lib/logging"
@@ -14,7 +13,7 @@ import (
 // Required because we need different Serialisation for Pair interface
 // todo change naming to be consistent?
 type BlockHeaderInv struct {
-	Hash   string
+	Hash   [32]byte
 	Height uint32
 	Flag   bool // indicates whether this Block has been processed
 }
@@ -30,18 +29,14 @@ func (v *BlockHeaderInv) SerialiseKey() ([]byte, error) {
 }
 
 func (v *BlockHeaderInv) SerialiseData() ([]byte, error) {
+	// todo: this should be optimisable by using a fixed size byte arrays
 	var buf bytes.Buffer
 	err := binary.Write(&buf, binary.BigEndian, v.Flag)
 	if err != nil {
 		logging.L.Err(err).Msg("error serialising block header inv")
 		return nil, err
 	}
-	blockHashBytes, err := hex.DecodeString(v.Hash)
-	if err != nil {
-		logging.L.Err(err).Msg("error serialising block header inv")
-		return nil, err
-	}
-	buf.Write(blockHashBytes)
+	buf.Write(v.Hash[:])
 
 	return buf.Bytes(), nil
 }
@@ -73,17 +68,12 @@ func (v *BlockHeaderInv) DeSerialiseData(data []byte) error {
 		logging.L.Err(err).Msg("error deserialising block header inv")
 		return err
 	}
-	v.Hash = hex.EncodeToString(data[1:])
+	copy(v.Hash[:], data[1:])
 	return nil
 }
 
 func GetKeyBlockHeaderInv(height uint32) ([]byte, error) {
-	var buf bytes.Buffer
-
-	err := binary.Write(&buf, binary.BigEndian, height)
-	if err != nil {
-		logging.L.Err(err).Msg("error getting key block header inv")
-		return nil, err
-	}
-	return buf.Bytes(), nil
+	var key [4]byte
+	binary.BigEndian.PutUint32(key[:], height)
+	return key[:], nil
 }

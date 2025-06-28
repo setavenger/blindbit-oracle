@@ -1,7 +1,6 @@
 package core
 
 import (
-	"bytes"
 	"encoding/binary"
 	"encoding/hex"
 
@@ -61,26 +60,27 @@ func BuildNewUTXOsFilter(block *types.Block) (types.Filter, error) {
 		return types.Filter{}, err
 	}
 
+	blockhashBytes, err := hex.DecodeString(block.Hash)
+	if err != nil {
+		logging.L.Fatal().Err(err).Str("blockhash", block.Hash).Msg("Failed to decode block hash")
+		return types.Filter{}, err
+	}
+
 	return types.Filter{
 		FilterType:  4,
 		BlockHeight: block.Height,
 		Data:        nBytes,
-		BlockHash:   block.Hash,
+		BlockHash:   [32]byte(blockhashBytes),
 	}, nil
 }
 
 // BuildSpentUTXOsFilter creates a filter based on the spent
 func BuildSpentUTXOsFilter(spentOutpointsIndex types.SpentOutpointsIndex) (types.Filter, error) {
-	blockHashBytes, err := hex.DecodeString(spentOutpointsIndex.BlockHash)
-	if err != nil {
-		logging.L.Fatal().Err(err).Str("blockhash", spentOutpointsIndex.BlockHash).Msg("Failed to decode block hash")
-		return types.Filter{}, err
-	}
 	c := chainhash.Hash{}
 
-	err = c.SetBytes(utils.ReverseBytes(blockHashBytes))
+	err := c.SetBytes(utils.ReverseBytes(spentOutpointsIndex.BlockHash[:]))
 	if err != nil {
-		logging.L.Fatal().Err(err).Str("blockhash", spentOutpointsIndex.BlockHash).Msg("Failed to set block hash")
+		logging.L.Fatal().Err(err).Hex("blockhash", spentOutpointsIndex.BlockHash[:]).Msg("Failed to set block hash")
 		return types.Filter{}, err
 
 	}
@@ -96,13 +96,13 @@ func BuildSpentUTXOsFilter(spentOutpointsIndex types.SpentOutpointsIndex) (types
 
 	filter, err := gcs.BuildGCSFilter(builder.DefaultP, builder.DefaultM, key, data)
 	if err != nil {
-		logging.L.Fatal().Err(err).Str("blockhash", spentOutpointsIndex.BlockHash).Msg("Failed to build GCS filter")
+		logging.L.Fatal().Err(err).Hex("blockhash", spentOutpointsIndex.BlockHash[:]).Msg("Failed to build GCS filter")
 		return types.Filter{}, err
 	}
 
 	nBytes, err := filter.NBytes()
 	if err != nil {
-		logging.L.Fatal().Err(err).Str("blockhash", spentOutpointsIndex.BlockHash).Msg("Failed to get NBytes")
+		logging.L.Fatal().Err(err).Hex("blockhash", spentOutpointsIndex.BlockHash[:]).Msg("Failed to get NBytes")
 		return types.Filter{}, err
 	}
 
@@ -115,17 +115,10 @@ func BuildSpentUTXOsFilter(spentOutpointsIndex types.SpentOutpointsIndex) (types
 }
 
 func SerialiseToOutpoint(utxo types.UTXO) ([]byte, error) {
-	var buf bytes.Buffer
+	out := make([]byte, 32+4)
 
-	txidBytes, err := hex.DecodeString(utxo.Txid)
-	if err != nil {
-		logging.L.Fatal().Err(err).Str("txid", utxo.Txid).Msg("Failed to decode txid")
-		return nil, err
-	}
+	copy(out[:32], utils.ReverseBytesCopy(utxo.Txid[:]))
+	binary.LittleEndian.PutUint32(out[32:], utxo.Vout)
 
-	// err is always nil
-	buf.Write(utils.ReverseBytes(txidBytes))
-
-	binary.Write(&buf, binary.LittleEndian, utxo.Vout)
-	return buf.Bytes(), err
+	return out, nil
 }

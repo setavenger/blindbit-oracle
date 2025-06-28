@@ -28,7 +28,7 @@ func overwriteUTXOsWithLookUp(utxos []types.UTXO) error {
 		utxosToOverwrite = append(utxosToOverwrite, &utxo)
 	}
 	err := dblevel.InsertUTXOs(utxosToOverwrite)
-	alreadyCheckedTxids := make(map[string]struct{})
+	alreadyCheckedTxids := make(map[[32]byte]struct{})
 	for _, utxo := range utxosToOverwrite {
 		if _, ok := alreadyCheckedTxids[utxo.Txid]; ok {
 			continue
@@ -90,7 +90,7 @@ func markSpentUTXOsAndTweaks(utxos []types.UTXO) error {
 
 	// we only need to check for one utxo per txid, so we reduce the number of utxos -> fewer lookups in DB
 	var cleanUTXOs []types.UTXO
-	includedTxids := make(map[string]bool)
+	includedTxids := make(map[[32]byte]bool)
 
 	for _, utxo := range utxos {
 		if _, exists := includedTxids[utxo.Txid]; !exists {

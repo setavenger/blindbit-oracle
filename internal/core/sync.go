@@ -1,11 +1,13 @@
 package core
 
 import (
+	"encoding/hex"
 	"errors"
 	"sort"
 	"sync"
 
 	"github.com/setavenger/blindbit-lib/logging"
+	"github.com/setavenger/blindbit-lib/utils"
 	"github.com/setavenger/blindbit-oracle/internal/config"
 	"github.com/setavenger/blindbit-oracle/internal/dblevel"
 	"github.com/setavenger/blindbit-oracle/internal/types"
@@ -288,8 +290,16 @@ func PreSyncHeaders() error {
 		// convert BlockHeaders to BlockerHeadersInv
 		var headersInv []types.BlockHeaderInv
 		for _, header := range headers {
+			blockHashSlice, err := hex.DecodeString(header.Hash)
+			if err != nil {
+				// todo: remove all hex.Decode or hex.Encode code
+				// there are only very few places where this actually needed
+				logging.L.Err(err).Msg("blockhash could not be hex decoded")
+				return err
+			}
+
 			headersInv = append(headersInv, types.BlockHeaderInv{
-				Hash:   header.Hash,
+				Hash:   utils.ConvertToFixedLength32(blockHashSlice),
 				Height: header.Height,
 				Flag:   false,
 			})

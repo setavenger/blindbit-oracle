@@ -55,7 +55,8 @@ func ComputeTweaksForBlockV4(block *types.Block) ([]types.Tweak, error) {
 							break
 						}
 						if tweakPerTx != nil {
-							tweakPerTx.BlockHash = block.Hash
+							blockHashBytes, _ := hex.DecodeString(block.Hash)
+							tweakPerTx.BlockHash = utils.ConvertToFixedLength32(blockHashBytes)
 							tweakPerTx.BlockHeight = block.Height
 							resultsChannel <- *tweakPerTx
 						}
@@ -140,7 +141,8 @@ func ComputeTweaksForBlockV3(block *types.Block) ([]types.Tweak, error) {
 							break
 						}
 						if tweakPerTx != nil {
-							tweakPerTx.BlockHash = block.Hash
+							blockHashBytes, _ := hex.DecodeString(block.Hash)
+							tweakPerTx.BlockHash = utils.ConvertToFixedLength32(blockHashBytes)
 							tweakPerTx.BlockHeight = block.Height
 
 							localTweaks = append(localTweaks, *tweakPerTx)
@@ -209,7 +211,8 @@ func ComputeTweaksForBlockV2(block *types.Block) ([]types.Tweak, error) {
 					// they are not supposed to throw an error
 					// but also don't have a tweak that can be computed
 					if tweakPerTx != nil {
-						tweakPerTx.BlockHash = block.Hash
+						blockHashBytes, _ := hex.DecodeString(block.Hash)
+						tweakPerTx.BlockHash = utils.ConvertToFixedLength32(blockHashBytes)
 						tweakPerTx.BlockHeight = block.Height
 
 						muTweaks.Lock()
@@ -247,7 +250,8 @@ func ComputeTweaksForBlockV1(block *types.Block) ([]types.Tweak, error) {
 				// they are not supposed to throw an error
 				// but also don't have a tweak that can be computed
 				if tweakPerTx != nil {
-					tweakPerTx.BlockHash = block.Hash
+					blockHashBytes, _ := hex.DecodeString(block.Hash)
+					tweakPerTx.BlockHash = utils.ConvertToFixedLength32(blockHashBytes)
 					tweakPerTx.BlockHeight = block.Height
 					tweaks = append(tweaks, *tweakPerTx)
 				}
@@ -294,8 +298,10 @@ func ComputeTweakPerTx(tx types.Transaction) (*types.Tweak, error) {
 		return nil, err
 	}
 
+	txidBytes, _ := hex.DecodeString(tx.Txid)
+
 	tweak := types.Tweak{
-		Txid:         tx.Txid,
+		Txid:         utils.ConvertToFixedLength32(txidBytes),
 		TweakData:    *tweakBytes,
 		HighestValue: highestValue,
 	}

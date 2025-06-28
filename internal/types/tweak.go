@@ -3,7 +3,6 @@ package types
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/hex"
 	"errors"
 
 	"github.com/setavenger/blindbit-lib/logging"
@@ -12,10 +11,10 @@ import (
 const TweakDataLength = 33
 
 type Tweak struct {
-	BlockHash string `json:"block_hash"`
+	BlockHash [32]byte `json:"block_hash"`
 	// BlockHeight todo not really used at the moment, could be added on a per request basis in the API handler
 	BlockHeight uint32                `json:"block_height"`
-	Txid        string                `json:"txid"`
+	Txid        [32]byte              `json:"txid"`
 	TweakData   [TweakDataLength]byte `json:"tweak_data"`
 	// HighestValue indicates the value of the UTXO with the most value for a specific tweak
 	HighestValue uint64
@@ -50,8 +49,8 @@ func (v *Tweak) DeSerialiseKey(key []byte) error {
 		return err
 	}
 
-	v.BlockHash = hex.EncodeToString(key[:32])
-	v.Txid = hex.EncodeToString(key[32:])
+	copy(v.BlockHash[:], key[:32])
+	copy(v.Txid[:], key[32:])
 
 	return nil
 }
@@ -76,20 +75,9 @@ func (v *Tweak) DeSerialiseData(data []byte) error {
 	return nil
 }
 
-func GetDBKeyTweak(blockHash, txid string) ([]byte, error) {
-	var buf bytes.Buffer
-	blockHashBytes, err := hex.DecodeString(blockHash)
-	if err != nil {
-		logging.L.Err(err).Hex("blockHash", []byte(blockHash)).Msg("error decoding block hash")
-		return nil, err
-	}
-	txidBytes, err := hex.DecodeString(txid)
-	if err != nil {
-		logging.L.Err(err).Hex("txid", []byte(txid)).Msg("error decoding txid")
-		return nil, err
-	}
-	buf.Write(blockHashBytes)
-	buf.Write(txidBytes)
-
-	return buf.Bytes(), nil
+func GetDBKeyTweak(blockHash [32]byte, txid [32]byte) ([]byte, error) {
+	key := make([]byte, 64)
+	copy(key[:32], blockHash[:])
+	copy(key[32:], txid[:])
+	return key, nil
 }

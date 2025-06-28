@@ -17,7 +17,7 @@ func InsertSpentOutpointsIndex(pair *types.SpentOutpointsIndex) error {
 	return nil
 }
 
-func FetchByBlockHashSpentOutpointIndex(blockHash string) (*types.SpentOutpointsIndex, error) {
+func FetchByBlockHashSpentOutpointIndex(blockHash [32]byte) (*types.SpentOutpointsIndex, error) {
 	var pair types.SpentOutpointsIndex
 	err := retrieveByBlockHash(SpentOutpointsIndexDB, blockHash, &pair)
 	if err != nil && !errors.Is(err, NoEntryErr{}) {

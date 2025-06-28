@@ -27,7 +27,7 @@ func InsertUTXOs(utxos []*types.UTXO) error {
 	return nil
 }
 
-func FetchByBlockHashUTXOs(blockHash string) ([]types.UTXO, error) {
+func FetchByBlockHashUTXOs(blockHash [32]byte) ([]types.UTXO, error) {
 	pairs, err := retrieveManyByBlockHash(UTXOsDB, blockHash, types.PairFactoryUTXO)
 	if err != nil {
 		logging.L.Err(err).Msg("error fetching utxos by block hash")
@@ -51,7 +51,7 @@ func FetchByBlockHashUTXOs(blockHash string) ([]types.UTXO, error) {
 	return result, nil
 }
 
-func FetchByBlockHashAndTxidUTXOs(blockHash, txid string) ([]types.UTXO, error) {
+func FetchByBlockHashAndTxidUTXOs(blockHash, txid [32]byte) ([]types.UTXO, error) {
 	pairs, err := retrieveManyByBlockHashAndTxid(UTXOsDB, blockHash, txid, types.PairFactoryUTXO)
 	if err != nil {
 		if errors.Is(err, NoEntryErr{}) {
@@ -129,7 +129,7 @@ func PruneUTXOs(prefix []byte) error {
 	// totalSet is for the final batch deletion
 	var totalSetToDelete []types.UTXO
 
-	var lastTxid string
+	var lastTxid [32]byte
 	var canBeRemoved = true
 	var currentSet []types.UTXO
 
@@ -145,7 +145,7 @@ func PruneUTXOs(prefix []byte) error {
 			return err
 		}
 
-		if lastTxid == "" {
+		if lastTxid == [32]byte{} {
 			lastTxid = value.Txid
 		}
 
@@ -169,7 +169,7 @@ func PruneUTXOs(prefix []byte) error {
 			// delete the current set of UTXOs if eligible
 
 			// do deletion
-			if lastTxid != "" && canBeRemoved {
+			if lastTxid != [32]byte{} && canBeRemoved {
 				totalSetToDelete = append(totalSetToDelete, currentSet...)
 			}
 

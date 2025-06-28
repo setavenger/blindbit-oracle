@@ -57,8 +57,8 @@ func convertUTXOsToRecords(utxos []types.UTXO) ([][]string, error) {
 	})
 	for _, pair := range utxos {
 		records = append(records, []string{
-			pair.BlockHash,
-			pair.Txid,
+			hex.EncodeToString(pair.BlockHash[:]),
+			hex.EncodeToString(pair.Txid[:]),
 			strconv.FormatUint(uint64(pair.Vout), 10),
 			pair.ScriptPubKey,
 			strconv.FormatUint(pair.Value, 10),
@@ -93,7 +93,7 @@ func convertFiltersToRecords(data []types.Filter) ([][]string, error) {
 	})
 	for _, pair := range data {
 		records = append(records, []string{
-			pair.BlockHash,
+			hex.EncodeToString(pair.BlockHash[:]),
 			strconv.FormatUint(uint64(pair.FilterType), 10),
 			hex.EncodeToString(pair.Data),
 		})
@@ -128,8 +128,8 @@ func convertTweaksToRecords(data []types.Tweak) ([][]string, error) {
 	})
 	for _, pair := range data {
 		records = append(records, []string{
-			pair.BlockHash,
-			pair.Txid,
+			hex.EncodeToString(pair.BlockHash[:]),
+			hex.EncodeToString(pair.Txid[:]),
 			hex.EncodeToString(pair.TweakData[:]),
 			strconv.FormatUint(pair.HighestValue, 10),
 		})
@@ -174,7 +174,7 @@ func convertTweakIndicesToRecords(data []types.TweakIndex) ([][]string, error) {
 		}
 
 		records = append(records, []string{
-			pair.BlockHash,
+			hex.EncodeToString(pair.BlockHash[:]),
 			hex.EncodeToString(flattened),
 		})
 	}
@@ -207,7 +207,7 @@ func convertHeadersInvToRecords(data []types.BlockHeaderInv) ([][]string, error)
 	for _, pair := range data {
 		records = append(records, []string{
 			strconv.FormatUint(uint64(pair.Height), 10),
-			pair.Hash,
+			hex.EncodeToString(pair.Hash[:]),
 		})
 	}
 	return records, nil

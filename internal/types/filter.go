@@ -3,17 +3,16 @@ package types
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/hex"
 	"errors"
 
 	"github.com/setavenger/blindbit-lib/logging"
 )
 
 type Filter struct {
-	FilterType  uint8  `json:"filter_type"`
-	BlockHeight uint32 `json:"block_height"`
-	Data        []byte `json:"data"`
-	BlockHash   string `json:"block_hash"`
+	FilterType  uint8    `json:"filter_type"`
+	BlockHeight uint32   `json:"block_height"`
+	Data        []byte   `json:"data"`
+	BlockHash   [32]byte `json:"block_hash"`
 }
 
 func PairFactoryFilter() Pair {
@@ -46,7 +45,7 @@ func (v *Filter) DeSerialiseKey(key []byte) error {
 		return err
 	}
 	// The block hash is fixed length, decode the block hash part
-	v.BlockHash = hex.EncodeToString(key)
+	copy(v.BlockHash[:], key)
 
 	return nil
 }
@@ -57,13 +56,6 @@ func (v *Filter) DeSerialiseData(data []byte) error {
 	return nil
 }
 
-func GetDBKeyFilter(blockHash string) ([]byte, error) {
-	var buf bytes.Buffer
-	blockHashBytes, err := hex.DecodeString(blockHash)
-	if err != nil {
-		logging.L.Err(err).Hex("blockHash", []byte(blockHash)).Msg("error decoding block hash")
-		return nil, err
-	}
-	buf.Write(blockHashBytes)
-	return buf.Bytes(), nil
+func GetDBKeyFilter(blockHash [32]byte) ([]byte, error) {
+	return blockHash[:], nil
 }

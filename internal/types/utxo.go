@@ -14,14 +14,14 @@ import (
 //
 //	unused fields could just be omitted from serialisation and de-serialisation
 type UTXO struct {
-	Txid         string `json:"txid"`
-	Vout         uint32 `json:"vout"`
-	Value        uint64 `json:"value"`
-	ScriptPubKey string `json:"scriptpubkey"`
-	BlockHeight  uint32 `json:"block_height"` // not used
-	BlockHash    string `json:"block_hash"`
-	Timestamp    uint64 `json:"timestamp"` // not used
-	Spent        bool   `json:"spent"`
+	Txid         [32]byte `json:"txid"`
+	Vout         uint32   `json:"vout"`
+	Value        uint64   `json:"value"`
+	ScriptPubKey string   `json:"scriptpubkey"`
+	BlockHeight  uint32   `json:"block_height"` // not used
+	BlockHash    [32]byte `json:"block_hash"`
+	Timestamp    uint64   `json:"timestamp"` // not used
+	Spent        bool     `json:"spent"`
 }
 
 const SerialisedKeyLengthUtxo = 32 + 32 + 4
@@ -78,8 +78,8 @@ func (v *UTXO) DeSerialiseKey(key []byte) error {
 		return err
 	}
 
-	v.BlockHash = hex.EncodeToString(key[:32])
-	v.Txid = hex.EncodeToString(key[32:64])
+	copy(v.BlockHash[:], key[:32])
+	copy(v.Txid[:], key[32:64])
 	err := binary.Read(bytes.NewReader(key[64:]), binary.BigEndian, &v.Vout)
 	if err != nil {
 		logging.L.Err(err).Msg("error deserialising utxo")
@@ -113,28 +113,19 @@ func (v *UTXO) DeSerialiseData(data []byte) error {
 	return nil
 }
 
-func GetDBKeyUTXO(blockHash, txid string, vout uint32) ([]byte, error) {
-	var buf bytes.Buffer
-	blockHashBytes, err := hex.DecodeString(blockHash)
-	if err != nil {
-		logging.L.Err(err).Hex("blockHash", []byte(blockHash)).Msg("error decoding block hash")
-		return nil, err
-	}
-	txidBytes, err := hex.DecodeString(txid)
-	if err != nil {
-		logging.L.Err(err).Hex("txid", []byte(txid)).Msg("error decoding txid")
-		return nil, err
-	}
-	buf.Write(blockHashBytes)
-	buf.Write(txidBytes)
+func GetDBKeyUTXO(blockHash, txid [32]byte, vout uint32) ([]byte, error) {
+	key := make([]byte, 32+32+4)
 
-	err = binary.Write(&buf, binary.BigEndian, vout)
-	if err != nil {
-		logging.L.Err(err).Msg("error getting key utxo")
-		return nil, err
-	}
+	// Copy blockHash (32 bytes)
+	copy(key[:32], blockHash[:])
 
-	return buf.Bytes(), nil
+	// Copy txid (32 bytes)
+	copy(key[32:64], txid[:])
+
+	// Write vout (4 bytes) in big-endian format
+	binary.BigEndian.PutUint32(key[64:], vout)
+
+	return key, nil
 }
 
 // FindBiggestRemainingUTXO returns nil if the spent utxo was not the largest and

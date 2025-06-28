@@ -1,6 +1,8 @@
 package core
 
 import (
+	"encoding/hex"
+
 	"github.com/setavenger/blindbit-lib/logging"
 	"github.com/setavenger/blindbit-lib/utils"
 
@@ -19,14 +21,18 @@ func ExtractNewUTXOs(block *types.Block, eligible map[string]struct{}) []*types.
 		}
 		for _, vout := range tx.Vout {
 			if vout.ScriptPubKey.Type == "witness_v1_taproot" {
+				// we use the fix sized conversion below with a panic
+				txidBytes, _ := hex.DecodeString(tx.Txid)
+				blockHashBytes, _ := hex.DecodeString(block.Hash)
+
 				value := utils.ConvertFloatBTCtoSats(vout.Value)
 				utxos = append(utxos, &types.UTXO{
-					Txid:         tx.Txid,
+					Txid:         utils.ConvertToFixedLength32(txidBytes),
 					Vout:         vout.N,
 					Value:        value,
 					ScriptPubKey: vout.ScriptPubKey.Hex,
 					BlockHeight:  block.Height,
-					BlockHash:    block.Hash,
+					BlockHash:    utils.ConvertToFixedLength32(blockHashBytes),
 					Timestamp:    block.Timestamp,
 					Spent:        value == 0, // Mark as spent if value is 0
 				})
@@ -72,15 +78,19 @@ func extractSpentTaprootPubKeysFromTx(tx *types.Transaction, block *types.Block)
 					logging.L.Panic().Err(err).Msg("Headers not synced from first taproot like occurrence. Either build complete index or fully sync headers only.")
 					return nil
 				}
-				blockHash = headerInv.Hash
+				blockHash = hex.EncodeToString(headerInv.Hash[:])
 			}
 
+			// we use the fix sized conversion below with a panic
+			txidBytes, _ := hex.DecodeString(vin.Txid)
+			blockHashBytes, _ := hex.DecodeString(blockHash)
+
 			spentUTXOs = append(spentUTXOs, types.UTXO{
-				Txid:         vin.Txid,
+				Txid:         utils.ConvertToFixedLength32(txidBytes),
 				Vout:         vin.Vout,
 				Value:        utils.ConvertFloatBTCtoSats(vin.Prevout.Value),
 				ScriptPubKey: vin.Prevout.ScriptPubKey.Hex,
-				BlockHash:    blockHash,
+				BlockHash:    utils.ConvertToFixedLength32(blockHashBytes),
 				Spent:        true,
 			})
 		} else {

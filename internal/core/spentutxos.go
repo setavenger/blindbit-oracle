@@ -21,7 +21,7 @@ func BuildSpentUTXOIndex(utxos []types.UTXO, block *types.Block) (types.SpentOut
 	blockHashBytes = utils.ReverseBytes(blockHashBytes)
 
 	spentOutpointsIndex := types.SpentOutpointsIndex{
-		BlockHash:   block.Hash,
+		BlockHash:   utils.ConvertToFixedLength32(blockHashBytes),
 		BlockHeight: block.Height,
 	}
 

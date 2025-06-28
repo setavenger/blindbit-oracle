@@ -1,11 +1,13 @@
 package core
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/setavenger/blindbit-lib/logging"
+	"github.com/setavenger/blindbit-lib/utils"
 	"github.com/setavenger/blindbit-oracle/internal/config"
 	"github.com/setavenger/blindbit-oracle/internal/dblevel"
 	"github.com/setavenger/blindbit-oracle/internal/types"
@@ -62,7 +64,12 @@ func PullBlock(blockHash string) (*types.Block, error) {
 		return nil, fmt.Errorf("block_hash invalid: %s", blockHash)
 	}
 	// this method is preferred over lastHeader because then this function can be called for PreviousBlockHash
-	header, err := dblevel.FetchByBlockHashBlockHeader(blockHash)
+	hashByteSlice, err := hex.DecodeString(blockHash)
+	if err != nil {
+		logging.L.Err(err).Msg("failed to hex decode blockhash")
+		return nil, err
+	}
+	header, err := dblevel.FetchByBlockHashBlockHeader(utils.ConvertToFixedLength32(hashByteSlice))
 	if err != nil && !errors.Is(err, dblevel.NoEntryErr{}) {
 		// we ignore no entry error
 		logging.L.Err(err).Msg("error fetching block header")
@@ -83,6 +90,7 @@ func PullBlock(blockHash string) (*types.Block, error) {
 }
 
 // CheckBlock checks whether the block hash has already been processed and will process the block if needed
+// todo: needs to throw an error
 func CheckBlock(block *types.Block) {
 	// todo add return type error
 	// todo this should fail at the highest instance were its wrapped in,
@@ -116,8 +124,13 @@ func CheckBlock(block *types.Block) {
 		return
 	}
 
+	hashByteSlice, err := hex.DecodeString(block.Hash)
+	if err != nil {
+		logging.L.Err(err).Msg("could not decode blockhash hex")
+		return
+	}
 	err = dblevel.InsertBlockHeaderInv(types.BlockHeaderInv{
-		Hash:   block.Hash,
+		Hash:   utils.ConvertToFixedLength32(hashByteSlice),
 		Height: block.Height,
 		Flag:   true,
 	})
@@ -152,7 +165,7 @@ func HandleBlock(block *types.Block) error {
 		// build map for sorting
 		tweaksForBlockMap := map[string]types.Tweak{}
 		for _, tweak := range tweaksForBlock {
-			tweaksForBlockMap[tweak.Txid] = tweak
+			tweaksForBlockMap[hex.EncodeToString(tweak.Txid[:])] = tweak
 		}
 
 		// we only create one of the two filters no dust can be derived from dust but not vice versa
@@ -161,7 +174,8 @@ func HandleBlock(block *types.Block) error {
 			// full index with dust filter possibility
 			// todo should we sort, overhead created
 			tweakIndexDust := types.TweakIndexDustFromTweakArray(tweaksForBlockMap, block)
-			tweakIndexDust.BlockHash = block.Hash
+			blockHashBytes, _ := hex.DecodeString(block.Hash)
+			tweakIndexDust.BlockHash = utils.ConvertToFixedLength32(blockHashBytes)
 			tweakIndexDust.BlockHeight = block.Height
 
 			err = dblevel.InsertTweakIndexDust(tweakIndexDust)
@@ -173,7 +187,8 @@ func HandleBlock(block *types.Block) error {
 			// normal full index no dust
 			// todo should we sort, overhead created
 			tweakIndex := types.TweakIndexFromTweakArray(tweaksForBlockMap, block)
-			tweakIndex.BlockHash = block.Hash
+			blockHashBytes, _ := hex.DecodeString(block.Hash)
+			tweakIndex.BlockHash = utils.ConvertToFixedLength32(blockHashBytes)
 			tweakIndex.BlockHeight = block.Height
 			err = dblevel.InsertTweakIndex(tweakIndex)
 			if err != nil {
@@ -199,7 +214,7 @@ func HandleBlock(block *types.Block) error {
 	// mark all transaction which have eligible outputs
 	eligibleTransaction := map[string]struct{}{}
 	for _, tweak := range tweaksForBlock {
-		eligibleTransaction[tweak.Txid] = struct{}{}
+		eligibleTransaction[hex.EncodeToString(tweak.Txid[:])] = struct{}{}
 	}
 
 	// first we need to get the new outputs because some of them might/will be spent in the same block

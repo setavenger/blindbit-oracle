@@ -1,8 +1,6 @@
 package types
 
 import (
-	"bytes"
-	"encoding/hex"
 	"errors"
 
 	"github.com/setavenger/blindbit-lib/logging"
@@ -11,7 +9,7 @@ import (
 const LenOutpointHashShort = 8
 
 type SpentOutpointsIndex struct {
-	BlockHash   string                       `json:"block_hash"`
+	BlockHash   [32]byte                     `json:"block_hash"`
 	BlockHeight uint32                       `json:"block_height"`
 	Data        [][LenOutpointHashShort]byte `json:"data"`
 }
@@ -22,7 +20,7 @@ func PairFactorySpentOutpointsIndex() Pair {
 }
 
 func (v *SpentOutpointsIndex) SerialiseKey() ([]byte, error) {
-	return GetDBKeyTweakIndex(v.BlockHash)
+	return GetDBKeySpentOutpointsIndex(v.BlockHash)
 }
 
 func (v *SpentOutpointsIndex) SerialiseData() ([]byte, error) {
@@ -45,7 +43,7 @@ func (v *SpentOutpointsIndex) DeSerialiseKey(key []byte) error {
 		return err
 	}
 
-	v.BlockHash = hex.EncodeToString(key)
+	copy(v.BlockHash[:], key)
 
 	return nil
 }
@@ -66,14 +64,6 @@ func (v *SpentOutpointsIndex) DeSerialiseData(data []byte) error {
 	return nil
 }
 
-func GetDBKeySpentSpentOutpointsIndex(blockHash string) ([]byte, error) {
-	var buf bytes.Buffer
-	blockHashBytes, err := hex.DecodeString(blockHash)
-	if err != nil {
-		logging.L.Err(err).Hex("blockHash", []byte(blockHash)).Msg("error decoding block hash")
-		return nil, err
-	}
-	buf.Write(blockHashBytes)
-
-	return buf.Bytes(), nil
+func GetDBKeySpentOutpointsIndex(blockHash [32]byte) ([]byte, error) {
+	return blockHash[:], nil
 }

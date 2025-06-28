@@ -17,7 +17,7 @@ func InsertBlockHeader(pair types.BlockHeader) error {
 	return nil
 }
 
-func FetchByBlockHashBlockHeader(blockHash string) (*types.BlockHeader, error) {
+func FetchByBlockHashBlockHeader(blockHash [32]byte) (*types.BlockHeader, error) {
 	var pair types.BlockHeader
 	err := retrieveByBlockHash(HeadersDB, blockHash, &pair)
 	if err != nil && !errors.Is(err, NoEntryErr{}) {

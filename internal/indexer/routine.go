@@ -2,7 +2,6 @@ package indexer
 
 import (
 	"context"
-	"encoding/hex"
 	"sync"
 
 	"github.com/setavenger/blindbit-lib/logging"
@@ -59,7 +58,7 @@ func ComputeTweaksForBlock(
 				return
 			}
 
-			tweak.BlockHash = hex.EncodeToString(block.GetBlockHashSlice())
+			tweak.BlockHash = block.GetBlockHash()
 			tweak.BlockHeight = block.GetBlockHeight()
 			resultChan <- result{tweak: tweak}
 		}(txs[i])
@@ -129,6 +128,14 @@ func HandleBlock(
 		return err
 	}
 
+	tweakIndexDust := BuildPerBlockTweakIndexDust(blockHash, blockHeight, tweaksForBlock)
+
+	err = dblevel.InsertTweakIndexDust(tweakIndexDust)
+	if err != nil {
+		logging.L.Err(err).Msg("error inserting tweak index dust")
+		return err
+	}
+
 	return nil
 }
 
@@ -137,7 +144,6 @@ func BuildPerBlockTweakIndex(
 	blockHeight uint32,
 	tweaks []types.Tweak,
 ) *types.TweakIndex {
-	blockHashString := hex.EncodeToString(blockHash[:])
 	tweakData := make([][33]byte, len(tweaks))
 
 	for i := 0; i < len(tweaks); i++ {
@@ -145,7 +151,28 @@ func BuildPerBlockTweakIndex(
 	}
 
 	return &types.TweakIndex{
-		BlockHash:   blockHashString,
+		BlockHash:   blockHash,
+		BlockHeight: blockHeight,
+		Data:        tweakData,
+	}
+}
+
+func BuildPerBlockTweakIndexDust(
+	blockHash [32]byte,
+	blockHeight uint32,
+	tweaks []types.Tweak,
+) *types.TweakIndexDust {
+	tweakData := make([]types.TweakDusted, len(tweaks))
+
+	for i := range tweaks {
+		tweakData[i] = types.TweakData{
+			Data:  tweaks[i].TweakData,
+			Value: tweaks[i].HighestValue,
+		}
+	}
+
+	return &types.TweakIndexDust{
+		BlockHash:   blockHash,
 		BlockHeight: blockHeight,
 		Data:        tweakData,
 	}

@@ -13,6 +13,7 @@ import (
 	"github.com/setavenger/blindbit-oracle/internal/config"
 	"github.com/setavenger/blindbit-oracle/internal/dblevel"
 	"github.com/setavenger/blindbit-oracle/internal/indexer/bitcoinkernel"
+	"github.com/setavenger/blindbit-oracle/internal/server"
 )
 
 var (
@@ -141,6 +142,14 @@ func main() {
 			logging.L.Fatal().Err(err).Msg("error syncing height")
 		}
 	}
+
+	err := bitcoinkernel.IndexHeaders()
+	if err != nil {
+		logging.L.Fatal().Err(err).Msg("error pre-syncing headers")
+		return
+	}
+
+	go server.RunServer(&server.ApiHandler{})
 
 	if syncHeightStart > 0 {
 		var endHeight *uint32

@@ -68,7 +68,7 @@ func (h *ApiHandler) GetBlockHashByHeight(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, api.BlockHashResponseOracle{
-		BlockHash: hInv.Hash,
+		BlockHash: hex.EncodeToString(hInv.Hash[:]),
 	})
 }
 
@@ -117,7 +117,7 @@ func (h *ApiHandler) GetCFilterByHeight(c *gin.Context) {
 	data := api.FilterResponseOracle{
 		FilterType:  cFilter.FilterType,
 		BlockHeight: hInv.Height,
-		BlockHash:   cFilter.BlockHash,
+		BlockHash:   hex.EncodeToString(cFilter.BlockHash[:]),
 		Data:        hex.EncodeToString(cFilter.Data),
 	}
 
@@ -165,15 +165,11 @@ func (h *ApiHandler) GetTweakDataByHeight(c *gin.Context) {
 		return
 	}
 	var tweaks []types.Tweak
-
+	var err error
 	// Extracting the dustLimit query parameter and converting it to uint64
 	dustLimitStr := c.DefaultQuery("dustLimit", "0") // Default to "0" if not provided
-	dustLimit, err := strconv.ParseUint(dustLimitStr, 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid dustLimit parameter"})
-		return
-	}
-	if dustLimit == 0 {
+
+	if dustLimitStr == "0" {
 		// this query should have a better performance due to no required checks
 		tweaks, err = dblevel.FetchByBlockHashTweaks(hInv.Hash)
 		if err != nil && !errors.Is(err, dblevel.NoEntryErr{}) {
@@ -184,6 +180,12 @@ func (h *ApiHandler) GetTweakDataByHeight(c *gin.Context) {
 			return
 		}
 	} else {
+		// moved conversion inside to optimise performance of above query
+		dustLimit, err := strconv.ParseUint(dustLimitStr, 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid dustLimit parameter"})
+			return
+		}
 		tweaks, err = dblevel.FetchByBlockHashDustLimitTweaks(hInv.Hash, dustLimit)
 		if err != nil && !errors.Is(err, dblevel.NoEntryErr{}) {
 			logging.L.Err(err).Msg("error fetching dust limit tweaks")
@@ -320,7 +322,7 @@ func (h *ApiHandler) GetSpentOutpointsIndex(c *gin.Context) {
 		Data      []string `json:"data"`
 	}
 
-	result.BlockHash = spentOutpointsIndex.BlockHash
+	result.BlockHash = hex.EncodeToString(spentOutpointsIndex.BlockHash[:])
 
 	if len(spentOutpointsIndex.Data) == 0 {
 		logging.L.Debug().Msg("spentOutpointsIndex was empty")

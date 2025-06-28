@@ -74,7 +74,7 @@ func FetchHighestBlockHeaderInv() (*types.BlockHeaderInv, error) {
 		logging.L.Err(err).Msg("error iterating over headers inv")
 		return nil, err
 	}
-	if result.Hash == "" {
+	if result.Hash == [32]byte{} {
 		logging.L.Warn().Msg("no entry found")
 		return nil, NoEntryErr{}
 	}

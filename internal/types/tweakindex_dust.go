@@ -3,7 +3,6 @@ package types
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/hex"
 	"errors"
 
 	"github.com/setavenger/blindbit-lib/logging"
@@ -14,7 +13,7 @@ import (
 // The tweaks will most likely not be sorted in any meaningful way and have no metadata attached.
 // TweakIndexDust differs from TweakIndex as it has the highest value per tx stored as well
 type TweakIndexDust struct {
-	BlockHash   string        `json:"block_hash"`
+	BlockHash   [32]byte      `json:"block_hash"`
 	BlockHeight uint32        `json:"block_height"`
 	Data        []TweakDusted `json:"data"`
 }
@@ -77,7 +76,7 @@ func (v *TweakIndexDust) DeSerialiseKey(key []byte) error {
 		return err
 	}
 
-	v.BlockHash = hex.EncodeToString(key)
+	copy(v.BlockHash[:], key)
 
 	return nil
 }
@@ -134,7 +133,7 @@ func (v *TweakIndexDust) ToTweakArray() []Tweak {
 		tweaks = append(tweaks, Tweak{
 			BlockHash:    v.BlockHash,
 			BlockHeight:  v.BlockHeight,
-			Txid:         "", // cannot be determined as it's not stored in the index
+			Txid:         [32]byte{}, // cannot be determined as it's not stored in the index
 			TweakData:    data.Tweak(),
 			HighestValue: data.HighestValue(),
 		})
@@ -142,14 +141,6 @@ func (v *TweakIndexDust) ToTweakArray() []Tweak {
 	return tweaks
 }
 
-func GetDBKeyTweakIndexDust(blockHash string) ([]byte, error) {
-	var buf bytes.Buffer
-	blockHashBytes, err := hex.DecodeString(blockHash)
-	if err != nil {
-		logging.L.Err(err).Hex("blockHash", []byte(blockHash)).Msg("error decoding block hash")
-		return nil, err
-	}
-	buf.Write(blockHashBytes)
-
-	return buf.Bytes(), nil
+func GetDBKeyTweakIndexDust(blockHash [32]byte) ([]byte, error) {
+	return blockHash[:], nil
 }

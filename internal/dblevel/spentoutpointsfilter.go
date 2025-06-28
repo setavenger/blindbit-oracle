@@ -15,7 +15,7 @@ func InsertSpentOutpointsFilter(pair types.Filter) error {
 	return nil
 }
 
-func FetchByBlockHashSpentOutpointsFilter(blockHash string) (types.Filter, error) {
+func FetchByBlockHashSpentOutpointsFilter(blockHash [32]byte) (types.Filter, error) {
 	var pair types.Filter
 	err := retrieveByBlockHash(SpentOutpointsFilterDB, blockHash, &pair)
 	if err != nil {

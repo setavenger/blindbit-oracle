@@ -15,7 +15,7 @@ func InsertNewUTXOsFilter(pair types.Filter) error {
 	return nil
 }
 
-func FetchByBlockHashNewUTXOsFilter(blockHash string) (types.Filter, error) {
+func FetchByBlockHashNewUTXOsFilter(blockHash [32]byte) (types.Filter, error) {
 	var pair types.Filter
 	err := retrieveByBlockHash(NewUTXOsFiltersDB, blockHash, &pair)
 	if err != nil {

@@ -1,7 +1,6 @@
 package dblevel
 
 import (
-	"encoding/hex"
 	"errors"
 	"math"
 
@@ -75,7 +74,7 @@ func OverWriteTweaks(tweaks []types.Tweak) error {
 	return err
 }
 
-func FetchByBlockHashTweaks(blockHash string) ([]types.Tweak, error) {
+func FetchByBlockHashTweaks(blockHash [32]byte) ([]types.Tweak, error) {
 	logging.L.Trace().Msg("Fetching tweaks")
 	pairs, err := retrieveManyByBlockHash(TweaksDB, blockHash, types.PairFactoryTweak)
 	if err != nil {
@@ -213,15 +212,11 @@ func DustOverwriteRoutine() error {
 	return err
 }
 
-func FetchByBlockHashDustLimitTweaks(blockHash string, dustLimit uint64) ([]types.Tweak, error) {
-	blockHashBytes, err := hex.DecodeString(blockHash)
-	if err != nil {
-		logging.L.Err(err).Msg("error decoding block hash")
-		return nil, err
-	}
-	iter := TweaksDB.NewIterator(util.BytesPrefix(blockHashBytes), nil)
+func FetchByBlockHashDustLimitTweaks(blockHash [32]byte, dustLimit uint64) ([]types.Tweak, error) {
+	iter := TweaksDB.NewIterator(util.BytesPrefix(blockHash[:]), nil)
 	defer iter.Release()
 	var results []types.Tweak
+	var err error
 
 	for iter.Next() {
 		tweak := types.Tweak{}

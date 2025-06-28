@@ -17,7 +17,7 @@ func InsertTweakIndexDust(pair *types.TweakIndexDust) error {
 	return nil
 }
 
-func FetchByBlockHashTweakIndexDust(blockHash string) (*types.TweakIndexDust, error) {
+func FetchByBlockHashTweakIndexDust(blockHash [32]byte) (*types.TweakIndexDust, error) {
 	var pair types.TweakIndexDust
 	err := retrieveByBlockHash(TweakIndexDustDB, blockHash, &pair)
 	if err != nil && !errors.Is(err, NoEntryErr{}) {

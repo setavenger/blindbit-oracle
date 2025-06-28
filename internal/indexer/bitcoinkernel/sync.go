@@ -21,7 +21,7 @@ var (
 )
 
 func init() {
-	ctx, err := bitcoinkernel.NewContext()
+	ctx, err := bitcoinkernel.NewContext(bitcoinkernel.ChainTypeMainnet)
 	if err != nil {
 		logging.L.Err(err).Msg("Failed to create context")
 	}
@@ -80,8 +80,11 @@ func SyncToTipFromHeight(
 }
 
 const (
-	maxBlockBacklog = 10 // maximum number of blocks that can be in preparation/computation
-	numPrepWorkers  = 12 // number of parallel block preparation workers
+	numPrepWorkers = 12 // number of parallel block preparation workers
+
+	// more backlog or workers do not really improve over all sync speed
+	maxBlockBacklog = numPrepWorkers * 3 // maximum number of blocks that can be in preparation/computation
+
 )
 
 // SyncWithAsyncBlockPreparationAndComputation has async block preparation and block computation
@@ -111,8 +114,9 @@ func SyncWithAsyncBlockPreparationAndComputation(
 	defer chainman.Close()
 	logging.L.Info().Msgf("Loaded chainstate manager")
 
-	cctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
-	defer cancel()
+	cctx := ctx
+	// cctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
+	// defer cancel()
 
 	blockIndex, err := chainman.GetBlockIndexFromHeight(int(startHeight))
 	if err != nil {
@@ -241,7 +245,11 @@ func SyncWithAsyncBlockPreparationAndComputation(
 			if result.err != nil {
 				logging.L.Err(result.err).Msgf("Failed to handle block %d", result.height)
 			} else {
-				logging.L.Info().Msgf("Successfully processed block %d", result.height)
+				logging.L.Info().
+					Int("prepChanSize", len(prepChan)).
+					Int("compChanSize", len(compChan)).
+					Uint32("height", result.height).
+					Msg("Successfully processed block")
 			}
 		}
 	}
@@ -262,7 +270,7 @@ func pullAndPrepareBlock(
 	chainman *bitcoinkernel.ChainstateManager,
 	blockIndex *bitcoinkernel.BlockIndex,
 ) (*KernelBlock, error) {
-	logging.L.Info().Msgf("Pulling and preparing block: %d", blockIndex.GetHeight())
+	logging.L.Debug().Msgf("Pulling and preparing block: %d", blockIndex.GetHeight())
 
 	blockKernel, err := chainman.ReadBlockData(blockIndex)
 	if err != nil {

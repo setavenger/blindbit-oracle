@@ -1,11 +1,13 @@
 package core
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/setavenger/blindbit-lib/logging"
+	"github.com/setavenger/blindbit-lib/utils"
 	"github.com/setavenger/blindbit-oracle/internal/config"
 	"github.com/setavenger/blindbit-oracle/internal/dblevel"
 	"github.com/setavenger/blindbit-oracle/internal/types"
@@ -152,7 +154,7 @@ func HandleBlock(block *types.Block) error {
 		// build map for sorting
 		tweaksForBlockMap := map[string]types.Tweak{}
 		for _, tweak := range tweaksForBlock {
-			tweaksForBlockMap[tweak.Txid] = tweak
+			tweaksForBlockMap[hex.EncodeToString(tweak.Txid[:])] = tweak
 		}
 
 		// we only create one of the two filters no dust can be derived from dust but not vice versa
@@ -161,7 +163,8 @@ func HandleBlock(block *types.Block) error {
 			// full index with dust filter possibility
 			// todo should we sort, overhead created
 			tweakIndexDust := types.TweakIndexDustFromTweakArray(tweaksForBlockMap, block)
-			tweakIndexDust.BlockHash = block.Hash
+			blockHashBytes, _ := hex.DecodeString(block.Hash)
+			tweakIndexDust.BlockHash = utils.ConvertToFixedLength32(blockHashBytes)
 			tweakIndexDust.BlockHeight = block.Height
 
 			err = dblevel.InsertTweakIndexDust(tweakIndexDust)
@@ -173,7 +176,8 @@ func HandleBlock(block *types.Block) error {
 			// normal full index no dust
 			// todo should we sort, overhead created
 			tweakIndex := types.TweakIndexFromTweakArray(tweaksForBlockMap, block)
-			tweakIndex.BlockHash = block.Hash
+			blockHashBytes, _ := hex.DecodeString(block.Hash)
+			tweakIndex.BlockHash = utils.ConvertToFixedLength32(blockHashBytes)
 			tweakIndex.BlockHeight = block.Height
 			err = dblevel.InsertTweakIndex(tweakIndex)
 			if err != nil {
@@ -199,7 +203,7 @@ func HandleBlock(block *types.Block) error {
 	// mark all transaction which have eligible outputs
 	eligibleTransaction := map[string]struct{}{}
 	for _, tweak := range tweaksForBlock {
-		eligibleTransaction[tweak.Txid] = struct{}{}
+		eligibleTransaction[hex.EncodeToString(tweak.Txid[:])] = struct{}{}
 	}
 
 	// first we need to get the new outputs because some of them might/will be spent in the same block

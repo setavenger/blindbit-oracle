@@ -1,8 +1,6 @@
 package types
 
 import (
-	"bytes"
-	"encoding/hex"
 	"errors"
 
 	"github.com/setavenger/blindbit-lib/logging"
@@ -12,7 +10,7 @@ import (
 // there is no transaction cut-through, so it will keep a full history.
 // The tweaks will most likely not be sorted in any meaningful way and have no metadata attached.
 type TweakIndex struct {
-	BlockHash   string                  `json:"block_hash"`
+	BlockHash   [32]byte                `json:"block_hash"`
 	BlockHeight uint32                  `json:"block_height"`
 	Data        [][TweakDataLength]byte `json:"data"`
 }
@@ -28,7 +26,6 @@ func (v *TweakIndex) SerialiseKey() ([]byte, error) {
 }
 
 func (v *TweakIndex) SerialiseData() ([]byte, error) {
-
 	// todo can this be made more efficiently?
 	totalLength := len(v.Data) * TweakDataLength
 	flattened := make([]byte, 0, totalLength)
@@ -47,7 +44,7 @@ func (v *TweakIndex) DeSerialiseKey(key []byte) error {
 		return err
 	}
 
-	v.BlockHash = hex.EncodeToString(key)
+	copy(v.BlockHash[:], key)
 
 	return nil
 }
@@ -90,21 +87,13 @@ func (v *TweakIndex) ToTweakArray() (tweaks []Tweak) {
 		tweaks = append(tweaks, Tweak{
 			BlockHash:   v.BlockHash,
 			BlockHeight: v.BlockHeight,
-			Txid:        "",
+			Txid:        [32]byte{},
 			TweakData:   data,
 		})
 	}
 	return
 }
 
-func GetDBKeyTweakIndex(blockHash string) ([]byte, error) {
-	var buf bytes.Buffer
-	blockHashBytes, err := hex.DecodeString(blockHash)
-	if err != nil {
-		logging.L.Err(err).Hex("blockHash", []byte(blockHash)).Msg("error decoding block hash")
-		return nil, err
-	}
-	buf.Write(blockHashBytes)
-
-	return buf.Bytes(), nil
+func GetDBKeyTweakIndex(blockHash [32]byte) ([]byte, error) {
+	return blockHash[:], nil
 }

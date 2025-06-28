@@ -3,7 +3,6 @@ package indexer
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/hex"
 	"errors"
 	"sort"
 
@@ -37,10 +36,9 @@ func ComputeTweakForTx(tx Transaction) (*types.Tweak, error) {
 		logging.L.Err(err).Msg("error computing tweak per tx")
 		return nil, err
 	}
-	txidHex := hex.EncodeToString(tx.GetTxIdSlice())
 
 	tweak := types.Tweak{
-		Txid:         txidHex,
+		Txid:         tx.GetTxId(),
 		TweakData:    *tweakBytes,
 		HighestValue: highestValue,
 	}

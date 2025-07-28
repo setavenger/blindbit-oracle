@@ -6,18 +6,12 @@ import (
 	"SilentPaymentAppBackend/src/testhelpers"
 	"encoding/hex"
 	"log"
-	"os"
 	"testing"
 )
 
 var b833000 types.Block
 
 func init() {
-	common.DebugLogger = log.New(os.Stdout, "[DEBUG] ", log.Ldate|log.Lmicroseconds|log.Lshortfile|log.Lmsgprefix)
-	common.InfoLogger = log.New(os.Stdout, "[INFO] ", log.Ldate|log.Lmicroseconds|log.Lshortfile|log.Lmsgprefix)
-	common.WarningLogger = log.New(os.Stdout, "[WARNING] ", log.Ldate|log.Lmicroseconds|log.Lshortfile|log.Lmsgprefix)
-	common.ErrorLogger = log.New(os.Stdout, "[ERROR] ", log.Ldate|log.Lmicroseconds|log.Lshortfile|log.Lmsgprefix)
-
 	err := testhelpers.LoadAndUnmarshalBlockFromFile("../test_data/block_833000.json", &b833000)
 	if err != nil {
 		log.Fatalln(err)

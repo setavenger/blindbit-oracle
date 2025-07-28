@@ -10,7 +10,7 @@ import (
 
 func TestBlockAnalysis(t *testing.T) {
 	var block types.Block
-	err := testhelpers.LoadBlockFromFile("/Users/setorblagogee/dev/sp-test-dir/block-716120.json", &block)
+	err := testhelpers.LoadAndUnmarshalBlockFromFile("../test_data/block_833000.json", &block)
 	if err != nil {
 		log.Fatalln(err)
 	}

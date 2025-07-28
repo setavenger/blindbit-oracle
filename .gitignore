@@ -18,3 +18,4 @@ docker-compose.yaml
 /bin/
 /signet-1/
 /dev/
+/result

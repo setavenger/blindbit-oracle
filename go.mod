@@ -10,7 +10,7 @@ require (
 	github.com/gin-contrib/gzip v1.2.2
 	github.com/gin-gonic/gin v1.10.0
 	github.com/rs/zerolog v1.34.0
-	github.com/setavenger/blindbit-lib v0.0.0-20250807130019-f9642edb8c97
+	github.com/setavenger/blindbit-lib v0.0.1
 	github.com/setavenger/go-bip352 v0.1.8-0.20250807125845-136879952399
 	github.com/setavenger/go-libsecp256k1 v0.0.0
 	github.com/spf13/viper v1.19.0

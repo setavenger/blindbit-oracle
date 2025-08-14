@@ -6,7 +6,7 @@ WORKDIR /app
 
 
 RUN go mod download
-RUN env CGO_ENABLED=0 go build -o main ./src
+RUN env CGO_ENABLED=0 go build -o main ./cmd/blindbit-oracle
 
 FROM busybox
 COPY --from=buildstage /app/main .

@@ -82,7 +82,7 @@ func FetchByBlockHashTweaks(blockHash [32]byte) ([]types.Tweak, error) {
 		return nil, err
 	}
 	if len(pairs) == 0 {
-		return nil, NoEntryErr{}
+		return nil, nil
 	}
 
 	result := make([]types.Tweak, len(pairs))
@@ -132,7 +132,7 @@ func FetchAllTweaks() ([]types.Tweak, error) {
 	}
 	if len(pairs) == 0 {
 		logging.L.Warn().Msg("nothing returned")
-		return nil, NoEntryErr{}
+		return nil, nil
 	}
 
 	result := make([]types.Tweak, len(pairs))

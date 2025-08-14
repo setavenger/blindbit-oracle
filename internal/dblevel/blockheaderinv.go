@@ -40,6 +40,7 @@ func InsertBatchBlockHeaderInv(headersInv []types.BlockHeaderInv) error {
 	return nil
 }
 
+// FetchByBlockHeightBlockHeaderInv change height 32 to (u)int64
 func FetchByBlockHeightBlockHeaderInv(height uint32) (types.BlockHeaderInv, error) {
 	var pair types.BlockHeaderInv
 	err := retrieveByBlockHeight(HeadersInvDB, height, &pair)
@@ -76,7 +77,7 @@ func FetchHighestBlockHeaderInv() (*types.BlockHeaderInv, error) {
 	}
 	if result.Hash == [32]byte{} {
 		logging.L.Warn().Msg("no entry found")
-		return nil, NoEntryErr{}
+		return nil, nil
 	}
 	return &result, err
 }
@@ -90,7 +91,7 @@ func FetchHighestBlockHeaderInvByFlag(flag bool) (*types.BlockHeaderInv, error) 
 
 	ok := iter.Last()
 	if !ok {
-		return nil, NoEntryErr{}
+		return nil, nil
 	}
 
 	// Process the last element first, then continue with previous elements.
@@ -331,7 +332,7 @@ func FetchAllHeadersInv() ([]types.BlockHeaderInv, error) {
 	}
 	if len(pairs) == 0 {
 		logging.L.Warn().Msg("Nothing returned")
-		return nil, NoEntryErr{}
+		return nil, nil
 	}
 
 	result := make([]types.BlockHeaderInv, len(pairs))

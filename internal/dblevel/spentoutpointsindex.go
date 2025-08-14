@@ -30,7 +30,7 @@ func FetchByBlockHashSpentOutpointIndex(blockHash [32]byte) (*types.SpentOutpoin
 	return &pair, nil
 }
 
-// FetchAllTweakIndices returns all types.TweakIndex in the DB
+// FetchAllSpenOutpointsIndices returns all types.TweakIndex in the DB
 func FetchAllSpenOutpointsIndices() ([]types.SpentOutpointsIndex, error) {
 	pairs, err := retrieveAll(SpentOutpointsIndexDB, types.PairFactorySpentOutpointsIndex)
 	if err != nil {
@@ -39,7 +39,7 @@ func FetchAllSpenOutpointsIndices() ([]types.SpentOutpointsIndex, error) {
 	}
 	if len(pairs) == 0 {
 		logging.L.Warn().Msg("Nothing returned")
-		return nil, NoEntryErr{}
+		return nil, nil
 	}
 
 	result := make([]types.SpentOutpointsIndex, len(pairs))

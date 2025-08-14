@@ -37,7 +37,8 @@ var (
 	DBPath        = ""
 	LogsPath      = ""
 
-	Host = "127.0.0.1:8000"
+	HTTPHost = "127.0.0.1:8000"
+	GRPCHost = "127.0.0.1:50051"
 )
 
 type chain int

@@ -40,7 +40,7 @@ func FetchAllTweakIndicesDust() ([]types.TweakIndexDust, error) {
 	}
 	if len(pairs) == 0 {
 		logging.L.Warn().Msg("Nothing returned")
-		return nil, NoEntryErr{}
+		return nil, nil
 	}
 
 	result := make([]types.TweakIndexDust, len(pairs))

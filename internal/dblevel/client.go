@@ -249,7 +249,7 @@ func retrieveManyByBlockHashAndTxid(db *leveldb.DB, blockHash, txid [32]byte, fa
 		return nil, err
 	}
 	if results == nil {
-		return nil, NoEntryErr{}
+		return nil, nil
 	}
 	return results, err
 }

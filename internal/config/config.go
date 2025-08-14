@@ -20,7 +20,8 @@ func LoadConfigs(pathToConfig string) {
 	/* set defaults */
 	// network
 	viper.SetDefault("max_parallel_requests", MaxParallelRequests)
-	viper.SetDefault("host", Host)
+	viper.SetDefault("http_host", HTTPHost)
+	viper.SetDefault("grpc_host", GRPCHost)
 	viper.SetDefault("chain", "signet")
 
 	// RPC endpoint only. Fails if others are not set
@@ -34,7 +35,8 @@ func LoadConfigs(pathToConfig string) {
 	viper.SetDefault("log_level", "info")
 	// Bind viper keys to environment variables (optional, for backup)
 	viper.AutomaticEnv()
-	viper.BindEnv("host", "HOST")
+	viper.BindEnv("http_host", "HTTP_HOST")
+	viper.BindEnv("grpc_host", "GRPC_HOST")
 	viper.BindEnv("chain", "CHAIN")
 	viper.BindEnv("rpc_endpoint", "RPC_ENDPOINT")
 	viper.BindEnv("cookie_path", "COOKIE_PATH")
@@ -52,7 +54,8 @@ func LoadConfigs(pathToConfig string) {
 	/* read and set config variables */
 	// General
 	SyncStartHeight = viper.GetUint32("sync_start_height")
-	Host = viper.GetString("host")
+	HTTPHost = viper.GetString("http_host")
+	GRPCHost = viper.GetString("grpc_host")
 	LogLevel = viper.GetString("log_level")
 	// Performance
 	MaxParallelRequests = viper.GetUint16("max_parallel_requests")

@@ -34,7 +34,7 @@ func FetchByBlockHashUTXOs(blockHash [32]byte) ([]types.UTXO, error) {
 		return nil, err
 	}
 	if len(pairs) == 0 {
-		return nil, NoEntryErr{}
+		return nil, nil
 	}
 
 	result := make([]types.UTXO, len(pairs))
@@ -62,7 +62,7 @@ func FetchByBlockHashAndTxidUTXOs(blockHash, txid [32]byte) ([]types.UTXO, error
 		return nil, err
 	}
 	if len(pairs) == 0 {
-		return nil, NoEntryErr{}
+		return nil, nil
 	}
 
 	result := make([]types.UTXO, len(pairs))
@@ -105,7 +105,7 @@ func FetchAllUTXOs() ([]types.UTXO, error) {
 	}
 	if len(pairs) == 0 {
 		logging.L.Warn().Msg("nothing returned")
-		return nil, NoEntryErr{}
+		return nil, nil
 	}
 
 	result := make([]types.UTXO, len(pairs))

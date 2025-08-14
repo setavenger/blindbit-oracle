@@ -17,6 +17,7 @@ import (
 	"github.com/setavenger/blindbit-oracle/internal/dataexport"
 	"github.com/setavenger/blindbit-oracle/internal/dblevel"
 	"github.com/setavenger/blindbit-oracle/internal/server"
+	v2 "github.com/setavenger/blindbit-oracle/internal/server/v2"
 )
 
 var (
@@ -142,6 +143,11 @@ func main() {
 
 		// so we can start fetching data while not fully synced. Requires headers to be synced to avoid grave errors.
 		go server.RunServer(&server.ApiHandler{})
+
+		// keep it optional for now
+		if config.GRPCHost != "" {
+			go v2.RunGRPCServer()
+		}
 
 		// todo buggy for sync catchup from 0, needs to be 1 or higher
 		err = core.SyncChain()

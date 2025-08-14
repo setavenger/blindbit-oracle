@@ -25,7 +25,7 @@ func FetchByBlockHashSpentOutpointsFilter(blockHash [32]byte) (types.Filter, err
 	return pair, nil
 }
 
-// FetchAllFilters returns all types.Filter in the DB
+// FetchAllSpentOutpointsFilters returns all types.Filter in the DB
 func FetchAllSpentOutpointsFilters() ([]types.Filter, error) {
 	pairs, err := retrieveAll(SpentOutpointsFilterDB, types.PairFactoryFilter)
 	if err != nil {
@@ -34,7 +34,7 @@ func FetchAllSpentOutpointsFilters() ([]types.Filter, error) {
 	}
 	if len(pairs) == 0 {
 		logging.L.Warn().Msg("Nothing returned")
-		return nil, NoEntryErr{}
+		return nil, nil
 	}
 
 	result := make([]types.Filter, len(pairs))

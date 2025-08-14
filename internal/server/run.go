@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/setavenger/blindbit-lib/logging"
+	"github.com/setavenger/blindbit-oracle/internal/config"
 )
 
 func RunServer(api *ApiHandler) {
@@ -31,8 +32,7 @@ func RunServer(api *ApiHandler) {
 
 	router.POST("/forward-tx", api.ForwardRawTX)
 
-	if err := router.Run("127.0.0.1:8000"); err != nil {
-		// if err := router.Run(config.Host); err != nil {
+	if err := router.Run(config.HTTPHost); err != nil {
 		logging.L.Err(err).Msg("could not run server")
 	}
 }

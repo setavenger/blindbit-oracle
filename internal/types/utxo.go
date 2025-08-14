@@ -17,7 +17,7 @@ type UTXO struct {
 	Txid         [32]byte `json:"txid"`
 	Vout         uint32   `json:"vout"`
 	Value        uint64   `json:"value"`
-	ScriptPubKey string   `json:"scriptpubkey"`
+	ScriptPubKey [34]byte `json:"scriptpubkey"`
 	BlockHeight  uint32   `json:"block_height"` // not used
 	BlockHash    [32]byte `json:"block_hash"`
 	Timestamp    uint64   `json:"timestamp"` // not used
@@ -37,14 +37,11 @@ func (v *UTXO) SerialiseKey() ([]byte, error) {
 }
 
 func (v *UTXO) SerialiseData() ([]byte, error) {
+	// todo: change to use fixed size slice make([]byte, 34) and put instead of a buffer
 	var buf bytes.Buffer
-	scriptPubKeyBytes, err := hex.DecodeString(v.ScriptPubKey)
-	if err != nil {
-		logging.L.Err(err).Str("scriptPubKey", v.ScriptPubKey).Msg("error decoding script pubkey")
-		return nil, err
-	}
+	var err error
 
-	buf.Write(scriptPubKeyBytes)
+	buf.Write(v.ScriptPubKey[:])
 
 	err = binary.Write(&buf, binary.BigEndian, v.Value)
 	if err != nil {

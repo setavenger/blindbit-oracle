@@ -9,15 +9,53 @@ import (
 	"github.com/setavenger/blindbit-oracle/internal/types"
 )
 
-// func IndexBlock(
-// 	ctx context.Context,
-// 	blockHash [32]byte,
-// 	blockHeight uint32,
-// 	txs []Transaction,
-// ) error {
-// }
+type IndexResult struct {
+	Tweaks       []types.Tweak
+	SpentOutputs []types.UTXO
+	NewOutputs   []types.UTXO
+	BlockHeight  uint64
+	BlockHash    [32]byte
+}
 
 var numTweakWorkers = 12 // number of concurrent workers for tweak computation
+
+func IndexBlock(
+	ctx context.Context,
+	block BlockData,
+) (*IndexResult, error) {
+
+	return nil, nil
+}
+
+func ExtractTaprootOutputs(tx Transaction, block BlockData) []types.UTXO {
+	txOuts := tx.GetTxOuts()
+	var utxos []types.UTXO
+	for _, txOut := range txOuts {
+		pkScript := txOut.GetPkScript()
+		// pkScripts for taproot outputs are exactly 34 bytes
+		if len(pkScript) != 34 {
+			continue
+		}
+		if IsP2TR(pkScript) {
+			return nil
+		}
+		value := txOut.GetValue()
+		utxo := types.UTXO{
+			Txid:         tx.GetTxId(),
+			Vout:         txOut.GetVout(),
+			Value:        value,
+			ScriptPubKey: [34]byte(txOut.GetPkScript()),
+			BlockHeight:  block.GetBlockHeight(),
+			BlockHash:    block.GetBlockHash(),
+			Timestamp:    0,
+			Spent:        value == 0,
+		}
+		utxos = append(utxos, utxo)
+	}
+
+	return utxos
+
+}
 
 func ComputeTweaksForBlock(
 	ctx context.Context,

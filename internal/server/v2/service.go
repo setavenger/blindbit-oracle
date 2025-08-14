@@ -328,6 +328,12 @@ func (s *OracleService) StreamBlockBatchFull(
 	req *pb.RangedBlockHeightRequest, stream pb.OracleService_StreamBlockBatchFullServer,
 ) error {
 	for height := req.Start; height <= req.End; height++ {
+		select {
+		case <-stream.Context().Done():
+			logging.L.Debug().Msg("stream context cancelled")
+			return nil
+		default:
+		}
 		headerInv, err := dblevel.FetchByBlockHeightBlockHeaderInv(uint32(height))
 		if err != nil {
 			logging.L.Err(err).Msg("error fetching block header inv")

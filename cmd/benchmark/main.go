@@ -16,11 +16,22 @@ func main() {
 		grpcHost    = flag.String("grpc", "127.0.0.1:50051", "gRPC server host:port")
 		runV1       = flag.Bool("v1", true, "Run v1 HTTP benchmark")
 		runV2       = flag.Bool("v2", true, "Run v2 gRPC benchmark")
+		compare     = flag.Bool("compare", false, "Compare v1 and v2 data instead of benchmarking")
 	)
 	flag.Parse()
 
 	// Setup logging
 	logging.SetLogLevel(zerolog.InfoLevel)
+
+	if *compare {
+		logging.L.Info().
+			Uint64("start_height", *startHeight).
+			Uint64("end_height", *endHeight).
+			Msg("Starting data comparison")
+
+		benchmark.CompareV1V2Results(*startHeight, *endHeight, *httpURL, *grpcHost)
+		return
+	}
 
 	logging.L.Info().
 		Uint64("start_height", *startHeight).

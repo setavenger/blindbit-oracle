@@ -25,6 +25,11 @@ make build-benchmark
 ./bin/benchmark -v1=false -v2 -startheight=100 -endheight=200
 ```
 
+### Compare v1 and v2 data (validation)
+```bash
+./bin/benchmark -compare -startheight=100 -endheight=200
+```
+
 ### Using Makefile
 ```bash
 # Run both
@@ -35,6 +40,9 @@ make benchmark-v1 ARGS="-startheight=100 -endheight=200"
 
 # Run only v2
 make benchmark-v2 ARGS="-startheight=100 -endheight=200"
+
+# Compare data
+make benchmark ARGS="-compare -startheight=264100 -endheight=264200"
 ```
 
 ## Command Line Flags
@@ -45,6 +53,7 @@ make benchmark-v2 ARGS="-startheight=100 -endheight=200"
 - `-grpc`: gRPC server host:port (default: "127.0.0.1:50051")
 - `-v1`: Run v1 HTTP benchmark (default: true)
 - `-v2`: Run v2 gRPC benchmark (default: true)
+- `-compare`: Compare v1 and v2 data instead of benchmarking (default: false)
 
 ## What it measures
 

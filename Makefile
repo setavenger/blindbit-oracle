@@ -14,6 +14,11 @@ benchmark-v2: build-benchmark
 	@echo "Running v2 gRPC benchmark only..."
 	./bin/benchmark -v1=false -v2 $(ARGS)
 
+.PHONY: compare
+compare: build-benchmark
+	@echo "Comparing v1 and v2 data..."
+	./bin/benchmark -compare $(ARGS)
+
 .PHONY: build-benchmark
 build-benchmark:
 	@echo "Building benchmark tool..."
@@ -24,3 +29,4 @@ build-benchmark:
 # make benchmark ARGS="-startheight=100 -endheight=200"
 # make benchmark-v1 ARGS="-startheight=100 -endheight=200"
 # make benchmark-v2 ARGS="-startheight=100 -endheight=200"
+# make compare ARGS="-startheight=100 -endheight=200"

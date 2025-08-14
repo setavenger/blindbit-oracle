@@ -263,6 +263,7 @@ func (s *OracleService) StreamBlockBatchSlim(
 	req *pb.RangedBlockHeightRequest,
 	stream pb.OracleService_StreamBlockBatchSlimServer,
 ) error {
+	logging.L.Info().Msgf("streaming slim batches from %d to %d", req.Start, req.End)
 	for height := req.Start; height <= req.End; height++ {
 		headerInv, err := dblevel.FetchByBlockHeightBlockHeaderInv(uint32(height))
 		if err != nil {

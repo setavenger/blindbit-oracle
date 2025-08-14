@@ -12,6 +12,10 @@ import (
 )
 
 // todo change to `var NoEntryErr = errors.new("[no entry found]")`
+
+// NoEntryErr was used to handle empty responses from level db
+//
+// Deprecated: Will probably not survive next rewrite. Bad design
 type NoEntryErr struct{}
 
 func (e NoEntryErr) Error() string {
@@ -98,13 +102,14 @@ func retrieveByBlockHash(db *leveldb.DB, blockHash [32]byte, pair types.Pair) er
 	if err != nil && !errors.Is(err, leveldb.ErrNotFound) { // todo this error probably exists as var/type somewhere
 		logging.L.Err(err).Msg("error getting block hash")
 		return err
-	} else if err != nil && errors.Is(err, leveldb.ErrNotFound) { // todo this error probably exists as var/type somewhere
-		// todo we don't need separate patterns if just return the errors anyways? or maybe just to avoid unnecessary logging
-		return NoEntryErr{}
+	} else if err != nil && errors.Is(err, leveldb.ErrNotFound) {
+		return nil
 	}
 	if len(data) == 0 {
-		// todo this should be a different type of error case
-		return NoEntryErr{}
+		// we do not return any errors anymore for empty results
+		//empty results are to be expected now and then
+		// only make error handling even more complicated
+		return nil
 	}
 
 	err = pair.DeSerialiseKey(blockHash[:])
@@ -133,13 +138,12 @@ func retrieveByBlockHeight(db *leveldb.DB, blockHeight uint32, pair types.Pair) 
 	if err != nil && err.Error() != "leveldb: not found" { // todo this error probably exists as var/type somewhere
 		logging.L.Err(err).Msg("error getting block height")
 		return err
-	} else if err != nil && err.Error() == "leveldb: not found" { // todo this error probably exists as var/type somewhere
-		return NoEntryErr{}
+	} else if err != nil && errors.Is(err, leveldb.ErrNotFound) { // todo this error probably exists as var/type somewhere
+		return nil
 	}
 
 	if len(data) == 0 {
-		// todo this should be a different type of error case
-		return NoEntryErr{}
+		return nil
 	}
 
 	err = pair.DeSerialiseKey(buf.Bytes())

@@ -3,9 +3,11 @@ package dblevel
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 
 	"github.com/setavenger/blindbit-lib/logging"
 	"github.com/setavenger/blindbit-oracle/internal/types"
+	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
@@ -71,7 +73,7 @@ func FetchHighestBlockHeaderInv() (*types.BlockHeaderInv, error) {
 	}
 
 	err := iter.Error()
-	if err != nil {
+	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
 		logging.L.Err(err).Msg("error iterating over headers inv")
 		return nil, err
 	}
@@ -79,7 +81,7 @@ func FetchHighestBlockHeaderInv() (*types.BlockHeaderInv, error) {
 		logging.L.Warn().Msg("no entry found")
 		return nil, nil
 	}
-	return &result, err
+	return &result, nil
 }
 
 // FetchHighestBlockHeaderInvByFlag gets the block with the highest height which has the corresponding flag set

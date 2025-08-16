@@ -2,7 +2,6 @@ package core
 
 import (
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"time"
 
@@ -64,22 +63,22 @@ func PullBlock(blockHash string) (*types.Block, error) {
 		return nil, fmt.Errorf("block_hash invalid: %s", blockHash)
 	}
 	// this method is preferred over lastHeader because then this function can be called for PreviousBlockHash
-	hashByteSlice, err := hex.DecodeString(blockHash)
-	if err != nil {
-		logging.L.Err(err).Msg("failed to hex decode blockhash")
-		return nil, err
-	}
-	header, err := dblevel.FetchByBlockHashBlockHeader(utils.ConvertToFixedLength32(hashByteSlice))
-	if err != nil && !errors.Is(err, dblevel.NoEntryErr{}) {
-		// we ignore no entry error
-		logging.L.Err(err).Msg("error fetching block header")
-		return nil, err
-	}
+	// hashByteSlice, err := hex.DecodeString(blockHash)
+	// if err != nil {
+	// 	logging.L.Err(err).Msg("failed to hex decode blockhash")
+	// 	return nil, err
+	// }
+	// header, err := dblevel.FetchByBlockHashBlockHeader(utils.ConvertToFixedLength32(hashByteSlice))
+	// if err != nil && !errors.Is(err, dblevel.NoEntryErr{}) {
+	// 	// we ignore no entry error
+	// 	logging.L.Err(err).Msg("error fetching block header")
+	// 	return nil, err
+	// }
 
-	if header != nil {
-		// if we already processed the header into our DB don't do anything
-		return nil, errors.New("block already processed")
-	}
+	// if header != nil {
+	// 	// if we already processed the header into our DB don't do anything
+	// 	return nil, errors.New("block already processed")
+	// }
 
 	block, err := GetFullBlockPerBlockHash(blockHash)
 	if err != nil {

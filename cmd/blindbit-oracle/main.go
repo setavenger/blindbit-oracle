@@ -73,8 +73,7 @@ func init() {
 	// create DB path
 	err = os.Mkdir(config.DBPath, 0750)
 	if err != nil && !strings.Contains(err.Error(), "file exists") {
-		logging.L.Err(err).Msg("error creating db path")
-		os.Exit(1)
+		logging.L.Fatal().Err(err).Msg("error creating db path")
 	}
 
 	// open levelDB connections

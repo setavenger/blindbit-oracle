@@ -11,6 +11,7 @@ import (
 	"github.com/setavenger/blindbit-oracle/internal/config"
 	"github.com/setavenger/blindbit-oracle/internal/dblevel"
 	"github.com/setavenger/blindbit-oracle/internal/types"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 func SyncChain() error {
@@ -220,13 +221,14 @@ func PreSyncHeaders() error {
 	logging.L.Info().Msg("Syncing headers")
 
 	headerInv, err := dblevel.FetchHighestBlockHeaderInv()
-	if err != nil && !errors.Is(err, dblevel.NoEntryErr{}) {
+	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
 		logging.L.Err(err).Msg("error fetching highest block header inv")
 		return err
 	}
 
 	var syncFromHeight uint32
-	if err != nil && errors.Is(err, dblevel.NoEntryErr{}) {
+	// nothing was found so we go to default
+	if headerInv == nil {
 		// we have to start before taproot activation height
 		// some taproot style pubKeys exist since height ~614000 (the last height I checked)
 		syncFromHeight = config.HeaderMustSyncHeight()

@@ -38,6 +38,9 @@ func main() {
 		Uint64("end_height", *endHeight).
 		Msg("Starting benchmark")
 
+	// heat up cache or whatever to keep it somewhat fair
+	benchmark.BenchmarkV2(*startHeight, *endHeight, *grpcHost)
+
 	if *runV1 {
 		logging.L.Info().Msg("=== Running V1 HTTP Benchmark ===")
 		benchmark.BenchmarkV1(*startHeight, *endHeight, *httpURL)

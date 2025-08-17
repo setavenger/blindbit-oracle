@@ -12,7 +12,10 @@ import (
 
 // BenchmarkV2 runs the v2 gRPC streaming benchmark
 func BenchmarkV2(startHeight, endHeight uint64, grpcHost string) {
-	logging.L.Info().Msgf("Starting v2 gRPC streaming benchmark from height %d to %d", startHeight, endHeight)
+	logging.L.Info().Msgf(
+		"Starting v2 gRPC streaming benchmark from height %d to %d",
+		startHeight, endHeight,
+	)
 
 	// Connect to gRPC server
 	conn, err := grpc.Dial(grpcHost, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -54,7 +57,9 @@ func BenchmarkV2(startHeight, endHeight uint64, grpcHost string) {
 		}
 
 		blocksProcessed++
-		logging.L.Debug().Uint64("height", uint64(batch.BlockIdentifier.BlockHeight)).Msg("received block batch")
+		logging.L.Debug().
+			Uint64("height", uint64(batch.BlockIdentifier.BlockHeight)).
+			Msg("received block batch")
 
 		// Use batch to avoid compiler warning
 		_ = batch

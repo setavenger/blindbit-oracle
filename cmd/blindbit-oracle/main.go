@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"path"
+	"time"
 
 	"os"
 	"os/signal"
@@ -126,17 +127,34 @@ func main() {
 		}
 	}()
 
+	db, err := database.OpenDB("")
+	if err != nil {
+		logging.L.Err(err).Msg("failed opening db")
+		errChan <- err
+		return
+	}
+	defer func() {
+		err := db.Close()
+		if err != nil {
+			logging.L.Err(err).Msg("db close failed")
+		}
+		logging.L.Debug().Msg("db closed successfully")
+	}()
+
 	// index builder
 	go func() {
-		db, err := database.OpenDB("")
+		err = database.DropIndexesForIBD(context.Background(), db)
 		if err != nil {
-			logging.L.Err(err).Msg("failed opening db")
+			logging.L.Err(err).Msg("failed to drop indexes")
 			errChan <- err
-			return
 		}
 
 		builder := indexer.NewBuilder(db)
-		err = builder.SyncBlocks(context.Background(), 260_000, 261_000)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+
+		err = builder.SyncBlocks(ctx, 230_000, 260_000)
 		if err != nil {
 			logging.L.Err(err).Msg("error indexing blocks")
 			errChan <- err

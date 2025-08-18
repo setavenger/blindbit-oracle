@@ -38,7 +38,7 @@ var (
 	LogsPath      = ""
 
 	HTTPHost = "127.0.0.1:8000"
-	GRPCHost = "127.0.0.1:50051"
+	GRPCHost = "" // default value is empty (deactivated)
 )
 
 type chain int

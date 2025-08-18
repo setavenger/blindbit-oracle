@@ -24,8 +24,9 @@ func OpenDB(path string) (*sql.DB, error) {
 		"?_txlock=immediate" + // BEGIN IMMEDIATE-style txns
 		"&_pragma=foreign_keys(ON)" +
 		"&_pragma=journal_mode(WAL)" +
-		"&_pragma=synchronous(NORMAL)" +
+		"&_pragma=synchronous(OFF)" +
 		"&_pragma=busy_timeout(5000)"
+
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, err

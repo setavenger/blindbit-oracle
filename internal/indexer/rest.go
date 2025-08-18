@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/setavenger/blindbit-lib/logging"
 )
@@ -34,6 +35,40 @@ var httpClient = &http.Client{
 	},
 }
 
+func getBlockHashByHeight(height int64) (*chainhash.Hash, error) {
+	req, err := http.NewRequest(
+		http.MethodGet,
+		fmt.Sprintf("http://127.0.0.1:38332/rest/blockhashbyheight/%d.bin", height),
+		nil,
+	)
+	if err != nil {
+		err = fmt.Errorf("error creating request: %v", err)
+		logging.L.Err(err).Msg("error creating request")
+		return nil, nil
+	}
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		err = fmt.Errorf("error performing request: %v", err)
+		logging.L.Err(err).Msg("error performing request")
+		return nil, nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		logging.L.Fatal().
+			Str("url", req.URL.String()).
+			Str("status", resp.Status).
+			Msg("bad status code")
+	}
+
+	var blockhash chainhash.Hash
+	resp.Body.Read(blockhash[:])
+
+	return &blockhash, err
+}
+
 func getSpentUtxos(blockhash string) ([][]*wire.TxOut, error) {
 	req, err := http.NewRequest(
 		http.MethodGet,
@@ -57,6 +92,7 @@ func getSpentUtxos(blockhash string) ([][]*wire.TxOut, error) {
 
 	if resp.StatusCode != 200 {
 		logging.L.Fatal().
+			Str("url", req.URL.String()).
 			Str("status", resp.Status).
 			Msg("bad status code")
 	}
@@ -87,6 +123,7 @@ func getBlockByHash(blockhash string) (block *btcutil.Block, err error) {
 
 	if resp.StatusCode != 200 {
 		logging.L.Fatal().
+			Str("url", req.URL.String()).
 			Str("status", resp.Status).
 			Msg("bad status code")
 	}

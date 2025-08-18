@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -9,13 +10,11 @@ import (
 	"os"
 	"os/signal"
 	"strings"
-	"time"
 
 	"github.com/setavenger/blindbit-lib/logging"
 	"github.com/setavenger/blindbit-oracle/internal/config"
-	"github.com/setavenger/blindbit-oracle/internal/core"
-	"github.com/setavenger/blindbit-oracle/internal/dataexport"
-	"github.com/setavenger/blindbit-oracle/internal/dblevel"
+	"github.com/setavenger/blindbit-oracle/internal/database"
+	"github.com/setavenger/blindbit-oracle/internal/indexer"
 	"github.com/setavenger/blindbit-oracle/internal/server"
 	v2 "github.com/setavenger/blindbit-oracle/internal/server/v2"
 )
@@ -77,7 +76,7 @@ func init() {
 	}
 
 	// open levelDB connections
-	openLevelDBConnections()
+	// openLevelDBConnections()
 
 	if config.CookiePath != "" {
 		data, err := os.ReadFile(config.CookiePath)
@@ -108,78 +107,63 @@ func main() {
 		os.Exit(0)
 	}
 	defer logging.L.Info().Msg("Program shut down")
-	defer dblevel.CloseDBs()
 
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 
 	logging.L.Info().Msg("Program Started")
 
-	// make sure everything is ready before we receive data
-
-	//todo create proper handling for exporting data
-
-	if exportData {
-		logging.L.Info().Msg("Exporting data")
-		dataexport.ExportAll()
-		// dataexport.ExportUTXOs(fmt.Sprintf("%s/export/utxos.csv", config.BaseDirectory))
-		return
-	}
+	errChan := make(chan error)
 
 	//moved into go routine such that the interrupt signal will apply properly
 	go func() {
-		if pruneOnStart {
-			startPrune := time.Now()
-			core.PruneAllUTXOs()
-			logging.L.Info().Msgf("Pruning took: %s", time.Since(startPrune).String())
-		}
-		startSync := time.Now()
-		err := core.PreSyncHeaders()
-		if err != nil {
-			logging.L.Fatal().Err(err).Msg("error pre-syncing headers")
-			return
-		}
-
-		// so we can start fetching data while not fully synced. Requires headers to be synced to avoid grave errors.
+		// so we can start fetching data while not fully synced.
 		go server.RunServer(&server.ApiHandler{})
 
 		// keep it optional for now
 		if config.GRPCHost != "" {
 			go v2.RunGRPCServer()
 		}
+	}()
 
-		// todo buggy for sync catchup from 0, needs to be 1 or higher
-		err = core.SyncChain()
+	// index builder
+	go func() {
+		db, err := database.OpenDB("")
 		if err != nil {
-			logging.L.Fatal().Err(err).Msg("error syncing chain")
+			logging.L.Err(err).Msg("failed opening db")
+			errChan <- err
 			return
 		}
-		logging.L.Info().Msgf("Sync took: %s", time.Since(startSync).String())
-		go core.CheckForNewBlockRoutine()
 
-		// only call this if you need to reindex. It doesn't delete anything but takes a couple of minutes to finish
-		//err := core.ReindexDustLimitsOnly()
-		//if err != nil {
-		//	logging.L.Err(err).Msg("error reindexing dust limits")
-		//	return
-		//}
+		builder := indexer.NewBuilder(db)
+		err = builder.SyncBlocks(context.Background(), 260_000, 261_000)
+		if err != nil {
+			logging.L.Err(err).Msg("error indexing blocks")
+			errChan <- err
+			return
+		}
 	}()
 
 	for {
-		<-interrupt
-		logging.L.Info().Msg("Program interrupted")
-		return
+		select {
+		case <-interrupt:
+			logging.L.Info().Msg("Program interrupted")
+			return
+		case err := <-errChan:
+			logging.L.Err(err).Msg("program failed")
+			return
+		}
 	}
 }
 
-func openLevelDBConnections() {
-	dblevel.HeadersDB = dblevel.OpenDBConnection(config.DBPathHeaders)
-	dblevel.HeadersInvDB = dblevel.OpenDBConnection(config.DBPathHeadersInv)
-	dblevel.NewUTXOsFiltersDB = dblevel.OpenDBConnection(config.DBPathFilters)
-	dblevel.TweaksDB = dblevel.OpenDBConnection(config.DBPathTweaks)
-	dblevel.TweakIndexDB = dblevel.OpenDBConnection(config.DBPathTweakIndex)
-	dblevel.TweakIndexDustDB = dblevel.OpenDBConnection(config.DBPathTweakIndexDust)
-	dblevel.UTXOsDB = dblevel.OpenDBConnection(config.DBPathUTXOs)
-	dblevel.SpentOutpointsIndexDB = dblevel.OpenDBConnection(config.DBPathSpentOutpointsIndex)
-	dblevel.SpentOutpointsFilterDB = dblevel.OpenDBConnection(config.DBPathSpentOutpointsFilter)
-}
+// func openLevelDBConnections() {
+// 	dblevel.HeadersDB = dblevel.OpenDBConnection(config.DBPathHeaders)
+// 	dblevel.HeadersInvDB = dblevel.OpenDBConnection(config.DBPathHeadersInv)
+// 	dblevel.NewUTXOsFiltersDB = dblevel.OpenDBConnection(config.DBPathFilters)
+// 	dblevel.TweaksDB = dblevel.OpenDBConnection(config.DBPathTweaks)
+// 	dblevel.TweakIndexDB = dblevel.OpenDBConnection(config.DBPathTweakIndex)
+// 	dblevel.TweakIndexDustDB = dblevel.OpenDBConnection(config.DBPathTweakIndexDust)
+// 	dblevel.UTXOsDB = dblevel.OpenDBConnection(config.DBPathUTXOs)
+// 	dblevel.SpentOutpointsIndexDB = dblevel.OpenDBConnection(config.DBPathSpentOutpointsIndex)
+// 	dblevel.SpentOutpointsFilterDB = dblevel.OpenDBConnection(config.DBPathSpentOutpointsFilter)
+// }

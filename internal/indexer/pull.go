@@ -10,7 +10,7 @@ import (
 	"github.com/setavenger/blindbit-lib/logging"
 )
 
-func PullBlockData(blockHash chainhash.Hash) (*Block, error) {
+func PullBlockData(blockHash *chainhash.Hash) (*Block, error) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 
@@ -21,6 +21,7 @@ func PullBlockData(blockHash chainhash.Hash) (*Block, error) {
 
 	blockHashStr := blockHash.String()
 	go func() {
+		defer wg.Done()
 		var err error
 		spentTxOuts, err = getSpentUtxos(blockHashStr)
 		if err != nil {
@@ -31,6 +32,7 @@ func PullBlockData(blockHash chainhash.Hash) (*Block, error) {
 	}()
 
 	go func() {
+		defer wg.Done()
 		var err error
 		block, err = getBlockByHash(blockHashStr)
 		if err != nil {
@@ -63,18 +65,31 @@ func mergeBlockAndSpentTxOuts(b *btcutil.Block, spentTxOuts [][]*wire.TxOut) (*B
 		txs:  make([]*Transaction, len(spentTxOuts)),
 	}
 
+	for i := range block.txs {
+		v := b.Transactions()[i]
+		block.txs[i] = &Transaction{
+			txid: v.Hash(),
+			outs: v.MsgTx().TxOut,
+		}
+	}
+
 	for i := range len(spentTxOuts) {
 		inCount := len(spentTxOuts[i])
+
+		orgBlockTx := b.Transactions()[i]
+		block.txs[i] = &Transaction{
+			txid: orgBlockTx.Hash(),
+			outs: orgBlockTx.MsgTx().TxOut,
+		}
 		block.txs[i].ins = make([]*Vin, inCount)
-		blockTx := b.Transactions()[i]
+
 		for j := range inCount {
 			vin := Vin{
-				txIn:    blockTx.MsgTx().TxIn[j],
+				txIn:    orgBlockTx.MsgTx().TxIn[j],
 				prevOut: spentTxOuts[i][j],
 			}
 			block.txs[i].ins[j] = &vin
 		}
-		block.txs[i].outs = blockTx.MsgTx().TxOut
 	}
 
 	return &block, nil

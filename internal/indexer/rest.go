@@ -47,8 +47,9 @@ func getBlockHashByHeight(height int64) (*chainhash.Hash, error) {
 		return nil, nil
 	}
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := httpClient.Do(req) // <-- reuse the shared client
+	// client := &http.Client{}
+	// resp, err := client.Do(req)
 	if err != nil {
 		err = fmt.Errorf("error performing request: %v", err)
 		logging.L.Err(err).Msg("error performing request")
@@ -81,8 +82,9 @@ func getSpentUtxos(blockhash string) ([][]*wire.TxOut, error) {
 		return nil, nil
 	}
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := httpClient.Do(req) // <-- reuse the shared client
+	// client := &http.Client{}
+	// resp, err := client.Do(req)
 	if err != nil {
 		err = fmt.Errorf("error performing request: %v", err)
 		logging.L.Err(err).Msg("error performing request")
@@ -112,8 +114,9 @@ func getBlockByHash(blockhash string) (block *btcutil.Block, err error) {
 		return
 	}
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := httpClient.Do(req) // <-- reuse the shared client
+	// client := &http.Client{}
+	// resp, err := client.Do(req)
 	if err != nil {
 		err = fmt.Errorf("error performing request: %v", err)
 		logging.L.Err(err).Msg("error performing request")

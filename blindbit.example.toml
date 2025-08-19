@@ -10,6 +10,7 @@ host = "127.0.0.1:8000"
 chain = "signet"
 
 # default: http://127.0.0.1:8332
+# also used for rest api
 rpc_endpoint = "http://127.0.0.1:18443"
 
 # required, unless rpc_user and rpc_pass are set

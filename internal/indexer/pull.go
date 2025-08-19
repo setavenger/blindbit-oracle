@@ -25,7 +25,7 @@ func PullBlockData(blockHash *chainhash.Hash) (*Block, error) {
 		var err error
 		spentTxOuts, err = getSpentUtxos(blockHashStr)
 		if err != nil {
-			logging.L.Err(err).Msg("failed to pull ")
+			logging.L.Err(err).Str("blockhash", blockHashStr).Msg("failed to pull spentutxos")
 			errChan <- err
 			return
 		}
@@ -36,7 +36,7 @@ func PullBlockData(blockHash *chainhash.Hash) (*Block, error) {
 		var err error
 		block, err = getBlockByHash(blockHashStr)
 		if err != nil {
-			logging.L.Err(err).Msg("failed to pull ")
+			logging.L.Err(err).Str("blockhash", blockHashStr).Msg("failed to pull block data")
 			errChan <- err
 			return
 		}
@@ -46,6 +46,7 @@ func PullBlockData(blockHash *chainhash.Hash) (*Block, error) {
 
 	select {
 	case err := <-errChan:
+		logging.L.Err(err).Msg("ended with err")
 		return nil, err
 	default:
 		// No errors

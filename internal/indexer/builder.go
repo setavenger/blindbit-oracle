@@ -7,6 +7,7 @@ import (
 
 	"github.com/cockroachdb/pebble"
 	"github.com/setavenger/blindbit-lib/logging"
+	"github.com/setavenger/blindbit-oracle/internal/config"
 	"github.com/setavenger/blindbit-oracle/internal/database"
 	"github.com/setavenger/blindbit-oracle/internal/database/dbpebble"
 	"github.com/setavenger/go-bip352"
@@ -25,12 +26,9 @@ type Builder struct {
 	store database.DB
 }
 
-const pullSmeaphoreCount = 50
-const computeSmeaphoreCount = 20
-
 func NewBuilder(db *sql.DB) *Builder {
 	return &Builder{
-		newBlockChan: make(chan *Block, pullSmeaphoreCount*100),
+		newBlockChan: make(chan *Block, config.MaxParallelRequests*20),
 		writerChan:   make(chan *database.DBBlock, 250),
 		db:           db,
 	}
@@ -52,30 +50,30 @@ func (b *Builder) SyncBlocks(
 	startHeight, endHeight int64,
 ) error {
 	errChan := make(chan error)
-	pullSemaphore := make(chan struct{}, pullSmeaphoreCount)
+	pullSemaphore := make(chan struct{}, config.MaxParallelRequests)
+
 	go func() {
 		for i := startHeight; i <= endHeight; i++ {
 			select {
+			case pullSemaphore <- struct{}{}:
 			case <-ctx.Done():
-				// check here
 				errChan <- ctx.Err()
 				return
-			default:
-				logging.L.Info().Msgf("pulling block %d", i)
-				func() {
-					pullSemaphore <- struct{}{}
-					defer func() { <-pullSemaphore }() // Release semaphore
-					err := b.pullBlock(i)
-					if err != nil {
-						errChan <- err
-						return
-					}
-				}()
 			}
+
+			logging.L.Info().Int64("height", i).Msgf("pulling block %d", i)
+			go func(height int64) {
+				defer func() { <-pullSemaphore }() // Release semaphore
+				err := b.pullBlock(height)
+				if err != nil {
+					errChan <- err
+					return
+				}
+			}(i)
 		}
 	}()
 
-	for i := 0; i < computeSmeaphoreCount; i++ {
+	for i := 0; i < config.MaxParallelTweakComputations; i++ {
 		go func() {
 			for {
 				select {

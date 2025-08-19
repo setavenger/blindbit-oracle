@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"path"
-	"time"
 
 	"os"
 	"os/signal"
@@ -14,7 +13,7 @@ import (
 
 	"github.com/setavenger/blindbit-lib/logging"
 	"github.com/setavenger/blindbit-oracle/internal/config"
-	"github.com/setavenger/blindbit-oracle/internal/database"
+	"github.com/setavenger/blindbit-oracle/internal/database/dbpebble"
 	"github.com/setavenger/blindbit-oracle/internal/indexer"
 	"github.com/setavenger/blindbit-oracle/internal/server"
 	v2 "github.com/setavenger/blindbit-oracle/internal/server/v2"
@@ -127,12 +126,14 @@ func main() {
 		}
 	}()
 
-	db, err := database.OpenDB("")
+	db, err := dbpebble.OpenDB()
+	// db, err := database.OpenDB("")
 	if err != nil {
 		logging.L.Err(err).Msg("failed opening db")
 		errChan <- err
 		return
 	}
+
 	defer func() {
 		err := db.Close()
 		if err != nil {
@@ -143,18 +144,19 @@ func main() {
 
 	// index builder
 	go func() {
-		err = database.DropIndexesForIBD(context.Background(), db)
-		if err != nil {
-			logging.L.Err(err).Msg("failed to drop indexes")
-			errChan <- err
-		}
+		// err = database.DropIndexesForIBD(context.Background(), db)
+		// if err != nil {
+		// 	logging.L.Err(err).Msg("failed to drop indexes")
+		// 	errChan <- err
+		// }
 
-		builder := indexer.NewBuilder(db)
+		builder := indexer.NewBuilderPebble(db)
+		// builder := indexer.NewBuilder(db)
 
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		defer cancel()
+		// ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		// defer cancel()
 
-		err = builder.SyncBlocks(ctx, 230_000, 260_000)
+		err = builder.SyncBlocks(context.Background(), 1, 260_000)
 		if err != nil {
 			logging.L.Err(err).Msg("error indexing blocks")
 			errChan <- err

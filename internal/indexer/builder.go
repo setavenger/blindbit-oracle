@@ -5,9 +5,10 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/cockroachdb/pebble"
 	"github.com/setavenger/blindbit-lib/logging"
 	"github.com/setavenger/blindbit-oracle/internal/database"
+	"github.com/setavenger/blindbit-oracle/internal/database/dbpebble"
 	"github.com/setavenger/go-bip352"
 )
 
@@ -16,26 +17,33 @@ type Builder struct {
 	newBlockChan chan *Block
 
 	// writerChan for single threaded inserts
-	writerChan chan *DBBlock
+	writerChan chan *database.DBBlock
 
 	// db connection used for the entire builder in all go routines
 	db *sql.DB
+
+	store database.DB
 }
 
-type DBBlock struct {
-	height int64
-	hash   *chainhash.Hash
-	txs    []*database.Tx
-}
-
-const pullSmeaphoreCount = 20
+const pullSmeaphoreCount = 50
 const computeSmeaphoreCount = 20
 
 func NewBuilder(db *sql.DB) *Builder {
 	return &Builder{
-		newBlockChan: make(chan *Block, pullSmeaphoreCount*5),
-		writerChan:   make(chan *DBBlock, 250),
+		newBlockChan: make(chan *Block, pullSmeaphoreCount*100),
+		writerChan:   make(chan *database.DBBlock, 250),
 		db:           db,
+	}
+}
+
+func NewBuilderPebble(db *pebble.DB) *Builder {
+	return &Builder{
+		newBlockChan: make(chan *Block),
+		writerChan:   make(chan *database.DBBlock),
+		db:           &sql.DB{},
+		store: &dbpebble.Store{
+			DB: db,
+		},
 	}
 }
 
@@ -86,54 +94,45 @@ func (b *Builder) SyncBlocks(
 	}
 
 	go func() {
-		tickerReports := time.Tick(5 * time.Second)
-
-		const blockBatch = 500
-
-		/*
-		   if err := b.InsertBlock(ctx, blockHash, h, txs); err != nil { _ = b.Rollback(); return err }
-		   count++
-		   if count%batchSize == 0 {
-		       if err := b.Commit(); err != nil { return err }
-		       b, err = database.BeginBatch(ctx, db) // start next batch
-		       if err != nil { return err }
-		   }
-		*/
-
-		counter := 0
-		batcher, err := database.BeginBatch(ctx, b.db)
-		if err != nil {
-			errChan <- err
-			return
-		}
+		tickerReports := time.Tick(100 * time.Millisecond)
 
 		for {
 			select {
 			case dbBlock := <-b.writerChan:
-				if counter > blockBatch {
-					err = batcher.Commit()
-					if err != nil {
-						errChan <- err
-						return
-					}
-					// reset everything for next batch
-					counter = 0
-					batcher, err = database.BeginBatch(ctx, b.db)
-					if err != nil {
-						errChan <- err
-						return
-					}
-				}
-				if err := batcher.InsertBlock(ctx, dbBlock.hash[:], dbBlock.height, dbBlock.txs); err != nil {
-					_ = batcher.Rollback()
+				err := b.store.ApplyBlock(dbBlock)
+				if err != nil {
 					logging.L.Err(err).
-						Str("blockhash", dbBlock.hash.String()).
-						Int64("height", dbBlock.height).
-						Msg("failed writing batch")
+						Str("blockhash", dbBlock.Hash.String()).
+						Uint32("height", dbBlock.Height).
+						Msg("failed storing block")
 					errChan <- err
 					return
 				}
 
+				// if counter > blockBatch {
+				// 	err = batcher.Commit()
+				// 	if err != nil {
+				// 		errChan <- err
+				// 		return
+				// 	}
+				// 	// reset everything for next batch
+				// 	counter = 0
+				// 	batcher, err = database.BeginBatch(ctx, b.db)
+				// 	if err != nil {
+				// 		errChan <- err
+				// 		return
+				// 	}
+				// }
+				// if err := batcher.InsertBlock(ctx, dbBlock.hash[:], dbBlock.height, dbBlock.txs); err != nil {
+				// 	_ = batcher.Rollback()
+				// 	logging.L.Err(err).
+				// 		Str("blockhash", dbBlock.hash.String()).
+				// 		Int64("height", dbBlock.height).
+				// 		Msg("failed writing batch")
+				// 	errChan <- err
+				// 	return
+				// }
+				//
 				// err := database.InsertBlock(ctx, b.db, dbBlock.hash[:], dbBlock.height, dbBlock.txs)
 				// if err != nil {
 				// 	logging.L.Err(err).
@@ -199,10 +198,10 @@ func (b *Builder) handleBlock(ctx context.Context, block *Block) error {
 		Str("blockhash", block.Hash.String()).
 		Int64("height", block.Height).
 		Msg("computation done")
-	b.writerChan <- &DBBlock{
-		height: block.Height,
-		hash:   block.Hash,
-		txs:    dbTxs,
+	b.writerChan <- &database.DBBlock{
+		Height: uint32(block.Height),
+		Hash:   block.Hash,
+		Txs:    dbTxs,
 	}
 	return nil
 }
@@ -246,7 +245,8 @@ func handleTx(tx *Transaction) *database.Tx {
 				dbOuts = append(dbOuts, &database.Out{
 					Txid:   tx.txid[:],
 					Vout:   uint32(i),
-					Amount: v.Value,
+					Amount: uint64(v.Value),
+					Pubkey: v.PkScript[2:],
 				})
 			}
 		}

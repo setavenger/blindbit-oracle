@@ -51,6 +51,7 @@ Table inputs {                          // spend events for those SP outputs
   idx        int
   prev_txid  blob
   prev_vout  int
+  pubkey blob
   // -- no spend_block_hash here (derive via block_txs + chain_index)
 
   indexes {

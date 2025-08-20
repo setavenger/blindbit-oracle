@@ -2,10 +2,8 @@ package dbpebble
 
 import (
 	"path/filepath"
-	"time"
 
 	"github.com/cockroachdb/pebble"
-	"github.com/setavenger/blindbit-lib/logging"
 	"github.com/setavenger/blindbit-oracle/internal/config"
 )
 
@@ -21,20 +19,20 @@ func OpenDB() (*pebble.DB, error) {
 
 	opts.MaxConcurrentCompactions = func() int { return 10 }
 
-	opts.EventListener = &pebble.EventListener{
-		WriteStallBegin: func(info pebble.WriteStallBeginInfo) {
-			logging.L.Debug().Any("info", info).Msg("write_stall_end")
-		},
-		WriteStallEnd: func() {
-			logging.L.Debug().Any("info", nil).Msg("write_stall_end")
-		},
-		// CompactionBegin: func(info pebble.CompactionInfo) {
-		// 	logging.L.Debug().Any("info", info).Msg("compact_begin")
-		// },
-		// CompactionEnd: func(info pebble.CompactionInfo) {
-		// 	logging.L.Debug().Any("info", info).Msg("compact_end")
-		// },
-	}
+	// opts.EventListener = &pebble.EventListener{
+	// 	WriteStallBegin: func(info pebble.WriteStallBeginInfo) {
+	// 		logging.L.Debug().Any("info", info).Msg("write_stall_end")
+	// 	},
+	// 	WriteStallEnd: func() {
+	// 		logging.L.Debug().Any("info", nil).Msg("write_stall_end")
+	// 	},
+	// 	// CompactionBegin: func(info pebble.CompactionInfo) {
+	// 	// 	logging.L.Debug().Any("info", info).Msg("compact_begin")
+	// 	// },
+	// 	// CompactionEnd: func(info pebble.CompactionInfo) {
+	// 	// 	logging.L.Debug().Any("info", info).Msg("compact_end")
+	// 	// },
+	// }
 
 	opts.BytesPerSync = 1 << 22
 
@@ -44,15 +42,15 @@ func OpenDB() (*pebble.DB, error) {
 	}
 
 	// Periodic metrics log (every 5–10s)
-	go func() {
-		t := time.NewTicker(10 * time.Second)
-		defer t.Stop()
-		for range t.C {
-			m := db.Metrics()
-			// The pretty string shows per-level tables/sizes and the compaction debt/stalls.
-			// It’s the easiest way to see L0 pressure & stalls.
-			logging.L.Warn().Any("metrics", m).Msg("")
-		}
-	}()
+	// go func() {
+	// 	t := time.NewTicker(10 * time.Second)
+	// 	defer t.Stop()
+	// 	for range t.C {
+	// 		m := db.Metrics()
+	// 		// The pretty string shows per-level tables/sizes and the compaction debt/stalls.
+	// 		// It’s the easiest way to see L0 pressure & stalls.
+	// 		logging.L.Warn().Any("metrics", m).Msg("")
+	// 	}
+	// }()
 	return db, err
 }

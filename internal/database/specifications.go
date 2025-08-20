@@ -1,9 +1,12 @@
-// database defines the interfaces for for handling db operations
+// Packag database
+// defines the interfaces for for handling db operations
 package database
 
 import "github.com/btcsuite/btcd/chaincfg/chainhash"
 
 type DB interface {
+	GetChainTip() ([]byte, uint32, error)
+	GetBlockHashByHeight(height uint32) ([]byte, error)
 	ApplyBlock(*DBBlock) error
 	TweaksForBlockAll([]byte) ([]TweakRow, error)
 	TweaksForBlockCutThrough([]byte, uint32) ([]TweakRow, error)

@@ -3,6 +3,7 @@ package dbpebble
 import (
 	"encoding/binary"
 	"errors"
+	"math"
 )
 
 // ---------------- Keys ----------------
@@ -95,6 +96,18 @@ func KeyCIHeight(height uint32) []byte {
 	be32(height, k[1:])
 	return k
 }
+
+func BoundsCIHeight() (lb, ub []byte) {
+	lb = make([]byte, 1+SizeHeight)
+	lb[0] = KCIHeight
+	be32(0, lb[1:])
+
+	ub = make([]byte, 1+SizeHeight)
+	ub[0] = KCIHeight
+	be32(math.MaxUint32, ub[1:])
+	return
+}
+
 func KeyCIBlock(blockHash []byte) []byte {
 	k := make([]byte, 1+SizeHash)
 	k[0] = KCIBlock

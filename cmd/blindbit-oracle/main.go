@@ -122,9 +122,6 @@ func main() {
 		return
 	}
 	store := dbpebble.NewStore(db)
-	// store := &dbpebble.Store{
-	// 	DB: db,
-	// }
 
 	//moved into go routine such that the interrupt signal will apply properly
 	go func() {
@@ -145,6 +142,9 @@ func main() {
 		logging.L.Debug().Msg("db closed successfully")
 	}()
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// index builder
 	go func() {
 		// err = database.DropIndexesForIBD(context.Background(), db)
@@ -156,7 +156,6 @@ func main() {
 		builder := indexer.NewBuilder(store)
 		// builder := indexer.NewBuilder(db)
 
-		ctx := context.Background()
 		// ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 		// defer cancel()
 
@@ -176,9 +175,11 @@ func main() {
 	for {
 		select {
 		case <-interrupt:
+			cancel()
 			logging.L.Info().Msg("Program interrupted")
 			return
 		case err := <-errChan:
+			cancel()
 			logging.L.Err(err).Msg("program failed")
 			return
 		}

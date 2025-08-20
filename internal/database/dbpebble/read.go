@@ -3,6 +3,7 @@ package dbpebble
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 
 	"github.com/cockroachdb/pebble"
 	"github.com/setavenger/blindbit-oracle/internal/database"
@@ -10,6 +11,43 @@ import (
 
 // Best-chain map to test membership quickly.
 type ActiveHeight func(blockHash []byte) (height uint32, ok bool)
+
+// GetChainTip returns the Blockhash and height of the highest block
+func (s *Store) GetChainTip() ([]byte, uint32, error) {
+	lb, ub := BoundsCIHeight()
+	it, err := s.DB.NewIter(&pebble.IterOptions{LowerBound: lb, UpperBound: ub})
+	if err != nil {
+		return nil, 0, err
+	}
+	defer it.Close()
+	if !it.Last() {
+		// means literally zero blockhashes are in the db
+		return nil, 0, errors.New("no chain tip found")
+	}
+	heightBytes := it.Key()
+	blockhash := it.Value()
+
+	if len(blockhash) != 32 {
+		return nil, 0, fmt.Errorf("bad blockhash %x", blockhash)
+	}
+
+	height := binary.BigEndian.Uint32(heightBytes[1:])
+
+	return blockhash, height, nil
+}
+
+func (s *Store) GetBlockHashByHeight(height uint32) ([]byte, error) {
+	key := KeyCIHeight(height)
+	blockhash, closer, err := s.DB.Get(key)
+	if err != nil {
+		if errors.Is(err, pebble.ErrNotFound) {
+			return nil, fmt.Errorf("height not found in chain index %d", height)
+		}
+		return nil, err
+	}
+	defer closer.Close()
+	return blockhash, err
+}
 
 func (s *Store) BlockTxids(blockHash []byte) ([][]byte, error) {
 	lb, ub := BoundsBlockTx(blockHash)
@@ -71,7 +109,7 @@ func (s *Store) LoadTweak(txid []byte) ([]byte, bool, error) {
 	return out, true, nil
 }
 
-// Is outpoint spent on best chain at height H?
+// IsSpentAt Is outpoint spent on best chain at height H?
 func (s *Store) IsSpentAt(prevTxid []byte, prevVout, H uint32, active ActiveHeight) (bool, error) {
 	lb, ub := BoundsSpend(prevTxid, prevVout)
 	it, err := s.DB.NewIter(&pebble.IterOptions{LowerBound: lb, UpperBound: ub})
@@ -162,6 +200,8 @@ func (s *Store) heightIfOnBestChain(blockHash []byte) (uint32, bool, error) {
 
 // spentAtHeightTip: is (prevTxid,prevVout) spent on best chain at or before H?
 func (s *Store) spentAtHeightTip(prevTxid []byte, prevVout, H uint32) (bool, error) {
+	// todo: should we drop the H thing. Just check if in or not
+
 	lb, ub := BoundsSpend(prevTxid, prevVout) // sp:<txid>:<vout>:<blockHash>
 	it, err := s.DB.NewIter(&pebble.IterOptions{LowerBound: lb, UpperBound: ub})
 	if err != nil {
@@ -181,8 +221,6 @@ func (s *Store) spentAtHeightTip(prevTxid []byte, prevVout, H uint32) (bool, err
 	return false, nil
 }
 
-// --- API you asked for ------------------------------------------------------
-
 func (s *Store) TweaksForBlockAll(blockHash []byte) ([]database.TweakRow, error) {
 	txids, err := s.BlockTxids(blockHash)
 	if err != nil {
@@ -195,7 +233,7 @@ func (s *Store) TweaksForBlockAll(blockHash []byte) ([]database.TweakRow, error)
 		if err != nil {
 			return nil, err
 		}
-		if !ok { // not SP-eligible (no tweak stored)
+		if !ok {
 			continue
 		}
 		row := database.TweakRow{
@@ -209,6 +247,7 @@ func (s *Store) TweaksForBlockAll(blockHash []byte) ([]database.TweakRow, error)
 	return out, nil
 }
 
+// TweaksForBlockCutThrough Account for cut-through
 //  2. Cut-through: exclude txs whose every tracked output is already spent
 //     at or before tipHeight on the best chain.
 func (s *Store) TweaksForBlockCutThrough(
@@ -225,7 +264,56 @@ func (s *Store) TweaksForBlockCutThrough(
 		if err != nil {
 			return nil, err
 		}
-		if !ok { // not SP-eligible
+		if !ok {
+			continue
+		}
+
+		outs, err := s.OutputsForTx(txid)
+		if err != nil {
+			return nil, err
+		}
+
+		// keep tweak if ANY tracked output is unspent at tip
+		keep := false
+		for _, o := range outs {
+			spent, err := s.spentAtHeightTip(txid, o.Vout, tipHeight)
+			if err != nil {
+				return nil, err
+			}
+			if !spent {
+				keep = true
+				break
+			}
+		}
+		if keep {
+			row := database.TweakRow{
+				Txid:  make([]byte, SizeTxid),
+				Tweak: make([]byte, SizeTweak),
+			}
+			copy(row.Txid, txid)
+			copy(row.Tweak, tweak)
+			out = append(out, row)
+		}
+	}
+	return out, nil
+}
+
+func (s *Store) TweaksForBlockCutThroughDustLimit(
+	blockHash []byte, tipHeight uint32, dustLimit uint64,
+) ([]database.TweakRow, error) {
+	// todo: spent at height
+	txids, err := s.BlockTxids(blockHash)
+	if err != nil {
+		return nil, err
+	}
+
+	var out []database.TweakRow
+	for _, txid := range txids {
+		tweak, ok, err := s.LoadTweak(txid)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
 			continue
 		}
 

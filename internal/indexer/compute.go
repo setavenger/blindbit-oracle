@@ -15,7 +15,7 @@ import (
 
 func ComputeTweakPerTx(tx *Transaction) (*[33]byte, error) {
 	pubKeys := extractPubKeys(tx)
-	if pubKeys == nil {
+	if len(pubKeys) == 0 {
 		// for example if coinbase transaction does not return any pubKeys (as it should)
 		return nil, nil
 	}
@@ -40,7 +40,11 @@ func ComputeTweakPerTx(tx *Transaction) (*[33]byte, error) {
 		return nil, err
 	}
 
-	golibsecp256k1.PubKeyTweakMul(summedKey, &hash)
+	if err := golibsecp256k1.PubKeyTweakMul(summedKey, &hash); err != nil {
+		logging.L.Debug().Str("txid", tx.txid.String()).Msg("error computing tweak per tx")
+		logging.L.Err(err).Msg("error computing tweak per tx")
+		return nil, err
+	}
 
 	tweakBytes := summedKey
 

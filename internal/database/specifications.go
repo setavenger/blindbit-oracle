@@ -5,6 +5,13 @@ import "github.com/btcsuite/btcd/chaincfg/chainhash"
 
 type DB interface {
 	ApplyBlock(*DBBlock) error
+	TweaksForBlockAll([]byte) ([]TweakRow, error)
+	TweaksForBlockCutThrough([]byte, uint32) ([]TweakRow, error)
+}
+
+type TweakRow struct {
+	Txid  []byte
+	Tweak []byte
 }
 
 type DBBlock struct {

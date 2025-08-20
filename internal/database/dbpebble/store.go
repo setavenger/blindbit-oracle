@@ -1,6 +1,9 @@
 package dbpebble
 
 import (
+	"sync"
+	"time"
+
 	"github.com/cockroachdb/pebble"
 	"github.com/setavenger/blindbit-lib/logging"
 	"github.com/setavenger/blindbit-oracle/internal/database"
@@ -28,15 +31,64 @@ type Tx struct {
 	Ins   []*In
 }
 
-type Store struct{ DB *pebble.DB }
+type Store struct {
+	DB           *pebble.DB
+	dbBatch      *pebble.Batch
+	batchCounter int
+	batchSync    *sync.Mutex
+	batchSize    int
+}
 
-func (s *Store) ApplyBlock(block *database.DBBlock) error {
+func NewStore(db *pebble.DB) *Store {
+	return &Store{
+		DB:           db,
+		dbBatch:      db.NewBatch(),
+		batchCounter: 0,
+		batchSync:    new(sync.Mutex),
+		batchSize:    200,
+	}
+}
+
+func (s *Store) collectAndWrite(block *database.DBBlock) error {
+	s.batchSync.Lock()
+	if s.dbBatch == nil {
+		s.dbBatch = s.DB.NewBatch()
+	}
+
+	s.batchCounter++
+	if s.batchCounter > s.batchSize {
+		writeBatchStart := time.Now()
+		err := s.dbBatch.Commit(pebble.NoSync)
+		if err != nil {
+			logging.L.Err(err).Msg("failed to write Batch")
+			return err
+		}
+		logging.L.Warn().Dur("write_batch_duration", time.Since(writeBatchStart)).Msg("batch_write_bench")
+		err = s.dbBatch.Close()
+		if err != nil {
+			logging.L.Err(err).Msg("failed to close db batch")
+			return err
+		}
+		// s.dbBatch = nil
+		s.dbBatch = s.DB.NewBatch()
+		s.batchCounter = 0
+	}
+	err := attachBlcokToBatch(s.dbBatch, block)
+	if err != nil {
+		logging.L.Err(err).Msg("failed to attach to batch")
+		return err
+	}
+
+	s.batchSync.Unlock()
+	return nil
+}
+
+func attachBlcokToBatch(batch *pebble.Batch, block *database.DBBlock) error {
 	blockHash := block.Hash[:]
 	txs := block.Txs
 	height := block.Height
 
-	b := s.DB.NewBatch()
-	defer b.Close()
+	b := batch
 
 	// chain index
 	if err := b.Set(KeyCIHeight(height), blockHash, nil); err != nil {
@@ -104,14 +156,33 @@ func (s *Store) ApplyBlock(block *database.DBBlock) error {
 		}
 	}
 
-	wopts := pebble.NoSync
-	// if sync {
-	// 	wopts = pebble.Sync
-	// }
-	err := b.Commit(wopts)
-	if err != nil {
-		logging.L.Err(err).Msg("failed to commit db tx")
-		return err
-	}
-	return err
+	return nil
 }
+
+func (s *Store) ApplyBlock(block *database.DBBlock) error {
+	return s.collectAndWrite(block)
+}
+
+// func (s *Store) ApplyBlock(block *database.DBBlock) error {
+// 	insertStart := time.Now()
+// 	defer func() {
+// 		logging.L.Trace().Dur("insert_time", time.Since(insertStart)).Msg("db insertion done")
+// 	}()
+//
+// 	b := s.DB.NewBatch()
+//
+// 	err := attachBlcokToBatch(b, block)
+// 	if err != nil {
+// 		logging.L.Err(err).Msg("failed to build batch data")
+// 	}
+// 	wopts := pebble.NoSync
+// 	// if sync {
+// 	// 	wopts = pebble.Sync
+// 	// }
+// 	err = b.Commit(wopts)
+// 	if err != nil {
+// 		logging.L.Err(err).Msg("failed to commit db tx")
+// 		return err
+// 	}
+// 	return err
+// }

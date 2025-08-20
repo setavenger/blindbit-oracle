@@ -3,6 +3,7 @@ package v2
 import (
 	"context"
 	"encoding/hex"
+	"fmt"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -10,19 +11,24 @@ import (
 
 	"github.com/setavenger/blindbit-lib/logging"
 	"github.com/setavenger/blindbit-lib/proto/pb"
+	"github.com/setavenger/blindbit-lib/utils"
 	"github.com/setavenger/blindbit-oracle/internal/config"
+	"github.com/setavenger/blindbit-oracle/internal/database"
 	"github.com/setavenger/blindbit-oracle/internal/dblevel"
 	"github.com/setavenger/blindbit-oracle/internal/types"
 )
 
 // OracleService implements the gRPC OracleService interface
 type OracleService struct {
+	db database.DB
 	pb.UnimplementedOracleServiceServer
 }
 
 // NewOracleService creates a new OracleService instance
-func NewOracleService() *OracleService {
-	return &OracleService{}
+func NewOracleService(db database.DB) *OracleService {
+	return &OracleService{
+		db: db,
+	}
 }
 
 // GetInfo returns oracle information
@@ -75,62 +81,19 @@ func (s *OracleService) GetBlockHashByHeight(
 
 // GetTweakArray returns tweaks for a specific block height
 func (s *OracleService) GetTweakArray(ctx context.Context, req *pb.BlockHeightRequest) (*pb.TweakArray, error) {
-	headerInv, err := dblevel.FetchByBlockHeightBlockHeaderInv(uint32(req.BlockHeight))
+
+	byteSlice, _ := hex.DecodeString("000000116922619904c23a7affe4c0472e4e654afba7161f1bd5c6d86f27879f")
+	tweakIndex, err := s.db.TweaksForBlockAll(utils.ReverseBytes(byteSlice))
 	if err != nil {
-		logging.L.Err(err).Msg("error fetching block header inv")
-		return nil, status.Errorf(codes.Internal, "could not retrieve block data")
+		return nil, status.Errorf(codes.Internal, "could not retrieve dusted tweak data")
 	}
 
-	tweaks, err := dblevel.FetchByBlockHashTweaks(headerInv.Hash)
-	if err != nil {
-		logging.L.Err(err).Msg("error fetching tweaks")
-		return nil, status.Errorf(codes.Internal, "could not retrieve tweak data")
-	}
-
-	// Convert tweaks to bytes
-	tweakBytes := make([][]byte, len(tweaks))
-	for i, tweak := range tweaks {
-		tweakBytes[i] = tweak.TweakData[:]
-	}
-
-	return &pb.TweakArray{
-		BlockIdentifier: &pb.BlockIdentifier{
-			BlockHash:   headerInv.Hash[:],
-			BlockHeight: uint64(headerInv.Height),
-		},
-		Tweaks: tweakBytes,
-	}, nil
-}
-
-// GetTweakIndexArray returns tweak index data for a specific block height
-func (s *OracleService) GetTweakIndexArray(
-	ctx context.Context, req *pb.GetTweakIndexRequest,
-) (*pb.TweakArray, error) {
-	headerInv, err := dblevel.FetchByBlockHeightBlockHeaderInv(uint32(req.BlockHeight))
-	if err != nil {
-		logging.L.Err(err).Msg("error fetching block header inv")
-		return nil, status.Errorf(codes.Internal, "could not retrieve block data")
-	}
-
-	var tweaks [][33]byte
-
-	if req.DustLimit > 0 {
-		// todo: think about adding not supported error
-		var rawTweaks []types.Tweak
-		rawTweaks, err = dblevel.FetchByBlockHashDustLimitTweaks(headerInv.Hash, req.DustLimit)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "could not retrieve dusted tweak data")
+	tweaks := make([][]byte, len(tweakIndex))
+	for i := range tweakIndex {
+		if i == 0 || i == 245 || i == len(tweakIndex)-1 {
+			fmt.Printf("%x\n", utils.ReverseBytesCopy(tweakIndex[i].Txid))
 		}
-		tweaks = make([][33]byte, len(rawTweaks))
-		for i := range rawTweaks {
-			tweaks[i] = rawTweaks[i].TweakData
-		}
-	} else {
-		var tweakIndex *types.TweakIndex
-		tweakIndex, err = dblevel.FetchByBlockHashTweakIndex(headerInv.Hash)
-		if err == nil {
-			tweaks = tweakIndex.Data
-		}
+		tweaks[i] = tweakIndex[i].Tweak
 	}
 
 	if err != nil {
@@ -138,18 +101,47 @@ func (s *OracleService) GetTweakIndexArray(
 		return nil, status.Errorf(codes.Internal, "could not retrieve tweak index data")
 	}
 
-	// Convert tweaks to bytes
-	tweakBytes := make([][]byte, len(tweaks))
-	for i, tweak := range tweaks {
-		tweakBytes[i] = tweak[:]
+	return &pb.TweakArray{
+		BlockIdentifier: &pb.BlockIdentifier{
+			BlockHash:   byteSlice,
+			BlockHeight: 258257,
+		},
+		Tweaks: tweaks,
+	}, nil
+}
+
+// GetTweakIndexArray returns tweak index data for a specific block height
+func (s *OracleService) GetTweakIndexArray(
+	ctx context.Context, req *pb.GetTweakIndexRequest,
+) (*pb.TweakArray, error) {
+
+	byteSlice, _ := hex.DecodeString("000000116922619904c23a7affe4c0472e4e654afba7161f1bd5c6d86f27879f")
+	// tweakIndex, err := s.db.TweaksForBlockAll(utils.ReverseBytes(byteSlice))
+	tweakIndex, err := s.db.TweaksForBlockCutThrough(utils.ReverseBytes(byteSlice), 280_000)
+	// tweakIndex, err := s.db.TweaksForBlockCutThrough(utils.ReverseBytes(byteSlice), 260_000)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "could not retrieve dusted tweak data")
+	}
+
+	tweaks := make([][]byte, len(tweakIndex))
+	for i := range tweakIndex {
+		if i == 0 || i == 245 || i == len(tweakIndex)-1 {
+			fmt.Printf("%x\n", utils.ReverseBytesCopy(tweakIndex[i].Txid))
+		}
+		tweaks[i] = tweakIndex[i].Tweak
+	}
+
+	if err != nil {
+		logging.L.Err(err).Msg("error fetching tweak index")
+		return nil, status.Errorf(codes.Internal, "could not retrieve tweak index data")
 	}
 
 	return &pb.TweakArray{
 		BlockIdentifier: &pb.BlockIdentifier{
-			BlockHash:   headerInv.Hash[:],
-			BlockHeight: uint64(headerInv.Height),
+			BlockHash:   byteSlice,
+			BlockHeight: 258257,
 		},
-		Tweaks: tweakBytes,
+		Tweaks: tweaks,
 	}, nil
 }
 

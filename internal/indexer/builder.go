@@ -14,6 +14,7 @@ import (
 )
 
 type Builder struct {
+	ctx context.Context
 	// blocks are pulled and pushed through the channel to workers to process the blocks
 	newBlockChan chan *Block
 
@@ -26,16 +27,17 @@ type Builder struct {
 	store database.DB
 }
 
-func NewBuilder(db *sql.DB) *Builder {
+func NewBuilder(db database.DB) *Builder {
 	return &Builder{
 		newBlockChan: make(chan *Block, config.MaxParallelRequests*20),
 		writerChan:   make(chan *database.DBBlock, 250),
-		db:           db,
+		store:        db,
 	}
 }
 
-func NewBuilderPebble(db *pebble.DB) *Builder {
+func NewBuilderPebble(ctx context.Context, db *pebble.DB) *Builder {
 	return &Builder{
+		ctx:          ctx,
 		newBlockChan: make(chan *Block),
 		writerChan:   make(chan *database.DBBlock),
 		db:           &sql.DB{},
@@ -196,21 +198,45 @@ func (b *Builder) handleBlock(ctx context.Context, block *Block) error {
 		Str("blockhash", block.Hash.String()).
 		Int64("height", block.Height).
 		Msg("computation done")
-	b.writerChan <- &database.DBBlock{
+
+	dbBlock := &database.DBBlock{
 		Height: uint32(block.Height),
 		Hash:   block.Hash,
 		Txs:    dbTxs,
 	}
-	return nil
+
+	// b.writerChan <- dbBlock
+	return b.store.ApplyBlock(dbBlock)
+	// return nil
 }
 
 func handleTx(tx *Transaction) *database.Tx {
-	tweak, err := ComputeTweakPerTx(tx)
-	if err != nil {
-		logging.L.Warn().Err(err).
-			Str("txid", tx.txid.String()).
-			Msg("failed to compute tweak")
-		tweak = nil
+	var dbOuts []*database.Out
+
+	// we only want outputs where we know they can be Silent Payments.
+	// NO tweak not silent payment
+	for i := range tx.outs {
+		v := tx.outs[i]
+		if bip352.IsP2TR(v.PkScript) {
+			dbOuts = append(dbOuts, &database.Out{
+				Txid:   tx.txid[:],
+				Vout:   uint32(i),
+				Amount: uint64(v.Value),
+				Pubkey: v.PkScript[2:],
+			})
+		}
+	}
+
+	var err error
+	var tweak *[33]byte
+	if len(dbOuts) > 0 {
+		tweak, err = ComputeTweakPerTx(tx)
+		if err != nil {
+			logging.L.Warn().Err(err).
+				Str("txid", tx.txid.String()).
+				Msg("failed to compute tweak")
+			tweak = nil
+		}
 	}
 
 	// if "82252d8fa50f1e4812dc382a300876bd4b7abb494a0573c750a02c11d50e9a49" == tx.txid.String() {
@@ -229,24 +255,6 @@ func handleTx(tx *Transaction) *database.Tx {
 				PrevTxid:  v.txIn.PreviousOutPoint.Hash[:],
 				PrevVout:  v.txIn.PreviousOutPoint.Index,
 			})
-		}
-	}
-
-	var dbOuts []*database.Out
-
-	// we only want outputs where we know they can be Silent Payments.
-	// NO tweak not silent payment
-	if tweak != nil {
-		for i := range tx.outs {
-			v := tx.outs[i]
-			if bip352.IsP2TR(v.PkScript) {
-				dbOuts = append(dbOuts, &database.Out{
-					Txid:   tx.txid[:],
-					Vout:   uint32(i),
-					Amount: uint64(v.Value),
-					Pubkey: v.PkScript[2:],
-				})
-			}
 		}
 	}
 

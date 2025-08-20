@@ -114,6 +114,17 @@ func main() {
 	logging.L.Info().Msg("Program Started")
 
 	errChan := make(chan error)
+	db, err := dbpebble.OpenDB()
+	// db, err := database.OpenDB("")
+	if err != nil {
+		logging.L.Err(err).Msg("failed opening db")
+		errChan <- err
+		return
+	}
+	store := dbpebble.NewStore(db)
+	// store := &dbpebble.Store{
+	// 	DB: db,
+	// }
 
 	//moved into go routine such that the interrupt signal will apply properly
 	go func() {
@@ -122,17 +133,9 @@ func main() {
 
 		// keep it optional for now
 		if config.GRPCHost != "" {
-			go v2.RunGRPCServer()
+			go v2.RunGRPCServer(store)
 		}
 	}()
-
-	db, err := dbpebble.OpenDB()
-	// db, err := database.OpenDB("")
-	if err != nil {
-		logging.L.Err(err).Msg("failed opening db")
-		errChan <- err
-		return
-	}
 
 	defer func() {
 		err := db.Close()
@@ -150,13 +153,19 @@ func main() {
 		// 	errChan <- err
 		// }
 
-		builder := indexer.NewBuilderPebble(db)
+		builder := indexer.NewBuilder(store)
 		// builder := indexer.NewBuilder(db)
 
-		// ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		ctx := context.Background()
+		// ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 		// defer cancel()
 
-		err = builder.SyncBlocks(context.Background(), 1, 260_000)
+		_ = ctx
+		_ = builder
+
+		// err = builder.SyncBlocks(ctx, 1, 265_963)
+		// err = builder.SyncBlocks(ctx, 251_000, 265_000)
+		// err = builder.SyncBlocks(ctx, 230_000, 265_000)
 		if err != nil {
 			logging.L.Err(err).Msg("error indexing blocks")
 			errChan <- err
@@ -175,15 +184,3 @@ func main() {
 		}
 	}
 }
-
-// func openLevelDBConnections() {
-// 	dblevel.HeadersDB = dblevel.OpenDBConnection(config.DBPathHeaders)
-// 	dblevel.HeadersInvDB = dblevel.OpenDBConnection(config.DBPathHeadersInv)
-// 	dblevel.NewUTXOsFiltersDB = dblevel.OpenDBConnection(config.DBPathFilters)
-// 	dblevel.TweaksDB = dblevel.OpenDBConnection(config.DBPathTweaks)
-// 	dblevel.TweakIndexDB = dblevel.OpenDBConnection(config.DBPathTweakIndex)
-// 	dblevel.TweakIndexDustDB = dblevel.OpenDBConnection(config.DBPathTweakIndexDust)
-// 	dblevel.UTXOsDB = dblevel.OpenDBConnection(config.DBPathUTXOs)
-// 	dblevel.SpentOutpointsIndexDB = dblevel.OpenDBConnection(config.DBPathSpentOutpointsIndex)
-// 	dblevel.SpentOutpointsFilterDB = dblevel.OpenDBConnection(config.DBPathSpentOutpointsFilter)
-// }

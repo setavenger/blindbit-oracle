@@ -6,16 +6,17 @@ import (
 	"github.com/setavenger/blindbit-lib/logging"
 	"github.com/setavenger/blindbit-lib/proto/pb"
 	"github.com/setavenger/blindbit-oracle/internal/config"
+	"github.com/setavenger/blindbit-oracle/internal/database"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
 
-func RunGRPCServer() {
+func RunGRPCServer(db database.DB) {
 	// Create gRPC server
 	grpcServer := grpc.NewServer()
 
 	// Register the OracleService
-	oracleService := NewOracleService()
+	oracleService := NewOracleService(db)
 	pb.RegisterOracleServiceServer(grpcServer, oracleService)
 
 	// Enable reflection for debugging (optional)

@@ -7,12 +7,13 @@ require (
 	github.com/btcsuite/btcd/btcutil v1.1.6
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.1.0
 	github.com/btcsuite/btcutil v0.0.0-20190425235716-9e5f4b9a998d
+	github.com/cockroachdb/pebble v1.1.5
 	github.com/gin-contrib/cors v1.7.2
 	github.com/gin-contrib/gzip v1.2.2
 	github.com/gin-gonic/gin v1.10.0
 	github.com/rs/zerolog v1.34.0
 	github.com/setavenger/blindbit-lib v0.0.1
-	github.com/setavenger/go-bip352 v0.1.8-0.20250807125845-136879952399
+	github.com/setavenger/go-bip352 v0.1.9-0.20250820220446-d596338dc6ad
 	github.com/setavenger/go-libsecp256k1 v0.0.0-20250601142217-61f26e074fd5
 	github.com/spf13/viper v1.19.0
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
@@ -20,8 +21,6 @@ require (
 	google.golang.org/protobuf v1.36.2
 	modernc.org/sqlite v1.38.2
 )
-
-replace github.com/setavenger/go-bip352 => ../go-bip352
 
 require (
 	github.com/DataDog/zstd v1.4.5 // indirect
@@ -36,7 +35,6 @@ require (
 	github.com/cockroachdb/errors v1.11.3 // indirect
 	github.com/cockroachdb/fifo v0.0.0-20240606204812-0bbfbd93a7ce // indirect
 	github.com/cockroachdb/logtags v0.0.0-20230118201751-21c54148d20b // indirect
-	github.com/cockroachdb/pebble v1.1.5 // indirect
 	github.com/cockroachdb/redact v1.1.5 // indirect
 	github.com/cockroachdb/tokenbucket v0.0.0-20230807174530-cc333fc44b06 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
@@ -102,7 +100,6 @@ require (
 	golang.org/x/text v0.23.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240314234333-6e1732d8331c // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
-	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	modernc.org/libc v1.66.3 // indirect
 	modernc.org/mathutil v1.7.1 // indirect

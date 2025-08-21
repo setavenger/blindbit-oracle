@@ -21,8 +21,8 @@ func (s *Store) GetChainTip() ([]byte, uint32, error) {
 	}
 	defer it.Close()
 	if !it.Last() {
-		// means literally zero blockhashes are in the db
-		return nil, 0, errors.New("no chain tip found")
+		// edge case empty db we are at 0 height
+		return nil, 0, nil
 	}
 	heightBytes := it.Key()
 	blockhash := it.Value()

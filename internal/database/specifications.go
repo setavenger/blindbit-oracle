@@ -8,6 +8,7 @@ type DB interface {
 	GetChainTip() ([]byte, uint32, error)
 	GetBlockHashByHeight(height uint32) ([]byte, error)
 	ApplyBlock(*DBBlock) error
+	FlushBatch() error
 	TweaksForBlockAll([]byte) ([]TweakRow, error)
 	TweaksForBlockCutThrough([]byte, uint32) ([]TweakRow, error)
 }

@@ -63,7 +63,9 @@ func (s *Store) collectAndWrite(block *database.DBBlock) error {
 			logging.L.Err(err).Msg("failed to write Batch")
 			return err
 		}
-		logging.L.Warn().Dur("write_batch_duration", time.Since(writeBatchStart)).Msg("batch_write_bench")
+		logging.L.Warn().
+			Dur("write_batch_duration", time.Since(writeBatchStart)).
+			Msg("batch_write_bench")
 		err = s.dbBatch.Close()
 		if err != nil {
 			logging.L.Err(err).Msg("failed to close db batch")
@@ -80,6 +82,31 @@ func (s *Store) collectAndWrite(block *database.DBBlock) error {
 	}
 
 	s.batchSync.Unlock()
+	return nil
+}
+
+func (s *Store) FlushBatch() error {
+	s.batchSync.Lock()
+	defer s.batchSync.Unlock()
+
+	err := s.dbBatch.Commit(pebble.NoSync)
+	if err != nil {
+		logging.L.Err(err).Msg("failed to write Batch")
+		return err
+	}
+	return nil
+}
+
+// don't use yet until api design is clear for this concept
+func (s *Store) commitBatch() error {
+	s.batchSync.Lock()
+	defer s.batchSync.Unlock()
+
+	err := s.dbBatch.Commit(pebble.NoSync)
+	if err != nil {
+		logging.L.Err(err).Msg("failed to write Batch")
+		return err
+	}
 	return nil
 }
 
@@ -103,7 +130,14 @@ func attachBlcokToBatch(batch *pebble.Batch, block *database.DBBlock) error {
 	}
 
 	// block → txs + transaction records
-	for i, t := range txs {
+	for i := range txs {
+
+		t := txs[i]
+		if t == nil {
+			// we skip nil txs here to so that we have exact positions.
+			// todo: should we keep it like this?
+			continue
+		}
 		// bt
 		if err := b.Set(KeyBlockTx(blockHash, uint32(i)), t.Txid, nil); err != nil {
 			logging.L.Err(err).Msg("insert failed")

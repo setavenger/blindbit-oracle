@@ -3,15 +3,24 @@ log_level = "debug"
 
 # 0.0.0.0:8000 to expose outside of localhost
 # default: "127.0.0.1:8000"
-host = "127.0.0.1:8000"
+http_host = "127.0.0.1:8000"
+
+# defines where the gRPC host is exposed
+# default: "" gRPC is not exposed by default
+grpc_host = "127.0.0.1:8001"
 
 # Defines on which chain the wallet runs. Allowed values: main, testnet, signet, regtest.
 # default: signet
 chain = "signet"
 
+# bitcoin core rpc endpoint
 # default: http://127.0.0.1:8332
-# also used for rest api
-rpc_endpoint = "http://127.0.0.1:18443"
+core_rpc_endpoint = "http://127.0.0.1:18443"
+
+# bitcoin core rest endpoint
+# note: requires bitcoin core PR #32540 (already merged to master but in a release yet)
+# default: ""
+core_rest_endpoint = "http://127.0.01:38332"
 
 # required, unless rpc_user and rpc_pass are set
 cookie_path = ""

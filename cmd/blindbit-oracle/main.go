@@ -58,7 +58,10 @@ func init() {
 		return
 	}
 
-	config.SetDirectories() // todo a proper set settings function which does it all would be good to avoid several small function calls
+	// todo: a proper set settings function which does it all
+	// avoid several small function calls
+	config.SetDirectories()
+
 	err := os.Mkdir(config.BaseDirectory, 0750)
 	if err != nil && !errors.Is(err, os.ErrExist) {
 		logging.L.Fatal().Err(err).Msg("error creating base directory")
@@ -74,9 +77,6 @@ func init() {
 	if err != nil && !strings.Contains(err.Error(), "file exists") {
 		logging.L.Fatal().Err(err).Msg("error creating db path")
 	}
-
-	// open levelDB connections
-	// openLevelDBConnections()
 
 	if config.CookiePath != "" {
 		data, err := os.ReadFile(config.CookiePath)
@@ -147,24 +147,19 @@ func main() {
 
 	// index builder
 	go func() {
-		// err = database.DropIndexesForIBD(context.Background(), db)
-		// if err != nil {
-		// 	logging.L.Err(err).Msg("failed to drop indexes")
-		// 	errChan <- err
-		// }
-
 		builder := indexer.NewBuilder(store)
-		// builder := indexer.NewBuilder(db)
 
-		// ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
-		// defer cancel()
+		// do initial sync then move towards steady state sync
+		err = builder.InitialSyncToTip(ctx)
+		if err != nil {
+			logging.L.Err(err).Msg("failed initial sync")
+			errChan <- err
+			return
+		}
 
-		_ = ctx
-		_ = builder
+		// do continous scans
+		err = builder.ContinuousSync(ctx)
 
-		// err = builder.SyncBlocks(ctx, 1, 265_963)
-		// err = builder.SyncBlocks(ctx, 251_000, 265_000)
-		// err = builder.SyncBlocks(ctx, 230_000, 265_000)
 		if err != nil {
 			logging.L.Err(err).Msg("error indexing blocks")
 			errChan <- err

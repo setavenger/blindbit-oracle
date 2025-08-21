@@ -28,10 +28,11 @@ var (
 )
 
 var (
-	RpcEndpoint = "http://127.0.0.1:8332" // default local node
-	CookiePath  = ""
-	RpcUser     = ""
-	RpcPass     = ""
+	RpcEndpoint  = "http://127.0.0.1:8332" // default local node
+	RestEndpoint = ""                      // default local node
+	CookiePath   = ""
+	RpcUser      = ""
+	RpcPass      = ""
 
 	BaseDirectory = ""
 	DBPath        = ""

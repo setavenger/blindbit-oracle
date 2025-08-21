@@ -2,11 +2,11 @@ package indexer
 
 import (
 	"context"
-	"database/sql"
 	"time"
 
 	"github.com/cockroachdb/pebble"
 	"github.com/setavenger/blindbit-lib/logging"
+	"github.com/setavenger/blindbit-lib/utils"
 	"github.com/setavenger/blindbit-oracle/internal/config"
 	"github.com/setavenger/blindbit-oracle/internal/database"
 	"github.com/setavenger/blindbit-oracle/internal/database/dbpebble"
@@ -22,8 +22,6 @@ type Builder struct {
 	writerChan chan *database.DBBlock
 
 	// db connection used for the entire builder in all go routines
-	db *sql.DB
-
 	store database.DB
 }
 
@@ -40,11 +38,78 @@ func NewBuilderPebble(ctx context.Context, db *pebble.DB) *Builder {
 		ctx:          ctx,
 		newBlockChan: make(chan *Block),
 		writerChan:   make(chan *database.DBBlock),
-		db:           &sql.DB{},
 		store: &dbpebble.Store{
 			DB: db,
 		},
 	}
+}
+
+func (b *Builder) ContinuousSync(ctx context.Context) error {
+	tickerBlockCheck := time.Tick(3 * time.Second)
+	tickerInfo := time.Tick(15 * time.Second)
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-tickerInfo:
+			blockhash, syncTip, err := b.store.GetChainTip()
+			if err != nil {
+				logging.L.Err(err).Msg("failed to pull chain tip from db")
+				return err
+			}
+			logging.L.Debug().
+				Hex("best_blockhash", utils.ReverseBytesCopy(blockhash)).
+				Uint32("height", syncTip).
+				Msg("state_update")
+
+		case <-tickerBlockCheck:
+			_, syncTip, err := b.store.GetChainTip()
+			if err != nil {
+				logging.L.Err(err).Msg("failed to pull chain tip from db")
+				return err
+			}
+
+			chainInfo, err := GetChainInfo()
+			if err != nil {
+				logging.L.Err(err).Msg("failed to pull chainInfo")
+				return err
+			}
+			// use chainInfo.BestBlockhash to determine a reorg
+			if uint32(chainInfo.Blocks) > syncTip {
+				b.SyncBlocks(ctx, int64(syncTip), chainInfo.Blocks)
+			}
+		}
+	}
+}
+
+func (b *Builder) InitialSyncToTip(
+	ctx context.Context,
+) error {
+	_, syncTip, err := b.store.GetChainTip()
+	if err != nil {
+		logging.L.Err(err).Msg("failed to pull chain tip from db")
+		return err
+	}
+
+	chainInfo, err := GetChainInfo()
+	if err != nil {
+		logging.L.Err(err).Msg("failed to pull chainInfo")
+		return err
+	}
+
+	// we either start off where the user said or where we were last
+	// otherwise we end up reindexing.
+	// todo: Add a check to see whether all blocks have been indexed
+	// todo: Inegrity check no gaps in index, re-orgs or whatever
+	syncTip = max(syncTip, config.SyncStartHeight)
+
+	logging.L.Info().
+		Uint32("syncTip", syncTip).
+		Int64("chaintip", chainInfo.Blocks).
+		Msg("Starting initial sync")
+
+	// using Blocks which is the actual count of blocks the node has available (assumption)
+	return b.SyncBlocks(ctx, int64(syncTip), chainInfo.Blocks)
 }
 
 func (b *Builder) SyncBlocks(
@@ -63,7 +128,7 @@ func (b *Builder) SyncBlocks(
 				return
 			}
 
-			logging.L.Info().Int64("height", i).Msgf("pulling block %d", i)
+			logging.L.Trace().Int64("height", i).Msgf("pulling block %d", i)
 			go func(height int64) {
 				defer func() { <-pullSemaphore }() // Release semaphore
 				err := b.pullBlock(height)
@@ -109,42 +174,8 @@ func (b *Builder) SyncBlocks(
 					return
 				}
 
-				// if counter > blockBatch {
-				// 	err = batcher.Commit()
-				// 	if err != nil {
-				// 		errChan <- err
-				// 		return
-				// 	}
-				// 	// reset everything for next batch
-				// 	counter = 0
-				// 	batcher, err = database.BeginBatch(ctx, b.db)
-				// 	if err != nil {
-				// 		errChan <- err
-				// 		return
-				// 	}
-				// }
-				// if err := batcher.InsertBlock(ctx, dbBlock.hash[:], dbBlock.height, dbBlock.txs); err != nil {
-				// 	_ = batcher.Rollback()
-				// 	logging.L.Err(err).
-				// 		Str("blockhash", dbBlock.hash.String()).
-				// 		Int64("height", dbBlock.height).
-				// 		Msg("failed writing batch")
-				// 	errChan <- err
-				// 	return
-				// }
-				//
-				// err := database.InsertBlock(ctx, b.db, dbBlock.hash[:], dbBlock.height, dbBlock.txs)
-				// if err != nil {
-				// 	logging.L.Err(err).
-				// 		Str("blockhash", dbBlock.hash.String()).
-				// 		Int64("height", dbBlock.height).
-				// 		Msg("failed handling block")
-				// 	errChan <- err
-				// 	return
-				// }
-
 			case <-tickerReports:
-				logging.L.Warn().
+				logging.L.Trace().
 					Int("backlog_chan_pull", len(b.newBlockChan)).
 					Int("backlog_chan_db_writer", len(b.writerChan)).
 					Msg("new_tick_report")
@@ -170,31 +201,38 @@ func (b *Builder) pullBlock(height int64) error {
 		logging.L.Err(err).Int64("height", height).Msg("failed to pul blockhash")
 		return err
 	}
-	logging.L.Trace().Str("blockhash", blockhash.String()).Msg("pulling blockhash")
+	logging.L.Trace().
+		Int64("height", height).
+		Str("blockhash", blockhash.String()).
+		Msg("pulling block")
 	block, err := PullBlockData(blockhash)
 	if err != nil {
 		logging.L.Err(err).Int64("height", height).Msg("failed to pull block")
 		return err
 	}
-	logging.L.Trace().Str("blockhash", blockhash.String()).Msgf("block pulled")
 	block.Height = height
 	b.newBlockChan <- block
-	logging.L.Info().Int64("height", height).Msgf("pulled block %d", height)
+	logging.L.Trace().
+		Str("blockhash", blockhash.String()).
+		Int64("height", height).
+		Msgf("pulled block %d", height)
 	return err
 }
 
 // handleBlock makes all computations for a block and sends a DBBlock into the builders writerChan
 func (b *Builder) handleBlock(ctx context.Context, block *Block) error {
-	logging.L.Debug().
+	logging.L.Trace().
 		Str("blockhash", block.Hash.String()).
 		Int64("height", block.Height).
 		Msg("handling block")
 	dbTxs := make([]*database.Tx, len(block.txs))
 	for i := range block.txs {
 		tx := block.txs[i]
+		// we also insert nils so we can pinpoint the positions later on
+		// we skip nils in insert logic
 		dbTxs[i] = handleTx(tx)
 	}
-	logging.L.Debug().
+	logging.L.Trace().
 		Str("blockhash", block.Hash.String()).
 		Int64("height", block.Height).
 		Msg("computation done")
@@ -239,12 +277,7 @@ func handleTx(tx *Transaction) *database.Tx {
 		}
 	}
 
-	// if "82252d8fa50f1e4812dc382a300876bd4b7abb494a0573c750a02c11d50e9a49" == tx.txid.String() {
-	// 	logging.L.Warn().Hex("tweak", tweak[:]).Msg("")
-	// }
-
 	// get valid inputs
-
 	var dbIns []*database.In
 	for i := range tx.ins {
 		v := tx.ins[i]
@@ -258,16 +291,16 @@ func handleTx(tx *Transaction) *database.Tx {
 		}
 	}
 
-	dbTx := database.Tx{
-		Txid:  tx.txid[:],
-		Tweak: tweak,
-		Outs:  dbOuts,
-		Ins:   dbIns,
+	// if no data of interest is in the tx we skip
+	if tweak != nil || len(dbOuts) > 0 || len(dbIns) > 0 {
+		dbTx := database.Tx{
+			Txid:  tx.txid[:],
+			Tweak: tweak,
+			Outs:  dbOuts,
+			Ins:   dbIns,
+		}
+		return &dbTx
 	}
 
-	// if "82252d8fa50f1e4812dc382a300876bd4b7abb494a0573c750a02c11d50e9a49" == tx.txid.String() {
-	// 	logging.L.Warn().Any("db_tx", dbTx).Hex("tweak", tweak[:]).Msg("")
-	// }
-
-	return &dbTx
+	return nil
 }

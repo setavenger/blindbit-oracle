@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"path"
+	"runtime"
 
 	"os"
 	"os/signal"
@@ -147,7 +148,7 @@ func main() {
 
 	// index builder
 	go func() {
-		builder := indexer.NewBuilder(store)
+		builder := indexer.NewBuilder(ctx, store)
 
 		// do initial sync then move towards steady state sync
 		err = builder.InitialSyncToTip(ctx)

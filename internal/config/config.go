@@ -63,7 +63,8 @@ func LoadConfigs(pathToConfig string) {
 	MaxParallelTweakComputations = viper.GetInt("max_parallel_tweak_computations")
 
 	// RPC
-	RpcEndpoint = viper.GetString("rpc_endpoint")
+	RpcEndpoint = viper.GetString("core_rpc_endpoint")
+	RestEndpoint = viper.GetString("core_rest_endpoint")
 	CookiePath = viper.GetString("cookie_path")
 	RpcPass = viper.GetString("rpc_pass")
 	RpcUser = viper.GetString("rpc_user")

@@ -4,17 +4,16 @@ import (
 	"context"
 	"time"
 
-	"github.com/cockroachdb/pebble"
 	"github.com/setavenger/blindbit-lib/logging"
 	"github.com/setavenger/blindbit-lib/utils"
 	"github.com/setavenger/blindbit-oracle/internal/config"
 	"github.com/setavenger/blindbit-oracle/internal/database"
-	"github.com/setavenger/blindbit-oracle/internal/database/dbpebble"
 	"github.com/setavenger/go-bip352"
 )
 
 type Builder struct {
 	ctx context.Context
+
 	// blocks are pulled and pushed through the channel to workers to process the blocks
 	newBlockChan chan *Block
 
@@ -25,22 +24,12 @@ type Builder struct {
 	store database.DB
 }
 
-func NewBuilder(db database.DB) *Builder {
-	return &Builder{
-		newBlockChan: make(chan *Block, config.MaxParallelRequests*20),
-		writerChan:   make(chan *database.DBBlock, 250),
-		store:        db,
-	}
-}
-
-func NewBuilderPebble(ctx context.Context, db *pebble.DB) *Builder {
+func NewBuilder(ctx context.Context, db database.DB) *Builder {
 	return &Builder{
 		ctx:          ctx,
-		newBlockChan: make(chan *Block),
-		writerChan:   make(chan *database.DBBlock),
-		store: &dbpebble.Store{
-			DB: db,
-		},
+		newBlockChan: make(chan *Block, config.MaxParallelRequests*20),
+		writerChan:   make(chan *database.DBBlock, config.MaxParallelTweakComputations*20),
+		store:        db,
 	}
 }
 
@@ -159,7 +148,8 @@ func (b *Builder) SyncBlocks(
 	}
 
 	go func() {
-		tickerReports := time.Tick(100 * time.Millisecond)
+		tickerReports := time.Tick(500 * time.Millisecond)
+		blockHeightTicker := time.Tick(10 * time.Second)
 
 		for {
 			select {
@@ -174,6 +164,17 @@ func (b *Builder) SyncBlocks(
 					return
 				}
 
+			case <-blockHeightTicker:
+				_, syncTip, err := b.store.GetChainTip()
+				if err != nil {
+					logging.L.Err(err).Msg("failed pulling indexing chain tip")
+					errChan <- err
+					return
+				}
+
+				logging.L.Info().
+					Uint32("height", syncTip).
+					Msgf("current indexed chain tip %d", syncTip)
 			case <-tickerReports:
 				logging.L.Trace().
 					Int("backlog_chan_pull", len(b.newBlockChan)).

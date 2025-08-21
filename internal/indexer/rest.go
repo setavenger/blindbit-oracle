@@ -15,13 +15,15 @@ import (
 )
 
 // pooling of api calls to potentially improve performance
+// todo: revise to see what a proper solution to timeouts is:
+// retries in roundtripper?, retries off blocks generally (put them into failed block list which is being retried until success)
 var httpClient = &http.Client{
-	Timeout: 10 * time.Second,
+	Timeout: 100 * time.Second,
 	Transport: &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		DialContext: (&net.Dialer{
-			Timeout:   5 * time.Second,
-			KeepAlive: 30 * time.Second,
+			Timeout:   50 * time.Second,
+			KeepAlive: 300 * time.Second,
 		}).DialContext,
 
 		// Pooling / reuse
@@ -29,9 +31,9 @@ var httpClient = &http.Client{
 		MaxIdleConnsPerHost: 100,
 		MaxConnsPerHost:     0,
 
-		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   5 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
+		IdleConnTimeout:       900 * time.Second,
+		TLSHandshakeTimeout:   50 * time.Second,
+		ExpectContinueTimeout: 10 * time.Second,
 	},
 }
 
@@ -127,7 +129,7 @@ func getBlockHashByHeight(height int64) (*chainhash.Hash, error) {
 func getSpentUtxos(blockhash string) ([][]*wire.TxOut, error) {
 	req, err := http.NewRequest(
 		http.MethodGet,
-		fmt.Sprintf("http://127.0.0.1:38332/rest/spenttxouts/%s.bin", blockhash),
+		fmt.Sprintf("%s/rest/spenttxouts/%s.bin", config.RestEndpoint, blockhash),
 		nil,
 	)
 	if err != nil {
@@ -157,7 +159,7 @@ func getSpentUtxos(blockhash string) ([][]*wire.TxOut, error) {
 func getBlockByHash(blockhash string) (block *btcutil.Block, err error) {
 	req, err := http.NewRequest(
 		http.MethodGet,
-		fmt.Sprintf("http://127.0.0.1:38332/rest/block/%s.bin", blockhash),
+		fmt.Sprintf("%s/rest/block/%s.bin", config.RestEndpoint, blockhash),
 		nil,
 	)
 	if err != nil {

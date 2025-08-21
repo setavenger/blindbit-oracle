@@ -14,12 +14,12 @@ import (
 
 // pooling of api calls to potentially improve performance
 var httpClient = &http.Client{
-	Timeout: 10 * time.Second, // overall request deadline (guardrail)
+	Timeout: 100 * time.Second, // overall request deadline (guardrail)
 	Transport: &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		DialContext: (&net.Dialer{
-			Timeout:   5 * time.Second,
-			KeepAlive: 30 * time.Second,
+			Timeout:   50 * time.Second,
+			KeepAlive: 300 * time.Second,
 		}).DialContext,
 
 		// Pooling / reuse
@@ -27,9 +27,9 @@ var httpClient = &http.Client{
 		MaxIdleConnsPerHost: 100, // bump to your parallelism per host
 		MaxConnsPerHost:     0,   // 0 = no hard cap; let HTTP/2 multiplex
 
-		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   5 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
+		IdleConnTimeout:       900 * time.Second,
+		TLSHandshakeTimeout:   50 * time.Second,
+		ExpectContinueTimeout: 10 * time.Second,
 
 		// Keep-alives are ON by default; don't disable them.
 	},
@@ -44,7 +44,7 @@ func getBlockHashByHeight(height int64) (*chainhash.Hash, error) {
 	if err != nil {
 		err = fmt.Errorf("error creating request: %v", err)
 		logging.L.Err(err).Msg("error creating request")
-		return nil, nil
+		return nil, err
 	}
 
 	resp, err := httpClient.Do(req) // <-- reuse the shared client
@@ -53,7 +53,7 @@ func getBlockHashByHeight(height int64) (*chainhash.Hash, error) {
 	if err != nil {
 		err = fmt.Errorf("error performing request: %v", err)
 		logging.L.Err(err).Msg("error performing request")
-		return nil, nil
+		return nil, err
 	}
 	defer resp.Body.Close()
 
@@ -79,7 +79,7 @@ func getSpentUtxos(blockhash string) ([][]*wire.TxOut, error) {
 	if err != nil {
 		err = fmt.Errorf("error creating request: %v", err)
 		logging.L.Err(err).Msg("error creating request")
-		return nil, nil
+		return nil, err
 	}
 
 	resp, err := httpClient.Do(req) // <-- reuse the shared client
@@ -88,7 +88,7 @@ func getSpentUtxos(blockhash string) ([][]*wire.TxOut, error) {
 	if err != nil {
 		err = fmt.Errorf("error performing request: %v", err)
 		logging.L.Err(err).Msg("error performing request")
-		return nil, nil
+		return nil, err
 	}
 	defer resp.Body.Close()
 
@@ -111,7 +111,7 @@ func getBlockByHash(blockhash string) (block *btcutil.Block, err error) {
 	if err != nil {
 		err = fmt.Errorf("error creating request: %v", err)
 		logging.L.Err(err).Msg("error creating request")
-		return
+		return nil, err
 	}
 
 	resp, err := httpClient.Do(req) // <-- reuse the shared client
@@ -120,7 +120,7 @@ func getBlockByHash(blockhash string) (block *btcutil.Block, err error) {
 	if err != nil {
 		err = fmt.Errorf("error performing request: %v", err)
 		logging.L.Err(err).Msg("error performing request")
-		return
+		return nil, err
 	}
 	defer resp.Body.Close()
 

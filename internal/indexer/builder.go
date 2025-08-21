@@ -175,6 +175,10 @@ func (b *Builder) SyncBlocks(
 				logging.L.Info().
 					Uint32("height", syncTip).
 					Msgf("current indexed chain tip %d", syncTip)
+				logging.L.Info().
+					Int("backlog_chan_pull", len(b.newBlockChan)).
+					Int("backlog_chan_db_writer", len(b.writerChan)).
+					Msg("new_tick_report")
 			case <-tickerReports:
 				logging.L.Trace().
 					Int("backlog_chan_pull", len(b.newBlockChan)).

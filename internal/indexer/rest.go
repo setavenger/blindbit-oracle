@@ -59,7 +59,7 @@ type ChainInfo struct {
 func GetChainInfo() (*ChainInfo, error) {
 	req, err := http.NewRequest(
 		http.MethodGet,
-		fmt.Sprintf("%s/rest/chaininfo.json", config.RpcEndpoint),
+		fmt.Sprintf("%s/rest/chaininfo.json", config.RestEndpoint),
 		nil,
 	)
 	if err != nil {
@@ -96,7 +96,7 @@ func GetChainInfo() (*ChainInfo, error) {
 func getBlockHashByHeight(height int64) (*chainhash.Hash, error) {
 	req, err := http.NewRequest(
 		http.MethodGet,
-		fmt.Sprintf("%s/rest/blockhashbyheight/%d.bin", config.RpcEndpoint, height),
+		fmt.Sprintf("%s/rest/blockhashbyheight/%d.bin", config.RestEndpoint, height),
 		nil,
 	)
 	if err != nil {

@@ -50,6 +50,9 @@ func NewStore(db *pebble.DB) *Store {
 }
 
 func (s *Store) collectAndWrite(block *database.DBBlock) error {
+	// with current logic channel size is irrelevant as it's not being used
+	// we need to untangle bacth collection and the channel length
+	// then we can continue computations while
 	s.batchSync.Lock()
 	if s.dbBatch == nil {
 		s.dbBatch = s.DB.NewBatch()
@@ -75,7 +78,7 @@ func (s *Store) collectAndWrite(block *database.DBBlock) error {
 		s.dbBatch = s.DB.NewBatch()
 		s.batchCounter = 0
 	}
-	err := attachBlcokToBatch(s.dbBatch, block)
+	err := attachBlockToBatch(s.dbBatch, block)
 	if err != nil {
 		logging.L.Err(err).Msg("failed to attach to batch")
 		return err
@@ -110,7 +113,7 @@ func (s *Store) commitBatch() error {
 	return nil
 }
 
-func attachBlcokToBatch(batch *pebble.Batch, block *database.DBBlock) error {
+func attachBlockToBatch(batch *pebble.Batch, block *database.DBBlock) error {
 	blockHash := block.Hash[:]
 	txs := block.Txs
 	height := block.Height

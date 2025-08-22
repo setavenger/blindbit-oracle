@@ -9,28 +9,6 @@ import (
 	"github.com/setavenger/blindbit-oracle/internal/database"
 )
 
-type Out struct {
-	Txid   []byte
-	Vout   uint32
-	Amount uint64
-	Pubkey []byte // 32B x-only
-}
-
-type In struct {
-	SpendTxid []byte // not needed for core queries; keep if you add a spender→prevout index
-	Idx       uint32
-	PrevTxid  []byte
-	PrevVout  uint32
-	Pubkey    []byte // optional 32B (taproot key path spend x-only)
-}
-
-type Tx struct {
-	Txid  []byte
-	Tweak *[33]byte // 33B or nil
-	Outs  []*Out
-	Ins   []*In
-}
-
 type Store struct {
 	DB           *pebble.DB
 	dbBatch      *pebble.Batch
@@ -47,6 +25,10 @@ func NewStore(db *pebble.DB) *Store {
 		batchSync:    new(sync.Mutex),
 		batchSize:    200,
 	}
+}
+
+func (s *Store) BatchSize() int {
+	return s.batchCounter
 }
 
 func (s *Store) collectAndWrite(block *database.DBBlock) error {
@@ -89,6 +71,9 @@ func (s *Store) collectAndWrite(block *database.DBBlock) error {
 }
 
 func (s *Store) FlushBatch() error {
+	if s.batchCounter == 0 {
+		return nil
+	}
 	s.batchSync.Lock()
 	defer s.batchSync.Unlock()
 
@@ -97,6 +82,7 @@ func (s *Store) FlushBatch() error {
 		logging.L.Err(err).Msg("failed to write Batch")
 		return err
 	}
+	s.batchCounter = 0
 	return nil
 }
 

@@ -14,7 +14,7 @@ import (
 	"github.com/setavenger/blindbit-oracle/internal/types"
 )
 
-func makeRPCRequest(rpcData interface{}, result interface{}) error {
+func makeRPCRequest(rpcData, result any) error {
 	payload, err := json.Marshal(rpcData)
 	if err != nil {
 		logging.L.Err(err).Msg("error marshaling RPC data")
@@ -27,6 +27,8 @@ func makeRPCRequest(rpcData interface{}, result interface{}) error {
 		logging.L.Err(err).Msg("error creating request")
 		return fmt.Errorf("error creating request: %v", err)
 	}
+
+	logging.L.Trace().Any("req", rpcData).Msg("")
 
 	// Set headers and auth...
 	req.Header.Set("Content-Type", "application/json")
@@ -213,7 +215,9 @@ func GetBlockchainInfo() (*types.BlockchainInfo, error) {
 	return &rpcResponse.Result, nil
 }
 
-func GetRawTransaction(txid string, blockhash ...string) (*types.Transaction, error) {
+func GetRawTransaction(
+	txid string, blockhash ...string,
+) (*types.Transaction, error) {
 	var params = []any{txid, 2} // verbosity level 2 so we easily get the prevouts for tweaking
 	if len(blockhash) > 0 {
 		params = append(params, blockhash[0])
@@ -230,12 +234,12 @@ func GetRawTransaction(txid string, blockhash ...string) (*types.Transaction, er
 
 	err := makeRPCRequest(rpcData, &rpcResponse)
 	if err != nil {
-		common.ErrorLogger.Printf("%v\n", err)
+		logging.L.Err(err).Msg("rpc call failed")
 		return nil, err
 	}
 
 	if rpcResponse.Error != nil {
-		common.ErrorLogger.Printf("RPC Error: %v\n", rpcResponse.Error)
+		logging.L.Error().Msgf("RPC Error: %v\n", rpcResponse.Error)
 		return nil, fmt.Errorf("RPC Error: %v", rpcResponse.Error)
 	}
 

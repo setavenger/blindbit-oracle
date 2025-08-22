@@ -149,6 +149,8 @@ func main() {
 	// index builder
 	go func() {
 		builder := indexer.NewBuilder(ctx, store)
+		// todo add non-sync option
+		_ = builder
 
 		// do initial sync then move towards steady state sync
 		err = builder.InitialSyncToTip(ctx)

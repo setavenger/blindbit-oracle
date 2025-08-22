@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 	"sync"
@@ -270,6 +271,7 @@ func ComputeTweakPerTx(tx types.Transaction) (*types.Tweak, error) {
 	}
 
 	fixSizePubKeys := utils.ConvertPubkeySliceToFixedLength33(pubKeys)
+	txidBytes, _ := hex.DecodeString(tx.Txid)
 
 	summedKey, err := bip352.SumPublicKeys(fixSizePubKeys)
 	if err != nil {
@@ -281,24 +283,26 @@ func ComputeTweakPerTx(tx types.Transaction) (*types.Tweak, error) {
 		logging.L.Err(err).Msg("error computing tweak per tx")
 		return nil, err
 	}
+	fmt.Printf("txid: %x\n", txidBytes)
+	fmt.Printf("summed Key: %x\n", summedKey[:])
 	hash, err := ComputeInputHash(tx, summedKey)
 	if err != nil {
 		logging.L.Debug().Str("txid", tx.Txid).Msg("error computing tweak per tx")
 		logging.L.Err(err).Msg("error computing tweak per tx")
 		return nil, err
 	}
+	fmt.Printf("Input hash: %x\n", hash[:])
 
 	golibsecp256k1.PubKeyTweakMul(summedKey, &hash)
 
 	tweakBytes := summedKey
+	fmt.Printf("Tweak: %x\n", tweakBytes[:])
 
 	highestValue, err := FindBiggestOutputFromTx(tx)
 	if err != nil {
 		logging.L.Err(err).Msg("error computing tweak per tx")
 		return nil, err
 	}
-
-	txidBytes, _ := hex.DecodeString(tx.Txid)
 
 	tweak := types.Tweak{
 		Txid:         utils.ConvertToFixedLength32(txidBytes),
@@ -480,6 +484,8 @@ func ComputeInputHash(tx types.Transaction, sumPublicKeys *[33]byte) ([32]byte, 
 		logging.L.Err(err).Msg("error finding smallest outpoint")
 		return [32]byte{}, err
 	}
+
+	fmt.Printf("smallestOutpoint: %x\n", smallestOutpoint)
 
 	// Concatenate outpointL and A
 	var buffer bytes.Buffer

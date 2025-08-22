@@ -11,6 +11,7 @@ type DB interface {
 	FlushBatch() error
 	TweaksForBlockAll([]byte) ([]TweakRow, error)
 	TweaksForBlockCutThrough([]byte, uint32) ([]TweakRow, error)
+	BatchSize() int
 }
 
 type TweakRow struct {

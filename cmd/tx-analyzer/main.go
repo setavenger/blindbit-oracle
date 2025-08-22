@@ -1,11 +1,12 @@
 package main
 
 import (
-	"SilentPaymentAppBackend/src/common"
-	"SilentPaymentAppBackend/src/common/types"
-	"SilentPaymentAppBackend/src/core"
 	"flag"
 	"fmt"
+
+	"github.com/setavenger/blindbit-oracle/internal/config"
+	"github.com/setavenger/blindbit-oracle/internal/core"
+	"github.com/setavenger/blindbit-oracle/internal/types"
 )
 
 func main() {
@@ -17,13 +18,13 @@ func main() {
 
 	flag.Parse()
 
-	common.RpcUser = *rpcUser
-	common.RpcPass = *rpcPass
-	common.RpcEndpoint = *rpcHost
+	config.RpcUser = *rpcUser
+	config.RpcPass = *rpcPass
+	config.RpcEndpoint = *rpcHost
 
 	var tx *types.Transaction
 	var err error
-	if blockhash != nil {
+	if *blockhash != "" {
 		tx, err = core.GetRawTransaction(*txid, *blockhash)
 	} else {
 		tx, err = core.GetRawTransaction(*txid)

@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"path"
-	"runtime"
 
 	"os"
 	"os/signal"

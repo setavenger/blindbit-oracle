@@ -73,6 +73,10 @@ func init() {
 	// load after loggers are instantiated
 	config.LoadConfigs(path.Join(config.BaseDirectory, config.ConfigFileName))
 
+	// after conifigs are loaded
+	fmt.Println("max cores:", config.MaxCPUCores)
+	runtime.GOMAXPROCS(config.MaxCPUCores)
+
 	// create DB path
 	err = os.Mkdir(config.DBPath, 0750)
 	if err != nil && !strings.Contains(err.Error(), "file exists") {
@@ -159,10 +163,18 @@ func main() {
 			errChan <- err
 			return
 		}
+		logging.L.Info().Msg("initial sync done")
+
+		// flush batch and then we proceed with ContinuousSync which utilises flushes
+		err = store.FlushBatch()
+		if err != nil {
+			logging.L.Err(err).Msg("flushing batch failed")
+			errChan <- err
+			return
+		}
 
 		// do continous scans
 		err = builder.ContinuousSync(ctx)
-
 		if err != nil {
 			logging.L.Err(err).Msg("error indexing blocks")
 			errChan <- err

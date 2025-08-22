@@ -18,21 +18,21 @@ func LoadConfigs(pathToConfig string) {
 	}
 
 	/* set defaults */
-	// network
 	viper.SetDefault("max_parallel_requests", MaxParallelRequests)
+	viper.SetDefault("max_cpu_cores", MaxCPUCores)
 	viper.SetDefault("http_host", HTTPHost)
 	viper.SetDefault("grpc_host", GRPCHost)
 	viper.SetDefault("chain", "signet")
 
-	// RPC endpoint only. Fails if others are not set
 	viper.SetDefault("rpc_endpoint", RpcEndpoint)
+	viper.SetDefault("rest_endpoint", RestEndpoint)
 
-	//Tweaks
 	viper.SetDefault("tweaks_only", false)
 	viper.SetDefault("tweaks_full_basic", true)
 	viper.SetDefault("tweaks_full_with_dust_filter", false)
 	viper.SetDefault("tweaks_cut_through_with_dust_filter", false)
 	viper.SetDefault("log_level", "info")
+
 	// Bind viper keys to environment variables (optional, for backup)
 	viper.AutomaticEnv()
 	viper.BindEnv("http_host", "HTTP_HOST")
@@ -46,6 +46,7 @@ func LoadConfigs(pathToConfig string) {
 	viper.BindEnv("sync_start_height", "SYNC_START_HEIGHT")
 	viper.BindEnv("max_parallel_requests", "MAX_PARALLEL_REQUESTS")
 	viper.BindEnv("max_parallel_tweak_computations", "MAX_PARALLEL_TWEAK_COMPUTATIONS")
+	viper.BindEnv("max_cpu_cores", "MAX_CPU_CORES")
 	viper.BindEnv("tweaks_only", "TWEAKS_ONLY")
 	viper.BindEnv("tweaks_full_basic", "TWEAKS_FULL_BASIC")
 	viper.BindEnv("tweaks_full_with_dust_filter", "TWEAKS_FULL_WITH_DUST_FILTER")
@@ -58,9 +59,11 @@ func LoadConfigs(pathToConfig string) {
 	HTTPHost = viper.GetString("http_host")
 	GRPCHost = viper.GetString("grpc_host")
 	LogLevel = viper.GetString("log_level")
+
 	// Performance
 	MaxParallelRequests = viper.GetUint16("max_parallel_requests")
 	MaxParallelTweakComputations = viper.GetInt("max_parallel_tweak_computations")
+	MaxCPUCores = viper.GetInt("max_cpu_cores")
 
 	// RPC
 	RpcEndpoint = viper.GetString("core_rpc_endpoint")

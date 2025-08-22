@@ -2,6 +2,7 @@ package indexer
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/setavenger/blindbit-lib/logging"
@@ -65,7 +66,17 @@ func (b *Builder) ContinuousSync(ctx context.Context) error {
 			}
 			// use chainInfo.BestBlockhash to determine a reorg
 			if uint32(chainInfo.Blocks) > syncTip {
-				b.SyncBlocks(ctx, int64(syncTip), chainInfo.Blocks)
+				err = b.SyncBlocks(ctx, int64(syncTip), chainInfo.Blocks)
+				if err != nil {
+					logging.L.Err(err).Msg("failed syncing blocks")
+					return err
+				}
+
+				err = b.store.FlushBatch()
+				if err != nil {
+					logging.L.Err(err).Msg("failed flushing batch")
+					return err
+				}
 			}
 		}
 	}
@@ -107,11 +118,14 @@ func (b *Builder) SyncBlocks(
 ) error {
 	errChan := make(chan error)
 	pullSemaphore := make(chan struct{}, config.MaxParallelRequests)
+	doneChan := make(chan struct{})
 
 	go func() {
+		var wg sync.WaitGroup
 		for i := startHeight; i <= endHeight; i++ {
 			select {
 			case pullSemaphore <- struct{}{}:
+				wg.Add(1)
 			case <-ctx.Done():
 				errChan <- ctx.Err()
 				return
@@ -125,35 +139,53 @@ func (b *Builder) SyncBlocks(
 					errChan <- err
 					return
 				}
+				wg.Done()
 			}(i)
 		}
+		wg.Wait()
+		close(b.newBlockChan)
 	}()
 
+	var handleWG sync.WaitGroup
 	for i := 0; i < config.MaxParallelTweakComputations; i++ {
 		go func() {
-			for {
-				select {
-				case block := <-b.newBlockChan:
-					err := b.handleBlock(ctx, block)
-					if err != nil {
-						logging.L.Err(err).
-							Str("blockhash", block.Hash.String()).
-							Int64("height", block.Height).
-							Msg("failed handling block")
-						errChan <- err
-					}
+			handleWG.Add(1)
+			defer handleWG.Done()
+			for block := range b.newBlockChan {
+				err := b.handleBlock(ctx, block)
+				if err != nil {
+					logging.L.Err(err).
+						Str("blockhash", block.Hash.String()).
+						Int64("height", block.Height).
+						Msg("failed handling block")
+					errChan <- err
 				}
+				logging.L.Info().Msg("block handled")
 			}
 		}()
 	}
+
+	// Close writerChan after all handlers finish sending.
+	go func() {
+		handleWG.Wait()
+		close(b.writerChan)
+	}()
 
 	go func() {
 		tickerReports := time.Tick(500 * time.Millisecond)
 		blockHeightTicker := time.Tick(10 * time.Second)
 
+		defer close(doneChan) // signal completion when we exit this goroutine
+
 		for {
 			select {
-			case dbBlock := <-b.writerChan:
+			case dbBlock, ok := <-b.writerChan:
+				if !ok {
+					// channel drained and closed: all done
+					return
+				}
+
+				logging.L.Warn().Msg("received first block")
 				err := b.store.ApplyBlock(dbBlock)
 				if err != nil {
 					logging.L.Err(err).
@@ -178,6 +210,7 @@ func (b *Builder) SyncBlocks(
 				logging.L.Info().
 					Int("backlog_chan_pull", len(b.newBlockChan)).
 					Int("backlog_chan_db_writer", len(b.writerChan)).
+					Int("batch_length", b.store.BatchSize()).
 					Msg("new_tick_report")
 			case <-tickerReports:
 				logging.L.Trace().
@@ -196,6 +229,8 @@ func (b *Builder) SyncBlocks(
 		case err := <-errChan:
 			logging.L.Err(err).Msg("there was an error pulling blocks")
 			return err
+		case <-doneChan:
+			return nil
 		}
 	}
 }
@@ -224,7 +259,8 @@ func (b *Builder) pullBlock(height int64) error {
 	return err
 }
 
-// handleBlock makes all computations for a block and sends a DBBlock into the builders writerChan
+// handleBlock makes all computations for a block
+// and sends a DBBlock into the builders writerChan
 func (b *Builder) handleBlock(ctx context.Context, block *Block) error {
 	logging.L.Trace().
 		Str("blockhash", block.Hash.String()).

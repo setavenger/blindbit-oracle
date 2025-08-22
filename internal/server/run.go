@@ -12,6 +12,8 @@ import (
 )
 
 func RunServer(api *ApiHandler) {
+	gin.SetMode(gin.ReleaseMode)
+
 	// todo merge gin logging into blindbit lib logging
 	router := gin.Default()
 	router.Use(gzip.Gzip(gzip.DefaultCompression))

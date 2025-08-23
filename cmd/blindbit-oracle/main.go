@@ -106,6 +106,7 @@ func init() {
 			defer logging.Close()
 		}
 	}
+	logging.SetConsoleLogging(config.LogToConsole)
 }
 
 func main() {

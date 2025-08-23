@@ -34,6 +34,7 @@ func LoadConfigs(pathToConfig string) {
 	viper.SetDefault("tweaks_cut_through_with_dust_filter", false)
 	viper.SetDefault("log_level", "info")
 	viper.SetDefault("log_path", "")
+	viper.SetDefault("log_to_console", true)
 	// Bind viper keys to environment variables (optional, for backup)
 	viper.AutomaticEnv()
 	viper.BindEnv("http_host", "HTTP_HOST")
@@ -60,6 +61,7 @@ func LoadConfigs(pathToConfig string) {
 	GRPCHost = viper.GetString("grpc_host")
 	LogLevel = viper.GetString("log_level")
 	LogsPath = viper.GetString("log_path")
+	LogToConsole = viper.GetBool("log_to_console")
 
 	// Performance
 	MaxParallelRequests = viper.GetUint16("max_parallel_requests")

@@ -37,6 +37,7 @@ var (
 	BaseDirectory = ""
 	DBPath        = ""
 	LogsPath      = ""
+	LogToConsole  = true
 
 	HTTPHost = "127.0.0.1:8000"
 	GRPCHost = "" // default value is empty (deactivated)

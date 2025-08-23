@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"path"
+	"path/filepath"
 
 	"os"
 	"os/signal"
@@ -98,6 +99,19 @@ func init() {
 
 	if config.RpcPass == "" {
 		logging.L.Fatal().Msg("rpc pass not set") // todo use cookie file to circumvent this requirement
+	}
+
+	if config.LogsPath != "" {
+		logFile := filepath.Join(config.LogsPath, "blindbit.log")
+		err := os.Mkdir(config.LogsPath, 0750)
+		if err != nil && !errors.Is(err, os.ErrExist) {
+			logging.L.Fatal().Err(err).Msg("error creating log directory")
+		} else {
+			logging.L.Info().Msgf("writing logs to %s", logFile)
+			if err := logging.SetLogOutput(logFile); err != nil {
+				logging.L.Warn().Err(err).Msg("Failed to initialize file logging, continuing with console-only")
+			}
+		}
 	}
 }
 

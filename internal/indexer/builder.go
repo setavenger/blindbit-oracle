@@ -35,8 +35,10 @@ func NewBuilder(ctx context.Context, db database.DB) *Builder {
 }
 
 func (b *Builder) ContinuousSync(ctx context.Context) error {
+	logging.L.Info().Msg("running continuous sync")
 	tickerBlockCheck := time.Tick(3 * time.Second)
 	tickerInfo := time.Tick(15 * time.Second)
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -47,7 +49,7 @@ func (b *Builder) ContinuousSync(ctx context.Context) error {
 				logging.L.Err(err).Msg("failed to pull chain tip from db")
 				return err
 			}
-			logging.L.Debug().
+			logging.L.Info().
 				Hex("best_blockhash", utils.ReverseBytesCopy(blockhash)).
 				Uint32("height", syncTip).
 				Msg("state_update")
@@ -119,6 +121,8 @@ func (b *Builder) SyncBlocks(
 	errChan := make(chan error)
 	pullSemaphore := make(chan struct{}, config.MaxParallelRequests)
 	doneChan := make(chan struct{})
+	b.newBlockChan = make(chan *Block, config.MaxParallelRequests*20)
+	b.writerChan = make(chan *database.DBBlock, config.MaxParallelTweakComputations*20)
 
 	go func() {
 		var wg sync.WaitGroup
@@ -160,7 +164,10 @@ func (b *Builder) SyncBlocks(
 						Msg("failed handling block")
 					errChan <- err
 				}
-				logging.L.Info().Msg("block handled")
+				logging.L.Trace().
+					Str("blockhash", block.Hash.String()).
+					Int64("height", block.Height).
+					Msg("block handled")
 			}
 		}()
 	}
@@ -290,14 +297,14 @@ func (b *Builder) handleBlock(ctx context.Context, block *Block) error {
 }
 
 func handleTx(tx *Transaction) *database.Tx {
-	var dbOuts []*database.Out
+	var dbOuts []*database.Output
 
 	// we only want outputs where we know they can be Silent Payments.
 	// NO tweak not silent payment
 	for i := range tx.outs {
 		v := tx.outs[i]
 		if bip352.IsP2TR(v.PkScript) {
-			dbOuts = append(dbOuts, &database.Out{
+			dbOuts = append(dbOuts, &database.Output{
 				Txid:   tx.txid[:],
 				Vout:   uint32(i),
 				Amount: uint64(v.Value),

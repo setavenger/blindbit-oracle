@@ -1,8 +1,9 @@
-// Packag database
-// defines the interfaces for for handling db operations
+// Package database defines the interfaces for for handling db operations
 package database
 
-import "github.com/btcsuite/btcd/chaincfg/chainhash"
+import (
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
+)
 
 type DB interface {
 	GetChainTip() ([]byte, uint32, error)
@@ -11,6 +12,7 @@ type DB interface {
 	FlushBatch() error
 	TweaksForBlockAll([]byte) ([]TweakRow, error)
 	TweaksForBlockCutThrough([]byte, uint32) ([]TweakRow, error)
+	FetchOutputsAll(blockhash []byte, tipheight uint32) ([]*Output, error)
 	BatchSize() int
 }
 
@@ -25,7 +27,7 @@ type DBBlock struct {
 	Txs    []*Tx
 }
 
-type Out struct {
+type Output struct {
 	Txid   []byte
 	Vout   uint32
 	Amount uint64
@@ -43,6 +45,6 @@ type In struct {
 type Tx struct {
 	Txid  []byte
 	Tweak *[33]byte // 33B or nil
-	Outs  []*Out
+	Outs  []*Output
 	Ins   []*In
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 	"sync"
@@ -282,16 +283,20 @@ func ComputeTweakPerTx(tx types.Transaction) (*types.Tweak, error) {
 		logging.L.Err(err).Msg("error computing tweak per tx")
 		return nil, err
 	}
+	fmt.Printf("txid: %x\n", txidBytes)
+	fmt.Printf("summed Key: %x\n", summedKey[:])
 	hash, err := ComputeInputHash(tx, summedKey)
 	if err != nil {
 		logging.L.Debug().Str("txid", tx.Txid).Msg("error computing tweak per tx")
 		logging.L.Err(err).Msg("error computing tweak per tx")
 		return nil, err
 	}
+	fmt.Printf("Input hash: %x\n", hash[:])
 
 	golibsecp256k1.PubKeyTweakMul(summedKey, &hash)
 
 	tweakBytes := summedKey
+	fmt.Printf("Tweak: %x\n", tweakBytes[:])
 
 	highestValue, err := FindBiggestOutputFromTx(tx)
 	if err != nil {
@@ -480,6 +485,7 @@ func ComputeInputHash(tx types.Transaction, sumPublicKeys *[33]byte) ([32]byte, 
 		return [32]byte{}, err
 	}
 
+	fmt.Printf("smallestOutpoint: %x\n", smallestOutpoint)
 
 	// Concatenate outpointL and A
 	var buffer bytes.Buffer

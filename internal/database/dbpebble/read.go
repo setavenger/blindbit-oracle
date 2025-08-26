@@ -4,12 +4,16 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/cockroachdb/pebble"
+	"github.com/setavenger/blindbit-lib/logging"
+	"github.com/setavenger/blindbit-lib/utils"
 	"github.com/setavenger/blindbit-oracle/internal/database"
 )
 
 // Best-chain map to test membership quickly.
+
 type ActiveHeight func(blockHash []byte) (height uint32, ok bool)
 
 // GetChainTip returns the Blockhash and height of the highest block
@@ -66,13 +70,7 @@ func (s *Store) BlockTxids(blockHash []byte) ([][]byte, error) {
 	return out, nil
 }
 
-type Output struct {
-	Vout   uint32
-	Amount uint64
-	Pubkey []byte
-}
-
-func (s *Store) OutputsForTx(txid []byte) ([]Output, error) {
+func (s *Store) OutputsForTx(txid []byte) ([]*database.Output, error) {
 	lb, ub := BoundsOut(txid)
 	it, err := s.DB.NewIter(&pebble.IterOptions{LowerBound: lb, UpperBound: ub})
 	if err != nil {
@@ -80,7 +78,7 @@ func (s *Store) OutputsForTx(txid []byte) ([]Output, error) {
 	}
 	defer it.Close()
 
-	var outs []Output
+	var outs []*database.Output
 	for ok := it.First(); ok; ok = it.Next() {
 		// parse vout from last 4 bytes of key
 		k := it.Key()
@@ -90,7 +88,7 @@ func (s *Store) OutputsForTx(txid []byte) ([]Output, error) {
 		if err != nil {
 			return nil, err
 		}
-		outs = append(outs, Output{Vout: vout, Amount: amt, Pubkey: pk})
+		outs = append(outs, &database.Output{Txid: txid, Vout: vout, Amount: amt, Pubkey: pk})
 	}
 	return outs, nil
 }
@@ -110,7 +108,9 @@ func (s *Store) LoadTweak(txid []byte) ([]byte, bool, error) {
 }
 
 // IsSpentAt Is outpoint spent on best chain at height H?
-func (s *Store) IsSpentAt(prevTxid []byte, prevVout, H uint32, active ActiveHeight) (bool, error) {
+func (s *Store) IsSpentAt(
+	prevTxid []byte, prevVout, H uint32, active ActiveHeight,
+) (bool, error) {
 	lb, ub := BoundsSpend(prevTxid, prevVout)
 	it, err := s.DB.NewIter(&pebble.IterOptions{LowerBound: lb, UpperBound: ub})
 	if err != nil {
@@ -136,13 +136,13 @@ func (s *Store) TweaksForBlock(
 	H uint32,
 	dust uint64,
 	active ActiveHeight,
-) ([]database.TweakRow, error) {
+) ([]*database.TweakRow, error) {
 	txids, err := s.BlockTxids(blockHash)
 	if err != nil {
 		return nil, err
 	}
 
-	var out []database.TweakRow
+	var out []*database.TweakRow
 	for _, txid := range txids {
 		tweak, ok, err := s.LoadTweak(txid)
 		if err != nil || !ok {
@@ -169,7 +169,7 @@ func (s *Store) TweaksForBlock(
 			}
 		}
 		if hasUnspent && (dust == 0 || maxUnspent >= dust) {
-			row := database.TweakRow{Txid: make([]byte, SizeTxid), Tweak: make([]byte, SizeTweak)}
+			row := &database.TweakRow{Txid: make([]byte, SizeTxid), Tweak: make([]byte, SizeTweak)}
 			copy(row.Txid, txid)
 			copy(row.Tweak, tweak)
 			out = append(out, row)
@@ -221,8 +221,93 @@ func (s *Store) spentAtHeightTip(prevTxid []byte, prevVout, H uint32) (bool, err
 	return false, nil
 }
 
-func (s *Store) TweaksForBlockAll(blockHash []byte) ([]database.TweakRow, error) {
-	txids, err := s.BlockTxids(blockHash)
+func (s *Store) FetchOutputsAll(
+	blockhash []byte, tipHeight uint32,
+) ([]*database.Output, error) {
+	return s.fetchOutputs(blockhash)
+}
+
+func (s *Store) FetchOutputsCutThroughDustLimit(
+	blockhash []byte, tipHeight uint32, dustLimit uint64,
+) ([]*database.Output, error) {
+	timeStart := time.Now()
+	defer func() {
+		logging.L.Trace().
+			Dur("duration", time.Since(timeStart)).
+			Uint64("dust_limit", dustLimit).
+			Hex("blockhash", utils.ReverseBytesCopy(blockhash)).
+			Msg("fetching_outputs_filtered_timing")
+	}()
+
+	outputs, err := s.fetchOutputs(blockhash)
+	if err != nil {
+		return nil, err
+	}
+
+	filteredOuts := make([]*database.Output, len(outputs))
+	idxCounter := 0
+	for i := range outputs {
+		o := outputs[i]
+		if o.Amount < dustLimit {
+			continue
+		}
+		var spent bool
+		spent, err = s.spentAtHeightTip(o.Txid, o.Vout, tipHeight)
+		if err != nil {
+			return nil, err
+		}
+		if !spent {
+			continue
+		}
+
+		// passed all filters
+		filteredOuts[idxCounter] = o
+		idxCounter++
+	}
+
+	return filteredOuts[:idxCounter], err
+}
+
+func (s *Store) fetchOutputs(
+	blockhash []byte,
+) ([]*database.Output, error) {
+	// timing block on trace level
+	timeStart := time.Now()
+	defer func() {
+		logging.L.Trace().
+			Dur("duration", time.Since(timeStart)).
+			Hex("blockhash", utils.ReverseBytesCopy(blockhash)).
+			Msg("fetching_outputs_timing")
+	}()
+
+	txids, err := s.BlockTxids(blockhash)
+	if err != nil {
+		return nil, err
+	}
+
+	var out []*database.Output
+	out = make([]*database.Output, 0, 100_000)
+	for _, txid := range txids {
+		outs, err := s.OutputsForTx(txid)
+		if err != nil {
+			return nil, err
+		}
+
+		out = append(out, outs...)
+	}
+
+	return out, nil
+}
+
+func (s *Store) TweaksForBlockAll(blockhash []byte) ([]database.TweakRow, error) {
+	timeStart := time.Now()
+	defer func() {
+		logging.L.Trace().
+			Dur("duration", time.Since(timeStart)).
+			Hex("blockhash", utils.ReverseBytesCopy(blockhash)).
+			Msg("fetching_tweaks_timing")
+	}()
+	txids, err := s.BlockTxids(blockhash)
 	if err != nil {
 		return nil, err
 	}

@@ -41,6 +41,9 @@ max_parallel_tweak_computations = 4
 # (depends on max-rpc-workers of the underlying full node)
 max_parallel_requests = 4
 
+# default: MAX - 2
+max_cpu_cores = 4 
+
 # optional - will only generate tweaks (still both cut-through and full-index)
 # default: 0
 tweaks_only = 0

@@ -117,7 +117,7 @@ type BlockchainInfo struct {
 }
 
 type RPCResponseGetRawTransaction struct {
-	Id     string      `json:"id"`
-	Result Transaction `json:"result,omitempty"`
-	Error  interface{} `json:"error,omitempty"`
+	ID     string      `json:"id"`
+	Result Transaction `json:"result"`
+	Error  any         `json:"error"`
 }

@@ -1,6 +1,8 @@
 package config
 
 import (
+	"runtime"
+
 	"github.com/setavenger/blindbit-lib/logging"
 	"github.com/setavenger/blindbit-lib/utils"
 )
@@ -68,6 +70,10 @@ var (
 	MaxParallelRequests uint16 = 2
 	// MaxParallelTweakComputations number of parallel processes which will be spawned in order to compute the tweaks for a given block
 	MaxParallelTweakComputations = 2
+
+	// We default to max num cores - 2
+	MaxCPUCores = runtime.NumCPU() - 2
+
 	// PruneFrequency every x blocks the data will be checked and pruned
 	// possible routines: -remove utxos for 100% spent transaction
 	PruneFrequency = 72

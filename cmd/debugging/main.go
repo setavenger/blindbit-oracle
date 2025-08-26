@@ -5,11 +5,10 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"path"
-	"runtime"
-
 	"os"
 	"os/signal"
+	"path"
+	"runtime"
 	"strings"
 
 	"github.com/setavenger/blindbit-lib/logging"
@@ -22,21 +21,18 @@ import (
 
 var (
 	displayVersion bool
-	Version        = "0.0.0" //todo LD flags etc. to setup correctly and add git hash
+	Version        = "0.0.0"
 )
 
 func init() {
+	// hard code for now
+	runtime.GOMAXPROCS(max(runtime.NumCPU()-4, 1))
+
 	flag.StringVar(
 		&config.BaseDirectory,
 		"datadir",
 		config.DefaultBaseDirectory,
 		"Set the base directory for blindbit oracle. Default directory is ~/.blindbit-oracle",
-	)
-	flag.BoolVar(
-		&displayVersion,
-		"version",
-		false,
-		"show version of blindbit-oracle",
 	)
 	flag.Parse()
 
@@ -59,22 +55,11 @@ func init() {
 	// load after loggers are instantiated
 	config.LoadConfigs(path.Join(config.BaseDirectory, config.ConfigFileName))
 
-	// after conifigs are loaded
-	runtime.GOMAXPROCS(config.MaxCPUCores)
-
 	// create DB path
 	err = os.Mkdir(config.DBPath, 0750)
 	if err != nil && !strings.Contains(err.Error(), "file exists") {
 		logging.L.Fatal().Err(err).Msg("error creating db path")
 	}
-
-	if config.LogsPath != "" {
-		if err := logging.SetLogOutput(config.LogsPath, "blindbit.log"); err != nil {
-			logging.L.Warn().Err(err).Msg("Failed to initialize file logging")
-			defer logging.Close()
-		}
-	}
-	logging.SetConsoleLogging(config.LogToConsole)
 }
 
 func main() {
@@ -127,27 +112,18 @@ func main() {
 		// todo add non-sync option
 		_ = builder
 
-		// do initial sync then move towards steady state sync
-		err = builder.InitialSyncToTip(ctx)
-		if err != nil {
-			logging.L.Err(err).Msg("failed initial sync")
-			errChan <- err
-			return
-		}
-		logging.L.Info().Msg("initial sync done")
-
-		// flush batch and then we proceed with ContinuousSync which utilises flushes
-		err = store.FlushBatch()
-		if err != nil {
-			logging.L.Err(err).Msg("flushing batch failed")
-			errChan <- err
-			return
-		}
-
-		// do continous scans
-		err = builder.ContinuousSync(ctx)
+		err = builder.SyncBlocks(ctx, 240000, 240000)
 		if err != nil {
 			logging.L.Err(err).Msg("error indexing blocks")
+			errChan <- err
+			return
+		}
+
+		logging.L.Warn().Msg("initial sync done")
+
+		err = store.FlushBatch()
+		if err != nil {
+			logging.L.Err(err).Msg("failed flushing batch")
 			errChan <- err
 			return
 		}

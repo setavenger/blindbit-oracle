@@ -2,7 +2,6 @@ package dbpebble
 
 import (
 	"sync"
-	"time"
 
 	"github.com/cockroachdb/pebble"
 	"github.com/setavenger/blindbit-lib/logging"
@@ -31,71 +30,86 @@ func (s *Store) BatchSize() int {
 	return s.batchCounter
 }
 
+// rotateLocked rotate swaps s.dbBatch to a fresh one under the lock
+// and returns the old batch to commit outside.
+func (s *Store) rotateLocked() (old *pebble.Batch) {
+	old = s.dbBatch
+	s.dbBatch = s.DB.NewBatch()
+	s.batchCounter = 0
+	return
+}
+
 func (s *Store) collectAndWrite(block *database.DBBlock) error {
-	// with current logic channel size is irrelevant as it's not being used
-	// we need to untangle bacth collection and the channel length
-	// then we can continue computations while
+	// var toCommit *pebble.Batch
+
 	s.batchSync.Lock()
 	if s.dbBatch == nil {
 		s.dbBatch = s.DB.NewBatch()
 	}
+	s.batchSync.Unlock()
 
 	s.batchCounter++
 	if s.batchCounter > s.batchSize {
-		writeBatchStart := time.Now()
-		err := s.dbBatch.Commit(pebble.NoSync)
-		if err != nil {
-			logging.L.Err(err).Msg("failed to write Batch")
+		// rotates batch and commits the old one in the background
+		if err := s.commitBatch(); err != nil {
+			s.batchSync.Unlock()
+			logging.L.Err(err).Msg("failed to commit batch")
 			return err
 		}
-		logging.L.Warn().
-			Dur("write_batch_duration", time.Since(writeBatchStart)).
-			Msg("batch_write_bench")
-		err = s.dbBatch.Close()
-		if err != nil {
-			logging.L.Err(err).Msg("failed to close db batch")
-			return err
-		}
-		// s.dbBatch = nil
-		s.dbBatch = s.DB.NewBatch()
-		s.batchCounter = 0
 	}
-	err := attachBlockToBatch(s.dbBatch, block)
-	if err != nil {
+
+	// write to the (possibly new) active batch
+	if err := s.attachBlockToBatch(block); err != nil {
+		s.batchSync.Unlock()
 		logging.L.Err(err).Msg("failed to attach to batch")
 		return err
 	}
 
-	s.batchSync.Unlock()
+	// // Commit outside the lock to avoid blocking writers.
+	// if toCommit != nil {
+	// 	writeBatchStart := time.Now()
+	// 	if err := toCommit.Commit(pebble.NoSync); err != nil {
+	// 		logging.L.Err(err).Msg("failed to write Batch")
+	// 		return err
+	// 	}
+	// 	if err := toCommit.Close(); err != nil {
+	// 		logging.L.Err(err).Msg("failed to close db batch")
+	// 		return err
+	// 	}
+	// 	logging.L.Debug().
+	// 		Dur("write_batch_duration", time.Since(writeBatchStart)).
+	// 		Msg("batch_write_bench")
+	// }
 	return nil
+}
+
+func (s *Store) attachBlockToBatch(block *database.DBBlock) error {
+	s.batchSync.Lock()
+	defer s.batchSync.Unlock()
+	return attachBlockToBatch(s.dbBatch, block)
 }
 
 func (s *Store) FlushBatch() error {
 	if s.batchCounter == 0 {
 		return nil
 	}
-	s.batchSync.Lock()
-	defer s.batchSync.Unlock()
-
-	err := s.dbBatch.Commit(pebble.NoSync)
-	if err != nil {
-		logging.L.Err(err).Msg("failed to write Batch")
-		return err
-	}
-	s.batchCounter = 0
-	return nil
+	return s.commitBatch()
 }
 
-// don't use yet until api design is clear for this concept
 func (s *Store) commitBatch() error {
 	s.batchSync.Lock()
-	defer s.batchSync.Unlock()
 
-	err := s.dbBatch.Commit(pebble.NoSync)
-	if err != nil {
-		logging.L.Err(err).Msg("failed to write Batch")
-		return err
-	}
+	// rotate out the old bath and commit the old one subsequently
+	oldBatch := s.rotateLocked()
+	s.batchSync.Unlock()
+
+	go func() {
+		// this might need a max commit semaphore style lock or something
+		err := oldBatch.Commit(pebble.NoSync)
+		if err != nil {
+			logging.L.Panic().Err(err).Msg("failed to write Batch")
+		}
+	}()
 	return nil
 }
 
@@ -172,7 +186,8 @@ func attachBlockToBatch(batch *pebble.Batch, block *database.DBBlock) error {
 				logging.L.Err(err).Msg("insert failed")
 				return err
 			}
-			if err := b.Set(KeySpend(in.PrevTxid, in.PrevVout, blockHash), val, nil); err != nil {
+			err = b.Set(KeySpend(in.PrevTxid, in.PrevVout, blockHash), val, nil)
+			if err != nil {
 				logging.L.Err(err).Msg("insert failed")
 				return err
 			}
@@ -185,27 +200,3 @@ func attachBlockToBatch(batch *pebble.Batch, block *database.DBBlock) error {
 func (s *Store) ApplyBlock(block *database.DBBlock) error {
 	return s.collectAndWrite(block)
 }
-
-// func (s *Store) ApplyBlock(block *database.DBBlock) error {
-// 	insertStart := time.Now()
-// 	defer func() {
-// 		logging.L.Trace().Dur("insert_time", time.Since(insertStart)).Msg("db insertion done")
-// 	}()
-//
-// 	b := s.DB.NewBatch()
-//
-// 	err := attachBlcokToBatch(b, block)
-// 	if err != nil {
-// 		logging.L.Err(err).Msg("failed to build batch data")
-// 	}
-// 	wopts := pebble.NoSync
-// 	// if sync {
-// 	// 	wopts = pebble.Sync
-// 	// }
-// 	err = b.Commit(wopts)
-// 	if err != nil {
-// 		logging.L.Err(err).Msg("failed to commit db tx")
-// 		return err
-// 	}
-// 	return err
-// }

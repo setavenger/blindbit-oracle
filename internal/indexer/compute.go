@@ -86,8 +86,7 @@ func findSmallestOutpoint(tx *Transaction) ([]byte, error) {
 		var outpoint [36]byte
 		copy(outpoint[:32], in.txIn.PreviousOutPoint.Hash[:])
 
-		// Encode vout as 4-byte little-endian
-		binary.LittleEndian.PutUint32(outpoint[32:36], in.txIn.PreviousOutPoint.Index)
+		binary.LittleEndian.PutUint32(outpoint[32:], in.txIn.PreviousOutPoint.Index)
 
 		// Add the serialized outpoint to the slice
 		outpoints = append(outpoints, outpoint)

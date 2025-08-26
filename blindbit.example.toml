@@ -1,5 +1,7 @@
 # possible values: trace, debug, info, warn, error
 log_level = "debug"
+# log_path = "<path to log directory>"
+# log_to_console = true
 
 # 0.0.0.0:8000 to expose outside of localhost
 # default: "127.0.0.1:8000"

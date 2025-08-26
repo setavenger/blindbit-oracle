@@ -520,18 +520,15 @@ func findSmallestOutpoint(tx types.Transaction) ([]byte, error) {
 		}
 		reversedTxid := utils.ReverseBytes(txidBytes)
 
-		// Serialize the Vout as little-endian bytes
-		voutBytes := new(bytes.Buffer)
-		err = binary.Write(voutBytes, binary.LittleEndian, vin.Vout)
-		if err != nil {
-			logging.L.Err(err).Msg("error serializing vout")
-			return nil, err
-		}
-		// Concatenate reversed Txid and Vout bytes
-		outpoint := append(reversedTxid, voutBytes.Bytes()...)
+		// Serialize outpoint: 32 bytes txid + 4 bytes vout
+		var outpoint [36]byte
+		copy(outpoint[:32], reversedTxid)
+
+		// Encode vout as 4-byte little-endian
+		binary.LittleEndian.PutUint32(outpoint[32:36], vin.Vout)
 
 		// Add the serialized outpoint to the slice
-		outpoints = append(outpoints, outpoint)
+		outpoints = append(outpoints, outpoint[:])
 	}
 
 	// Sort the slice of outpoints to find the lexicographically smallest one

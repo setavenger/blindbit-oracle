@@ -67,6 +67,14 @@ func init() {
 	if err != nil && !strings.Contains(err.Error(), "file exists") {
 		logging.L.Fatal().Err(err).Msg("error creating db path")
 	}
+
+	if config.LogsPath != "" {
+		if err := logging.SetLogOutput(config.LogsPath, "blindbit.log"); err != nil {
+			logging.L.Warn().Err(err).Msg("Failed to initialize file logging")
+			defer logging.Close()
+		}
+	}
+	logging.SetConsoleLogging(config.LogToConsole)
 }
 
 func main() {

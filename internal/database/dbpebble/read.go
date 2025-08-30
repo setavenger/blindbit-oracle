@@ -136,13 +136,13 @@ func (s *Store) TweaksForBlock(
 	H uint32,
 	dust uint64,
 	active ActiveHeight,
-) ([]*database.TweakRow, error) {
+) ([]database.TweakRow, error) {
 	txids, err := s.BlockTxids(blockHash)
 	if err != nil {
 		return nil, err
 	}
 
-	var out []*database.TweakRow
+	var out []database.TweakRow
 	for _, txid := range txids {
 		tweak, ok, err := s.LoadTweak(txid)
 		if err != nil || !ok {
@@ -169,9 +169,14 @@ func (s *Store) TweaksForBlock(
 			}
 		}
 		if hasUnspent && (dust == 0 || maxUnspent >= dust) {
-			row := &database.TweakRow{Txid: make([]byte, SizeTxid), Tweak: make([]byte, SizeTweak)}
-			copy(row.Txid, txid)
-			copy(row.Tweak, tweak)
+			// row := &database.TweakRow{Txid: make([]byte, SizeTxid), Tweak: make([]byte, SizeTweak)}
+			// copy(row.Txid, txid)
+			// copy(row.Tweak, tweak)
+			// out = append(out, row)
+
+			var row database.TweakRow
+			copy(row.Txid[:], txid)
+			copy(row.Tweak[:], tweak)
 			out = append(out, row)
 		}
 	}
@@ -299,7 +304,7 @@ func (s *Store) fetchOutputs(
 	return out, nil
 }
 
-func (s *Store) TweaksForBlockAll(blockhash []byte) ([]database.TweakRow, error) {
+func (s *Store) TweaksForBlockAll(blockhash []byte) ([]*database.TweakRow, error) {
 	timeStart := time.Now()
 	defer func() {
 		logging.L.Trace().
@@ -312,7 +317,7 @@ func (s *Store) TweaksForBlockAll(blockhash []byte) ([]database.TweakRow, error)
 		return nil, err
 	}
 
-	var out []database.TweakRow
+	out := make([]*database.TweakRow, 0, len(txids))
 	for _, txid := range txids {
 		tweak, ok, err := s.LoadTweak(txid)
 		if err != nil {
@@ -321,12 +326,9 @@ func (s *Store) TweaksForBlockAll(blockhash []byte) ([]database.TweakRow, error)
 		if !ok {
 			continue
 		}
-		row := database.TweakRow{
-			Txid:  make([]byte, SizeTxid),
-			Tweak: make([]byte, SizeTweak),
-		}
-		copy(row.Txid, txid)
-		copy(row.Tweak, tweak)
+		row := new(database.TweakRow)
+		copy(row.Txid[:], txid)
+		copy(row.Tweak[:], tweak)
 		out = append(out, row)
 	}
 	return out, nil
@@ -371,12 +373,16 @@ func (s *Store) TweaksForBlockCutThrough(
 			}
 		}
 		if keep {
-			row := database.TweakRow{
-				Txid:  make([]byte, SizeTxid),
-				Tweak: make([]byte, SizeTweak),
-			}
-			copy(row.Txid, txid)
-			copy(row.Tweak, tweak)
+			// row := &database.TweakRow{
+			// 	Txid:  make([]byte, SizeTxid),
+			// 	Tweak: make([]byte, SizeTweak),
+			// }
+			// copy(row.Txid, txid)
+			// copy(row.Tweak, tweak)
+			// out = append(out, row)
+			var row database.TweakRow
+			copy(row.Txid[:], txid)
+			copy(row.Tweak[:], tweak)
 			out = append(out, row)
 		}
 	}
@@ -420,12 +426,17 @@ func (s *Store) TweaksForBlockCutThroughDustLimit(
 			}
 		}
 		if keep {
-			row := database.TweakRow{
-				Txid:  make([]byte, SizeTxid),
-				Tweak: make([]byte, SizeTweak),
-			}
-			copy(row.Txid, txid)
-			copy(row.Tweak, tweak)
+			// row := database.TweakRow{
+			// 	Txid:  make([]byte, SizeTxid),
+			// 	Tweak: make([]byte, SizeTweak),
+			// }
+			// copy(row.Txid, txid)
+			// copy(row.Tweak, tweak)
+			// out = append(out, row)
+
+			var row database.TweakRow
+			copy(row.Txid[:], txid)
+			copy(row.Tweak[:], tweak)
 			out = append(out, row)
 		}
 	}

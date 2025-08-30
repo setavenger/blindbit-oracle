@@ -3,6 +3,7 @@ package v2
 
 import (
 	"context"
+	"sync"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -101,7 +102,7 @@ func (s *OracleService) GetTweakArray(
 
 	tweaks := make([][]byte, len(tweakIndex))
 	for i := range tweakIndex {
-		tweaks[i] = tweakIndex[i].Tweak
+		tweaks[i] = tweakIndex[i].Tweak[:]
 	}
 
 	return &pb.TweakArray{
@@ -142,7 +143,7 @@ func (s *OracleService) GetTweakIndexArray(
 
 	tweaks := make([][]byte, len(tweakIndex))
 	for i := range tweakIndex {
-		tweaks[i] = tweakIndex[i].Tweak
+		tweaks[i] = tweakIndex[i].Tweak[:]
 	}
 
 	return &pb.TweakArray{
@@ -309,7 +310,7 @@ func (s *OracleService) StreamBlockBatchSlim(
 		// Convert tweaks to bytes
 		tweakBytes := make([][]byte, len(tweakIndex))
 		for i, tweak := range tweakIndex {
-			tweakBytes[i] = tweak.Tweak
+			tweakBytes[i] = tweak.Tweak[:]
 		}
 
 		batch := &pb.BlockBatchSlim{
@@ -365,43 +366,59 @@ func (s *OracleService) StreamBlockBatchFull(
 		// todo: make dependant on which index is supported
 		// for now it's always full basic
 
-		// utxos
-		// todo: change to dustlimit request
-		outputs, err := s.db.FetchOutputsAll(blockhash, syncTip)
-		if err != nil {
-			logging.L.Err(err).Msg("failed pulling utxos")
-			return status.Errorf(codes.Internal, "failed to pull utxos at height %d", height)
-		}
+		var wg sync.WaitGroup
+		var pbUtxos []*pb.UTXO
 
-		// Convert internal UTXO types to protobuf types
-		pbUtxos := make([]*pb.UTXO, len(outputs))
-		for i, utxo := range outputs {
-			// todo: g in and change scriptpubKey to at least Byte slice if not even array
-			pbUtxos[i] = &pb.UTXO{
-				Txid:         utils.ReverseBytesCopy(utxo.Txid[:]),
-				Vout:         utxo.Vout,
-				Value:        utxo.Amount,
-				ScriptPubKey: utxo.Pubkey,
-				// BlockHeight:  height,
-				// BlockHash:    blockhash,
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			// utxos
+			// todo: change to dustlimit request
+			var outputs []*database.Output
+			outputs, err = s.db.FetchOutputsAll(blockhash, syncTip)
+			if err != nil {
+				logging.L.Err(err).Msg("failed pulling utxos")
+				// return status.Errorf(codes.Internal, "failed to pull utxos at height %d", height)
 			}
-		}
 
-		// tweaks
-		tweakIndex, err := s.db.TweaksForBlockAll(blockhash)
-		if err != nil {
-			logging.L.Err(err).
-				Uint64("height", height).
-				Hex("blockhash", utils.ReverseBytesCopy(blockhash)).
-				Msg("failed to pull tweaks")
-			return status.Errorf(codes.Internal, "failed to pull tweak index for height %d", height)
-		}
+			// Convert internal UTXO types to protobuf types
+			pbUtxos = make([]*pb.UTXO, len(outputs))
+			for i, utxo := range outputs {
+				// todo: g in and change scriptpubKey to at least Byte slice if not even array
+				pbUtxos[i] = &pb.UTXO{
+					Txid:         utils.ReverseBytesCopy(utxo.Txid[:]),
+					Vout:         utxo.Vout,
+					Value:        utxo.Amount,
+					ScriptPubKey: utxo.Pubkey,
+					// BlockHeight:  height,
+					// BlockHash:    blockhash,
+				}
+			}
+		}()
 
-		// Convert tweaks to bytes
-		tweakBytes := make([][]byte, len(tweakIndex))
-		for i, tweak := range tweakIndex {
-			tweakBytes[i] = tweak.Tweak
-		}
+		var tweakBytes [][]byte
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			// tweaks
+			tweakIndex, err := s.db.TweaksForBlockAll(blockhash)
+			if err != nil {
+				logging.L.Err(err).
+					Uint64("height", height).
+					Hex("blockhash", utils.ReverseBytesCopy(blockhash)).
+					Msg("failed to pull tweaks")
+				// return status.Errorf(codes.Internal, "failed to pull tweak index for height %d", height)
+			}
+
+			// Convert tweaks to bytes
+			tweakBytes = make([][]byte, len(tweakIndex))
+			for i, tweak := range tweakIndex {
+				tweakBytes[i] = tweak.Tweak[:]
+			}
+		}()
+
+		wg.Wait()
 
 		batch := &pb.BlockBatchFull{
 			BlockIdentifier: &pb.BlockIdentifier{

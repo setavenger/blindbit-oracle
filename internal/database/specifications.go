@@ -10,7 +10,7 @@ type DB interface {
 	GetBlockHashByHeight(height uint32) ([]byte, error)
 	ApplyBlock(*DBBlock) error
 	FlushBatch() error
-	TweaksForBlockAll([]byte) ([]TweakRow, error)
+	TweaksForBlockAll([]byte) ([]*TweakRow, error)
 	TweaksForBlockCutThrough([]byte, uint32) ([]TweakRow, error)
 	FetchOutputsAll(blockhash []byte, tipheight uint32) ([]*Output, error)
 	BatchSize() int

@@ -42,8 +42,9 @@ func (s *Store) BuildStaticIndexing() error {
 		var blockhash []byte
 		blockhash, err = s.GetBlockHashByHeight(uint32(height))
 		if err != nil {
-			logging.L.Err(err).Uint32("height", height).Msg("failed to blockash by height")
-			return err
+			logging.L.Warn().Err(err).Uint32("height", height).Msg("failed to blockash by height")
+			continue
+			// return err
 		}
 		err = s.ReindexBlock(blockhash)
 		if err != nil {

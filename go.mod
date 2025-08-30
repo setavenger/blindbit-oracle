@@ -15,12 +15,15 @@ require (
 	github.com/setavenger/blindbit-lib v0.0.1
 	github.com/setavenger/go-bip352 v0.1.9-0.20250820220446-d596338dc6ad
 	github.com/setavenger/go-libsecp256k1 v0.0.0-20250601142217-61f26e074fd5
+	github.com/spf13/cobra v1.9.1
 	github.com/spf13/viper v1.19.0
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
 	google.golang.org/grpc v1.62.1
 	google.golang.org/protobuf v1.36.2
 	modernc.org/sqlite v1.38.2
 )
+
+replace github.com/setavenger/blindbit-lib => ../blindbit-lib/
 
 require (
 	github.com/DataDog/zstd v1.4.5 // indirect
@@ -54,6 +57,7 @@ require (
 	github.com/golang/snappy v0.0.5-0.20220116011046-fa5810519dcb // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
+	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/kkdai/bstream v0.0.0-20161212061736-f391b8402d23 // indirect
 	github.com/klauspost/compress v1.17.2 // indirect
@@ -84,7 +88,7 @@ require (
 	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spf13/afero v1.11.0 // indirect
 	github.com/spf13/cast v1.6.0 // indirect
-	github.com/spf13/pflag v1.0.5 // indirect
+	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/stretchr/testify v1.10.0 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect

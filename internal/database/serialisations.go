@@ -16,9 +16,11 @@ func (o *Output) BinarySerialisation() (out []byte) {
 
 func (o *Output) BinaryDeSerialisation(in []byte) {
 	_ = in[OutputBinLength-1] //bounds check
+	o.Txid = make([]byte, 32)
+	o.Pubkey = make([]byte, 32)
 
-	copy(o.Txid, in[:32])
+	copy(o.Txid[:], in[:32])
 	o.Vout = binary.LittleEndian.Uint32(in[32:36])
 	o.Amount = binary.NativeEndian.Uint64(in[36:44])
-	copy(o.Pubkey, in[44:OutputBinLength])
+	copy(o.Pubkey[:], in[44:OutputBinLength])
 }

@@ -3,13 +3,11 @@ package main
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
-	"path"
-	"runtime"
-
 	"os"
 	"os/signal"
+	"path"
+	"runtime"
 	"strings"
 
 	"github.com/setavenger/blindbit-lib/logging"
@@ -18,143 +16,225 @@ import (
 	"github.com/setavenger/blindbit-oracle/internal/indexer"
 	"github.com/setavenger/blindbit-oracle/internal/server"
 	v2 "github.com/setavenger/blindbit-oracle/internal/server/v2"
+	"github.com/spf13/cobra"
 )
 
 var (
-	displayVersion bool
-	Version        = "0.0.0" //todo LD flags etc. to setup correctly and add git hash
+	Version = "0.0.0" //todo LD flags etc. to setup correctly and add git hash
+
+	// Global flags
+	datadir    string
+	configFile string
 )
 
 func init() {
-	flag.StringVar(
-		&config.BaseDirectory,
+	// Global flags
+	rootCmd.PersistentFlags().StringVar(
+		&datadir,
 		"datadir",
 		config.DefaultBaseDirectory,
 		"Set the base directory for blindbit oracle. Default directory is ~/.blindbit-oracle",
 	)
-	flag.BoolVar(
-		&displayVersion,
-		"version",
-		false,
-		"show version of blindbit-oracle",
+	rootCmd.PersistentFlags().StringVar(
+		&configFile,
+		"config",
+		"",
+		"Path to config file (default: datadir/blindbit.toml)",
 	)
-	flag.Parse()
-
-	if displayVersion {
-		// we only need the version for this
-		return
-	}
-
-	// todo: a proper set settings function which does it all
-	// avoid several small function calls
-	config.SetDirectories()
-
-	err := os.Mkdir(config.BaseDirectory, 0750)
-	if err != nil && !errors.Is(err, os.ErrExist) {
-		logging.L.Fatal().Err(err).Msg("error creating base directory")
-	}
-
-	logging.L.Info().Msgf("base directory %s", config.BaseDirectory)
-
-	// load after loggers are instantiated
-	config.LoadConfigs(path.Join(config.BaseDirectory, config.ConfigFileName))
-
-	// after conifigs are loaded
-	runtime.GOMAXPROCS(config.MaxCPUCores)
-
-	// create DB path
-	err = os.Mkdir(config.DBPath, 0750)
-	if err != nil && !strings.Contains(err.Error(), "file exists") {
-		logging.L.Fatal().Err(err).Msg("error creating db path")
-	}
 }
 
-func main() {
-	if displayVersion {
-		fmt.Println("blindbit-oracle version:", Version) // using fmt because loggers are not initialised
-		os.Exit(0)
-	}
-	defer logging.L.Info().Msg("Program shut down")
+var rootCmd = &cobra.Command{
+	Use:   "blindbit-oracle",
+	Short: "BlindBit Oracle - Bitcoin UTXO indexing and scanning service",
+	Long: `BlindBit Oracle is a Bitcoin UTXO indexing and scanning service that provides
+efficient blockchain data processing and API access for Bitcoin applications.`,
+	Version: Version,
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		// Set directories and initialize config
+		config.BaseDirectory = datadir
+		config.SetDirectories()
 
-	interrupt := make(chan os.Signal, 1)
-	signal.Notify(interrupt, os.Interrupt)
+		// Create base directory
+		err := os.Mkdir(config.BaseDirectory, 0750)
+		if err != nil && !errors.Is(err, os.ErrExist) {
+			logging.L.Fatal().Err(err).Msg("error creating base directory")
+		}
 
-	logging.L.Info().Msg("Program Started")
+		logging.L.Info().Msgf("base directory %s", config.BaseDirectory)
 
-	errChan := make(chan error)
-	db, err := dbpebble.OpenDB()
-	// db, err := database.OpenDB("")
-	if err != nil {
-		logging.L.Err(err).Msg("failed opening db")
-		errChan <- err
-		return
-	}
-	store := dbpebble.NewStore(db)
+		// Load config
+		if configFile == "" {
+			configFile = path.Join(config.BaseDirectory, config.ConfigFileName)
+		}
+		config.LoadConfigs(configFile)
 
-	//moved into go routine such that the interrupt signal will apply properly
-	go func() {
-		// so we can start fetching data while not fully synced.
+		// Set CPU cores
+		runtime.GOMAXPROCS(config.MaxCPUCores)
+
+		// Create DB path
+		err = os.Mkdir(config.DBPath, 0750)
+		if err != nil && !strings.Contains(err.Error(), "file exists") {
+			logging.L.Fatal().Err(err).Msg("error creating db path")
+		}
+	},
+}
+
+var staticIndexesCmd = &cobra.Command{
+	Use:   "static-indexes",
+	Short: "Build static indexes for all blocks",
+	Long: `Build static indexes for all blocks in the database. This command will:
+- Process all blocks from the first block to the current tip
+- Create static indexes for tweaks and outputs
+- Not start continuous scanning or servers`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		logging.L.Info().Msg("Starting static index rebuild...")
+
+		db, err := dbpebble.OpenDB()
+		if err != nil {
+			return fmt.Errorf("failed opening db: %w", err)
+		}
+		defer db.Close()
+
+		store := dbpebble.NewStore(db)
+
+		err = store.BuildStaticIndexing()
+		if err != nil {
+			return fmt.Errorf("static indexing failed: %w", err)
+		}
+
+		logging.L.Info().Msg("Static index rebuild completed successfully")
+		return nil
+	},
+}
+
+var syncCmd = &cobra.Command{
+	Use:   "sync",
+	Short: "Sync blockchain data (initial sync only)",
+	Long: `Perform initial blockchain sync to the current tip. This command will:
+- Sync all blocks from the first block to the current tip
+- Not start continuous scanning or servers
+- Not rebuild static indexes`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		logging.L.Info().Msg("Starting initial blockchain sync...")
+
+		db, err := dbpebble.OpenDB()
+		if err != nil {
+			return fmt.Errorf("failed opening db: %w", err)
+		}
+		defer db.Close()
+
+		store := dbpebble.NewStore(db)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		builder := indexer.NewBuilder(ctx, store)
+
+		err = builder.InitialSyncToTip(ctx)
+		if err != nil {
+			return fmt.Errorf("initial sync failed: %w", err)
+		}
+
+		logging.L.Info().Msg("Initial blockchain sync completed successfully")
+		return nil
+	},
+}
+
+var runCmd = &cobra.Command{
+	Use:   "run",
+	Short: "Run the full BlindBit Oracle service",
+	Long: `Run the complete BlindBit Oracle service including:
+- Initial blockchain sync
+- Continuous scanning for new blocks
+- HTTP API server
+- gRPC server (if configured)
+- Static index building`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		logging.L.Info().Msg("Starting BlindBit Oracle service...")
+
+		db, err := dbpebble.OpenDB()
+		if err != nil {
+			return fmt.Errorf("failed opening db: %w", err)
+		}
+		defer db.Close()
+
+		store := dbpebble.NewStore(db)
+
+		// Start servers
 		go server.RunServer(&server.ApiHandler{})
 
-		// keep it optional for now
 		if config.GRPCHost != "" {
 			go v2.RunGRPCServer(store)
 		}
-	}()
 
-	defer func() {
-		err := db.Close()
-		if err != nil {
-			logging.L.Err(err).Msg("db close failed")
+		// Setup context and error handling
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		interrupt := make(chan os.Signal, 1)
+		signal.Notify(interrupt, os.Interrupt)
+
+		errChan := make(chan error, 1)
+
+		// Start indexer
+		go func() {
+			builder := indexer.NewBuilder(ctx, store)
+
+			// Do initial sync
+			err = builder.InitialSyncToTip(ctx)
+			if err != nil {
+				errChan <- fmt.Errorf("failed initial sync: %w", err)
+				return
+			}
+			logging.L.Info().Msg("initial sync done")
+
+			// Flush batch before continuous sync
+			err = store.FlushBatch()
+			if err != nil {
+				errChan <- fmt.Errorf("flushing batch failed: %w", err)
+				return
+			}
+
+			// Build static indexes
+			// err = store.BuildStaticIndexing()
+			// if err != nil {
+			// 	errChan <- fmt.Errorf("static indexing failed: %w", err)
+			// 	return
+			// }
+			// logging.L.Info().Msg("static indexes built")
+			//
+			// // Start continuous sync
+			// err = builder.ContinuousSync(ctx)
+			// if err != nil {
+			// 	errChan <- fmt.Errorf("continuous sync failed: %w", err)
+			// 	return
+			// }
+		}()
+
+		// Wait for interrupt or error
+		for {
+			select {
+			case <-interrupt:
+				cancel()
+				logging.L.Info().Msg("Service interrupted")
+				return nil
+			case err := <-errChan:
+				cancel()
+				return err
+			}
 		}
-		logging.L.Debug().Msg("db closed successfully")
-	}()
+	},
+}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+func main() {
+	// Add subcommands
+	rootCmd.AddCommand(staticIndexesCmd)
+	rootCmd.AddCommand(syncCmd)
+	rootCmd.AddCommand(runCmd)
 
-	// index builder
-	go func() {
-		builder := indexer.NewBuilder(ctx, store)
-		// todo add non-sync option
-		_ = builder
-
-		// do initial sync then move towards steady state sync
-		err = builder.InitialSyncToTip(ctx)
-		if err != nil {
-			logging.L.Err(err).Msg("failed initial sync")
-			errChan <- err
-			return
-		}
-		logging.L.Info().Msg("initial sync done")
-
-		// flush batch and then we proceed with ContinuousSync which utilises flushes
-		err = store.FlushBatch()
-		if err != nil {
-			logging.L.Err(err).Msg("flushing batch failed")
-			errChan <- err
-			return
-		}
-
-		// do continous scans
-		err = builder.ContinuousSync(ctx)
-		if err != nil {
-			logging.L.Err(err).Msg("error indexing blocks")
-			errChan <- err
-			return
-		}
-	}()
-
-	for {
-		select {
-		case <-interrupt:
-			cancel()
-			logging.L.Info().Msg("Program interrupted")
-			return
-		case err := <-errChan:
-			cancel()
-			logging.L.Err(err).Msg("program failed")
-			return
-		}
+	// Execute the root command
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
 }

@@ -13,6 +13,8 @@ type DB interface {
 	TweaksForBlockAll([]byte) ([]*TweakRow, error)
 	TweaksForBlockCutThrough([]byte, uint32) ([]TweakRow, error)
 	FetchOutputsAll(blockhash []byte, tipheight uint32) ([]*Output, error)
+	FetchTweaksStatic(blockhash []byte) ([][]byte, error)
+	FetchOutputsStatic(blockhash []byte) ([]*Output, error)
 	BatchSize() int
 }
 

@@ -440,3 +440,114 @@ func (s *OracleService) StreamBlockBatchFull(
 
 	return nil
 }
+
+func (s *OracleService) StreamBlockBatchSlimStatic(
+	req *pb.RangedBlockHeightRequest, stream pb.OracleService_StreamBlockBatchSlimStaticServer,
+) error {
+	for height := req.Start; height <= req.End; height++ {
+		blockhash, err := s.db.GetBlockHashByHeight(uint32(height))
+		if err != nil {
+			logging.L.Err(err).Uint64("height", height).Msg("failed to blockash by height")
+			return err
+		}
+
+		tweakIndex, err := s.db.FetchTweaksStatic(blockhash)
+		if err != nil {
+			logging.L.Err(err).Uint64("height", height).Msg("failed to pull tweaks")
+			return err
+		}
+
+		batch := &pb.BlockBatchSlim{
+			BlockIdentifier: &pb.BlockIdentifier{
+				BlockHash:   utils.ReverseBytesCopy(blockhash),
+				BlockHeight: height,
+			},
+			Tweaks:           tweakIndex,
+			NewUtxosFilter:   nil,
+			SpentUtxosFilter: nil,
+		}
+
+		if err := stream.Send(batch); err != nil {
+			logging.L.Err(err).Msg("error sending block batch")
+			return status.Errorf(codes.Internal, "failed to send block batch for height %d", height)
+		}
+	}
+
+	return nil
+}
+
+func (s *OracleService) StreamBlockBatchFullStatic(
+	req *pb.RangedBlockHeightRequest, stream pb.OracleService_StreamBlockBatchFullStaticServer,
+) error {
+	for height := req.Start; height <= req.End; height++ {
+		blockhash, err := s.db.GetBlockHashByHeight(uint32(height))
+		if err != nil {
+			logging.L.Err(err).Uint64("height", height).Msg("failed to blockash by height")
+			return err
+		}
+
+		var wg sync.WaitGroup
+		var pbUtxos []*pb.UTXO
+		var tweakIndex [][]byte
+		errChan := make(chan error, 2)
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			tweakIndex, err = s.db.FetchTweaksStatic(blockhash)
+			if err != nil {
+				logging.L.Err(err).Uint64("height", height).Msg("failed to pull tweaks")
+				errChan <- err
+			}
+		}()
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			outputs, err := s.db.FetchOutputsStatic(blockhash)
+			if err != nil {
+				logging.L.Err(err).Uint64("height", height).Msg("failed to pull outputs")
+				errChan <- err
+			}
+
+			pbUtxos = make([]*pb.UTXO, len(outputs))
+			for i, utxo := range outputs {
+				pbUtxos[i] = &pb.UTXO{
+					Txid:         utils.ReverseBytesCopy(utxo.Txid),
+					Vout:         utxo.Vout,
+					Value:        utxo.Amount,
+					ScriptPubKey: utxo.Pubkey,
+				}
+			}
+		}()
+
+		wg.Wait()
+
+		select {
+		case err := <-errChan:
+			logging.L.Err(err).Msg("ended with err")
+			return err
+		default:
+			// No errors
+		}
+		batch := &pb.BlockBatchFull{
+			BlockIdentifier: &pb.BlockIdentifier{
+				BlockHash:   utils.ReverseBytesCopy(blockhash),
+				BlockHeight: height,
+			},
+			Tweaks:           tweakIndex,
+			Utxos:            pbUtxos,
+			NewUtxosFilter:   nil,
+			SpentUtxosFilter: nil,
+			SpentUtxos:       make([][]byte, 0),
+		}
+
+		if err := stream.Send(batch); err != nil {
+			logging.L.Err(err).Msg("error sending block batch")
+			return status.Errorf(codes.Internal, "failed to send block batch for height %d", height)
+		}
+	}
+
+	return nil
+}

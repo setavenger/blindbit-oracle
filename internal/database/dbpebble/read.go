@@ -471,3 +471,48 @@ func (s *Store) TweaksForBlockCutThroughDustLimit(
 	}
 	return out, nil
 }
+
+// -----Statics ------
+
+func (s *Store) FetchTweaksStatic(blockhash []byte) ([][]byte, error) {
+	val, closer, err := s.DB.Get(KeyTweaksStatic(blockhash))
+	if err != nil {
+		if errors.Is(err, pebble.ErrNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer closer.Close()
+	if len(val)%33 != 0 {
+		panic("bad tweaks static value length")
+	}
+	numTweaks := len(val) / 33
+	out := make([][]byte, numTweaks)
+	for i := range out {
+		out[i] = make([]byte, 33)
+		copy(out[i], val[i*33:(i+1)*33])
+	}
+	return out, nil
+
+}
+
+func (s *Store) FetchOutputsStatic(blockhash []byte) ([]*database.Output, error) {
+	val, closer, err := s.DB.Get(KeyKUTXOsStatic(blockhash))
+	if err != nil {
+		if errors.Is(err, pebble.ErrNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer closer.Close()
+	if len(val)%76 != 0 {
+		panic("bad outputs static value length")
+	}
+	numOutputs := len(val) / 76
+	out := make([]*database.Output, numOutputs)
+	for i := range out {
+		out[i] = new(database.Output)
+		out[i].BinaryDeSerialisation(val[i*76 : (i+1)*76])
+	}
+	return out, nil
+}

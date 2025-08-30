@@ -40,6 +40,29 @@ func (s *Store) GetChainTip() ([]byte, uint32, error) {
 	return blockhash, height, nil
 }
 
+func (s *Store) FirstBlock() ([]byte, uint32, error) {
+	lb, ub := BoundsCIHeight()
+	it, err := s.DB.NewIter(&pebble.IterOptions{LowerBound: lb, UpperBound: ub})
+	if err != nil {
+		return nil, 0, err
+	}
+	defer it.Close()
+	if !it.First() {
+		// edge case empty db we are at 0 height
+		return nil, 0, nil
+	}
+	heightBytes := it.Key()
+	blockhash := it.Value()
+
+	if len(blockhash) != 32 {
+		return nil, 0, fmt.Errorf("bad blockhash %x", blockhash)
+	}
+
+	height := binary.BigEndian.Uint32(heightBytes[1:])
+
+	return blockhash, height, nil
+}
+
 func (s *Store) GetBlockHashByHeight(height uint32) ([]byte, error) {
 	key := KeyCIHeight(height)
 	blockhash, closer, err := s.DB.Get(key)
@@ -88,7 +111,12 @@ func (s *Store) OutputsForTx(txid []byte) ([]*database.Output, error) {
 		if err != nil {
 			return nil, err
 		}
-		outs = append(outs, &database.Output{Txid: txid, Vout: vout, Amount: amt, Pubkey: pk})
+		outs = append(outs, &database.Output{
+			Txid:   txid,
+			Vout:   vout,
+			Amount: amt,
+			Pubkey: pk,
+		})
 	}
 	return outs, nil
 }
@@ -438,6 +466,7 @@ func (s *Store) TweaksForBlockCutThroughDustLimit(
 			copy(row.Txid[:], txid)
 			copy(row.Tweak[:], tweak)
 			out = append(out, row)
+
 		}
 	}
 	return out, nil

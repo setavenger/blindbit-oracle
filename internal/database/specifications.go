@@ -17,8 +17,8 @@ type DB interface {
 }
 
 type TweakRow struct {
-	Txid  []byte
-	Tweak []byte
+	Txid  [32]byte
+	Tweak [33]byte
 }
 
 type DBBlock struct {

@@ -115,6 +115,22 @@ func KeyCIBlock(blockHash []byte) []byte {
 	return k
 }
 
+// ---------------- Statics ----------------
+
+func KeyTweaksStatic(blockhash []byte) []byte {
+	k := make([]byte, 1+SizeHash)
+	k[0] = KTweaksStatic
+	copy(k[1:], blockhash)
+	return k
+}
+
+func KeyKUTXOsStatic(blockhash []byte) []byte {
+	k := make([]byte, 1+SizeHash)
+	k[0] = KUTXOsStatic
+	copy(k[1:], blockhash)
+	return k
+}
+
 // ---------------- Values ----------------
 
 func ValTxTweak(tweak []byte) ([]byte, error) {
@@ -137,6 +153,8 @@ func ValOut(amount uint64, pubkey []byte) ([]byte, error) {
 }
 
 func ParseOutValue(v []byte) (amount uint64, pubkey []byte, err error) {
+	// todo: should maybe just panic wrong values should no exist.
+	// If wrong values are in the db it's a development bug which should be caught fast
 	if len(v) != SizeAmt+SizePubKey {
 		return 0, nil, errors.New("bad out value length")
 	}
@@ -146,7 +164,6 @@ func ParseOutValue(v []byte) (amount uint64, pubkey []byte, err error) {
 	return amount, pk, nil
 }
 
-// optional: store spend pubkey (32B); pass nil to write empty.
 func ValSpend(spendPub []byte) ([]byte, error) {
 	if spendPub == nil {
 		return nil, nil // keys-only

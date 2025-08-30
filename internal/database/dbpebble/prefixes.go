@@ -11,6 +11,7 @@ const (
 	SizePubKey = 32 // x-only pubkey
 )
 
+// Prefix Keys "K"
 const (
 	KBlockTx  = 0x01
 	KTx       = 0x02
@@ -19,4 +20,8 @@ const (
 	KCIHeight = 0x05
 	KCIBlock  = 0x06
 	KTxOccur  = 0x07
+
+	// Statics
+	KTweaksStatic = 0x08
+	KUTXOsStatic  = 0x09
 )

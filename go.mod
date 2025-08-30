@@ -12,7 +12,7 @@ require (
 	github.com/gin-contrib/gzip v1.2.2
 	github.com/gin-gonic/gin v1.10.0
 	github.com/rs/zerolog v1.34.0
-	github.com/setavenger/blindbit-lib v0.0.1
+	github.com/setavenger/blindbit-lib v0.0.2-0.20250830181948-63d2071d30da
 	github.com/setavenger/go-bip352 v0.1.9-0.20250820220446-d596338dc6ad
 	github.com/setavenger/go-libsecp256k1 v0.0.0-20250601142217-61f26e074fd5
 	github.com/spf13/cobra v1.9.1
@@ -23,7 +23,7 @@ require (
 	modernc.org/sqlite v1.38.2
 )
 
-replace github.com/setavenger/blindbit-lib => ../blindbit-lib/
+// replace github.com/setavenger/blindbit-lib => ../blindbit-lib/
 
 require (
 	github.com/DataDog/zstd v1.4.5 // indirect

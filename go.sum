@@ -220,6 +220,8 @@ github.com/sagikazarmark/locafero v0.4.0 h1:HApY1R9zGo4DBgr7dqsTH/JJxLTTsOt7u6ke
 github.com/sagikazarmark/locafero v0.4.0/go.mod h1:Pe1W6UlPYUk/+wc/6KFhbORCfqzgYEpgQ3O5fPuL3H4=
 github.com/sagikazarmark/slog-shim v0.1.0 h1:diDBnUNK9N/354PgrxMywXnAwEr1QZcOr6gto+ugjYE=
 github.com/sagikazarmark/slog-shim v0.1.0/go.mod h1:SrcSrq8aKtyuqEI1uvTDTK1arOWRIczQRv+GVI1AkeQ=
+github.com/setavenger/blindbit-lib v0.0.2-0.20250830181948-63d2071d30da h1:E7AXY8TMOKaZKD1ltN2zVBYFG9rT1fe2uNpoGQDaHTI=
+github.com/setavenger/blindbit-lib v0.0.2-0.20250830181948-63d2071d30da/go.mod h1:wE/PNqVqW/oqoocOY3berjC/PsmCrrcrs72onzTyQOE=
 github.com/setavenger/go-bip352 v0.1.9-0.20250820220446-d596338dc6ad h1:JNWybVAGa/SxPQH0905GQp+QxT7/+lOTmcSlN9qb9/4=
 github.com/setavenger/go-bip352 v0.1.9-0.20250820220446-d596338dc6ad/go.mod h1:j+5v4nI/7n9IBEnvr6LagRpe6whTAHjIBRtqJKyJKG4=
 github.com/setavenger/go-libsecp256k1 v0.0.0-20250601142217-61f26e074fd5 h1:KKpLemBDPEQxNmTz2+5M8bWhlArls9ZkhkCHPPVh3RY=

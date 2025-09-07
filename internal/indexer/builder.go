@@ -68,17 +68,13 @@ func (b *Builder) ContinuousSync(ctx context.Context) error {
 			}
 			// use chainInfo.BestBlockhash to determine a reorg
 			if uint32(chainInfo.Blocks) > syncTip {
-				err = b.SyncBlocks(ctx, int64(syncTip), chainInfo.Blocks)
+				// +1 because we already processed the tip
+				err = b.SyncBlocks(ctx, int64(syncTip)+1, chainInfo.Blocks)
 				if err != nil {
 					logging.L.Err(err).Msg("failed syncing blocks")
 					return err
 				}
 
-				err = b.store.FlushBatch()
-				if err != nil {
-					logging.L.Err(err).Msg("failed flushing batch")
-					return err
-				}
 			}
 		}
 	}
@@ -111,7 +107,13 @@ func (b *Builder) InitialSyncToTip(
 		Msg("Starting initial sync")
 
 	// using Blocks which is the actual count of blocks the node has available (assumption)
-	return b.SyncBlocks(ctx, int64(syncTip), chainInfo.Blocks)
+	err = b.SyncBlocks(ctx, int64(syncTip)+1, chainInfo.Blocks)
+	if err != nil {
+		logging.L.Err(err).Msg("failed syncing blocks")
+		return err
+	}
+
+	return nil
 }
 
 func (b *Builder) SyncBlocks(
@@ -152,22 +154,31 @@ func (b *Builder) SyncBlocks(
 
 	var handleWG sync.WaitGroup
 	for i := 0; i < config.MaxParallelTweakComputations; i++ {
+		handleWG.Add(1)
 		go func() {
-			handleWG.Add(1)
 			defer handleWG.Done()
-			for block := range b.newBlockChan {
-				err := b.handleBlock(ctx, block)
-				if err != nil {
-					logging.L.Err(err).
+			for {
+				select {
+				case <-ctx.Done():
+					logging.L.Trace().Msg("Handler goroutine received context cancellation")
+					return
+				case block, ok := <-b.newBlockChan:
+					if !ok {
+						return
+					}
+					err := b.handleBlock(ctx, block)
+					if err != nil {
+						logging.L.Err(err).
+							Str("blockhash", block.Hash.String()).
+							Int64("height", block.Height).
+							Msg("failed handling block")
+						errChan <- err
+					}
+					logging.L.Trace().
 						Str("blockhash", block.Hash.String()).
 						Int64("height", block.Height).
-						Msg("failed handling block")
-					errChan <- err
+						Msg("block handled")
 				}
-				logging.L.Trace().
-					Str("blockhash", block.Hash.String()).
-					Int64("height", block.Height).
-					Msg("block handled")
 			}
 		}()
 	}
@@ -186,6 +197,9 @@ func (b *Builder) SyncBlocks(
 
 		for {
 			select {
+			case <-ctx.Done():
+				logging.L.Trace().Msg("Writer goroutine received context cancellation")
+				return
 			case dbBlock, ok := <-b.writerChan:
 				if !ok {
 					// channel drained and closed: all done
@@ -237,7 +251,7 @@ func (b *Builder) SyncBlocks(
 			logging.L.Err(err).Msg("there was an error pulling blocks")
 			return err
 		case <-doneChan:
-			return nil
+			return b.store.FlushBatch(true)
 		}
 	}
 }
@@ -269,6 +283,8 @@ func (b *Builder) pullBlock(height int64) error {
 // handleBlock makes all computations for a block
 // and sends a DBBlock into the builders writerChan
 func (b *Builder) handleBlock(ctx context.Context, block *Block) error {
+	// todo: add filters to handleBlock
+
 	logging.L.Trace().
 		Str("blockhash", block.Hash.String()).
 		Int64("height", block.Height).
@@ -291,9 +307,7 @@ func (b *Builder) handleBlock(ctx context.Context, block *Block) error {
 		Txs:    dbTxs,
 	}
 
-	// b.writerChan <- dbBlock
 	return b.store.ApplyBlock(dbBlock)
-	// return nil
 }
 
 func handleTx(tx *Transaction) *database.Tx {

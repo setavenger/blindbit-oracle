@@ -21,6 +21,6 @@ func (o *Output) BinaryDeSerialisation(in []byte) {
 
 	copy(o.Txid[:], in[:32])
 	o.Vout = binary.LittleEndian.Uint32(in[32:36])
-	o.Amount = binary.NativeEndian.Uint64(in[36:44])
+	o.Amount = binary.LittleEndian.Uint64(in[36:44])
 	copy(o.Pubkey[:], in[44:OutputBinLength])
 }

@@ -3,18 +3,23 @@ package database
 
 import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/setavenger/blindbit-lib/proto/pb"
 )
 
 type DB interface {
 	GetChainTip() ([]byte, uint32, error)
 	GetBlockHashByHeight(height uint32) ([]byte, error)
 	ApplyBlock(*DBBlock) error
-	FlushBatch() error
+	FlushBatch(sync bool) error
 	TweaksForBlockAll([]byte) ([]*TweakRow, error)
 	TweaksForBlockCutThrough([]byte, uint32) ([]TweakRow, error)
 	FetchOutputsAll(blockhash []byte, tipheight uint32) ([]*Output, error)
 	FetchTweaksStatic(blockhash []byte) ([][]byte, error)
+	FetchTweaksStaticProto(blockhash []byte) ([][]byte, error) // todo: i guess redundant
 	FetchOutputsStatic(blockhash []byte) ([]*Output, error)
+	FetchOutputsStaticProto(blockhash []byte) ([]pb.UTXO, error)
+	FetchTaprootUnspentFilter(blockhash []byte) ([]byte, error)
+	ChainIterator(asc bool) (<-chan []byte, error)
 	BatchSize() int
 }
 
@@ -27,6 +32,7 @@ type DBBlock struct {
 	Height uint32
 	Hash   *chainhash.Hash
 	Txs    []*Tx
+	// todo: add filters
 }
 
 type Output struct {

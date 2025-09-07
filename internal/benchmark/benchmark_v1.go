@@ -49,7 +49,7 @@ func fetchBlockDataV1(height uint64, client *networking.ClientBlindBit) (*BlockD
 	errChan := make(chan error, 3)
 
 	var filterNew, filterSpent *networking.Filter
-	var tweaks [][33]byte
+	var tweaks [][]byte
 
 	// Fetch new UTXOs filter
 	go func() {
@@ -93,11 +93,16 @@ func fetchBlockDataV1(height uint64, client *networking.ClientBlindBit) (*BlockD
 		// No errors
 	}
 
+	tweakBytes := make([][33]byte, len(tweaks))
+	for i, tweak := range tweaks {
+		tweakBytes[i] = [33]byte(tweak[:])
+	}
+
 	return &BlockDataV1{
 		Height:      height,
 		FilterNew:   filterNew,
 		FilterSpent: filterSpent,
-		Tweaks:      tweaks,
+		Tweaks:      tweakBytes,
 	}, nil
 }
 

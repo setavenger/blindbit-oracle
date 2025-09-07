@@ -4,6 +4,7 @@ package v2
 import (
 	"context"
 	"sync"
+	"time"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -344,6 +345,27 @@ func (s *OracleService) StreamBlockBatchFull(
 			Msg("failed to get chain tip")
 		return err
 	}
+	logging.L.Debug().
+		Uint64("start", req.Start).
+		Uint64("end", req.End).
+		Uint32("sync_tip", syncTip).
+		Msg("streaming block batch full")
+
+	if req.Start > uint64(syncTip) {
+		logging.L.Err(err).
+			Uint64("start", req.Start).
+			Uint32("sync_tip", syncTip).
+			Msg("start height is greater than sync tip")
+		return status.Errorf(codes.Internal, "start height is greater than sync tip")
+	}
+
+	if req.Start > req.End {
+		logging.L.Err(err).
+			Uint64("start", req.Start).
+			Uint64("end", req.End).
+			Msg("start height is greater than end height")
+		return status.Errorf(codes.Internal, "end height is greater than start height")
+	}
 
 	for height := req.Start; height <= req.End; height++ {
 		select {
@@ -368,6 +390,14 @@ func (s *OracleService) StreamBlockBatchFull(
 
 		var wg sync.WaitGroup
 		var pbUtxos []*pb.UTXO
+		errChan := make(chan error, 2)
+
+		select {
+		case <-stream.Context().Done():
+			logging.L.Debug().Msg("stream context cancelled")
+			return nil
+		default:
+		}
 
 		wg.Add(1)
 		go func() {
@@ -375,10 +405,11 @@ func (s *OracleService) StreamBlockBatchFull(
 			// utxos
 			// todo: change to dustlimit request
 			var outputs []*database.Output
+			logging.L.Trace().Msg("pulling utxos")
 			outputs, err = s.db.FetchOutputsAll(blockhash, syncTip)
 			if err != nil {
 				logging.L.Err(err).Msg("failed pulling utxos")
-				// return status.Errorf(codes.Internal, "failed to pull utxos at height %d", height)
+				errChan <- err
 			}
 
 			// Convert internal UTXO types to protobuf types
@@ -408,7 +439,7 @@ func (s *OracleService) StreamBlockBatchFull(
 					Uint64("height", height).
 					Hex("blockhash", utils.ReverseBytesCopy(blockhash)).
 					Msg("failed to pull tweaks")
-				// return status.Errorf(codes.Internal, "failed to pull tweak index for height %d", height)
+				errChan <- err
 			}
 
 			// Convert tweaks to bytes
@@ -419,6 +450,14 @@ func (s *OracleService) StreamBlockBatchFull(
 		}()
 
 		wg.Wait()
+
+		select {
+		case err := <-errChan:
+			logging.L.Err(err).Msg("ended with err")
+			return err
+		default:
+			// No errors
+		}
 
 		batch := &pb.BlockBatchFull{
 			BlockIdentifier: &pb.BlockIdentifier{
@@ -457,13 +496,23 @@ func (s *OracleService) StreamBlockBatchSlimStatic(
 			return err
 		}
 
+		unspentFilter, err := s.db.FetchTaprootUnspentFilter(blockhash)
+		if err != nil {
+			logging.L.Err(err).Uint64("height", height).Msg("failed to pull unspent filter")
+			return err
+		}
+
 		batch := &pb.BlockBatchSlim{
 			BlockIdentifier: &pb.BlockIdentifier{
 				BlockHash:   utils.ReverseBytesCopy(blockhash),
 				BlockHeight: height,
 			},
-			Tweaks:           tweakIndex,
-			NewUtxosFilter:   nil,
+			Tweaks: tweakIndex,
+			NewUtxosFilter: &pb.FilterData{
+				Blockhash:  utils.ReverseBytesCopy(blockhash),
+				FilterType: pb.FilterType_FILTER_TYPE_NEW_UTXOS,
+				Data:       unspentFilter,
+			},
 			SpentUtxosFilter: nil,
 		}
 
@@ -479,6 +528,7 @@ func (s *OracleService) StreamBlockBatchSlimStatic(
 func (s *OracleService) StreamBlockBatchFullStatic(
 	req *pb.RangedBlockHeightRequest, stream pb.OracleService_StreamBlockBatchFullStaticServer,
 ) error {
+	timeFullGRPCCall := time.Now()
 	for height := req.Start; height <= req.End; height++ {
 		blockhash, err := s.db.GetBlockHashByHeight(uint32(height))
 		if err != nil {
@@ -487,7 +537,8 @@ func (s *OracleService) StreamBlockBatchFullStatic(
 		}
 
 		var wg sync.WaitGroup
-		var pbUtxos []*pb.UTXO
+		var pbUtxos []pb.UTXO
+		var pbUtxosOut []*pb.UTXO
 		var tweakIndex [][]byte
 		errChan := make(chan error, 2)
 
@@ -505,21 +556,26 @@ func (s *OracleService) StreamBlockBatchFullStatic(
 		go func() {
 			defer wg.Done()
 
-			outputs, err := s.db.FetchOutputsStatic(blockhash)
+			// outputs, err := s.db.FetchOutputsStatic(blockhash)
+			pbUtxos, err = s.db.FetchOutputsStaticProto(blockhash)
 			if err != nil {
 				logging.L.Err(err).Uint64("height", height).Msg("failed to pull outputs")
 				errChan <- err
 			}
-
-			pbUtxos = make([]*pb.UTXO, len(outputs))
-			for i, utxo := range outputs {
-				pbUtxos[i] = &pb.UTXO{
-					Txid:         utils.ReverseBytesCopy(utxo.Txid),
-					Vout:         utxo.Vout,
-					Value:        utxo.Amount,
-					ScriptPubKey: utxo.Pubkey,
-				}
+			pbUtxosOut = make([]*pb.UTXO, len(pbUtxos))
+			for i := range pbUtxos {
+				pbUtxosOut[i] = &pbUtxos[i]
 			}
+
+			// pbUtxosOut = make([]*pb.UTXO, len(outputs))
+			// for i, utxo := range outputs {
+			// 	pbUtxosOut[i] = &pb.UTXO{
+			// 		Txid:         utils.ReverseBytesCopy(utxo.Txid),
+			// 		Vout:         utxo.Vout,
+			// 		Value:        utxo.Amount,
+			// 		ScriptPubKey: utxo.Pubkey,
+			// 	}
+			// }
 		}()
 
 		wg.Wait()
@@ -537,17 +593,25 @@ func (s *OracleService) StreamBlockBatchFullStatic(
 				BlockHeight: height,
 			},
 			Tweaks:           tweakIndex,
-			Utxos:            pbUtxos,
+			Utxos:            pbUtxosOut,
 			NewUtxosFilter:   nil,
 			SpentUtxosFilter: nil,
 			SpentUtxos:       make([][]byte, 0),
 		}
 
+		sendTime := time.Now()
 		if err := stream.Send(batch); err != nil {
 			logging.L.Err(err).Msg("error sending block batch")
 			return status.Errorf(codes.Internal, "failed to send block batch for height %d", height)
 		}
-	}
+		logging.L.Debug().
+			Uint64("height", height).
+			Dur("duration", time.Since(sendTime)).
+			Msg("block_batch_full_static_send_timing")
 
+	}
+	logging.L.Debug().
+		Dur("duration", time.Since(timeFullGRPCCall)).
+		Msg("block_batch_full_static_full_timing")
 	return nil
 }

@@ -24,4 +24,15 @@ const (
 	// Statics
 	KTweaksStatic = 0x08
 	KUTXOsStatic  = 0x09
+
+	/* Filters */
+
+	// Inlcudes all taproot outputs for block
+	KTaprootPubkeyFilter = 0x0A
+
+	// Inlcudes all taproot unspent outputs for block
+	KTaprootUnspentFilter = 0x0B
+
+	// Inlcudes all taproot spent outputs for block
+	KTaprootSpentFilter = 0x0C
 )

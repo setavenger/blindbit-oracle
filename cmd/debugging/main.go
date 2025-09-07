@@ -121,7 +121,7 @@ func main() {
 
 		logging.L.Warn().Msg("initial sync done")
 
-		err = store.FlushBatch()
+		err = store.FlushBatch(true)
 		if err != nil {
 			logging.L.Err(err).Msg("failed flushing batch")
 			errChan <- err

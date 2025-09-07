@@ -51,7 +51,7 @@ func (s *Store) collectAndWrite(block *database.DBBlock) error {
 	s.batchCounter++
 	if s.batchCounter > s.batchSize {
 		// rotates batch and commits the old one in the background
-		if err := s.commitBatch(); err != nil {
+		if err := s.commitBatch(false); err != nil {
 			s.batchSync.Unlock()
 			logging.L.Err(err).Msg("failed to commit batch")
 			return err
@@ -89,28 +89,44 @@ func (s *Store) attachBlockToBatch(block *database.DBBlock) error {
 	return attachBlockToBatch(s.dbBatch, block)
 }
 
-func (s *Store) FlushBatch() error {
+func (s *Store) FlushBatch(sync bool) error {
 	if s.batchCounter == 0 {
 		return nil
 	}
-	return s.commitBatch()
+	logging.L.Info().Int("batch_counter", s.batchCounter).Bool("sync", sync).Msg("flushing batch")
+
+	return s.commitBatch(sync)
 }
 
-func (s *Store) commitBatch() error {
+func (s *Store) commitBatch(sync bool) error {
 	s.batchSync.Lock()
 
 	// rotate out the old bath and commit the old one subsequently
 	oldBatch := s.rotateLocked()
 	s.batchSync.Unlock()
 
-	go func() {
+	closeOldBatch := func() error {
+		defer oldBatch.Close()
 		// this might need a max commit semaphore style lock or something
 		err := oldBatch.Commit(pebble.NoSync)
 		if err != nil {
 			logging.L.Panic().Err(err).Msg("failed to write Batch")
+			return err
 		}
-	}()
-	return nil
+		return nil
+	}
+
+	if sync {
+		return closeOldBatch()
+	} else {
+		go func() {
+			err := closeOldBatch()
+			if err != nil {
+				logging.L.Err(err).Msg("failed to write Batch")
+			}
+		}()
+		return nil
+	}
 }
 
 func attachBlockToBatch(batch *pebble.Batch, block *database.DBBlock) error {

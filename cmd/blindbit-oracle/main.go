@@ -23,8 +23,10 @@ var (
 	Version = "0.0.0" //todo LD flags etc. to setup correctly and add git hash
 
 	// Global flags
-	datadir    string
-	configFile string
+	datadir       string
+	configFile    string
+	reindexStatic bool
+	skipPrecheck  bool
 )
 
 func init() {
@@ -41,6 +43,33 @@ func init() {
 		"",
 		"Path to config file (default: datadir/blindbit.toml)",
 	)
+	rootCmd.PersistentFlags().BoolVar(
+		&reindexStatic,
+		"reindex-static",
+		false,
+		"Force rebuild of static indexes (default: false)",
+	)
+	rootCmd.PersistentFlags().BoolVar(
+		&skipPrecheck,
+		"skip-precheck",
+		false,
+		"Skip database integrity checks and other pre-checks (default: false)",
+	)
+}
+
+// performDBIntegrityCheck performs database integrity check unless skipped by flag
+func performDBIntegrityCheck(builder *indexer.Builder) error {
+	if !skipPrecheck {
+		logging.L.Info().Msg("Performing database integrity check...")
+		err := builder.DBIntegrityCheck()
+		if err != nil {
+			return fmt.Errorf("db integrity check failed: %w", err)
+		}
+		logging.L.Info().Msg("Database integrity check completed successfully")
+	} else {
+		logging.L.Info().Msg("Skipping database integrity check (--skip-precheck flag set)")
+	}
+	return nil
 }
 
 var rootCmd = &cobra.Command{
@@ -85,25 +114,56 @@ var staticIndexesCmd = &cobra.Command{
 	Long: `Build static indexes for all blocks in the database. This command will:
 - Process all blocks from the first block to the current tip
 - Create static indexes for tweaks and outputs
-- Not start continuous scanning or servers`,
+- Not start continuous scanning or servers
+
+Flags:
+--reindex-static flag to force rebuild of existing indexes`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		interrupt := make(chan os.Signal, 1)
+		signal.Notify(interrupt, os.Interrupt)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
 		logging.L.Info().Msg("Starting static index rebuild...")
 
-		db, err := dbpebble.OpenDB()
-		if err != nil {
-			return fmt.Errorf("failed opening db: %w", err)
+		errChan := make(chan error)
+		doneChan := make(chan struct{})
+
+		go func() {
+			defer close(doneChan)
+
+			db, err := dbpebble.OpenDB()
+			if err != nil {
+				errChan <- fmt.Errorf("failed opening db: %w", err)
+				return
+			}
+			defer db.Close()
+
+			store := dbpebble.NewStore(db)
+			defer store.FlushBatch(true)
+
+			// todo: should be in an indexer.Builder
+			err = store.BuildStaticIndexing(reindexStatic)
+			if err != nil {
+				errChan <- fmt.Errorf("static indexing failed: %w", err)
+				return
+			}
+		}()
+
+		select {
+		case <-interrupt:
+			cancel()
+			logging.L.Info().Msg("Static index rebuild interrupted")
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		case err := <-errChan:
+			return err
+		case <-doneChan:
+			logging.L.Info().Msg("Static index rebuild completed successfully")
+			return nil
 		}
-		defer db.Close()
-
-		store := dbpebble.NewStore(db)
-
-		err = store.BuildStaticIndexing()
-		if err != nil {
-			return fmt.Errorf("static indexing failed: %w", err)
-		}
-
-		logging.L.Info().Msg("Static index rebuild completed successfully")
-		return nil
 	},
 }
 
@@ -113,7 +173,10 @@ var syncCmd = &cobra.Command{
 	Long: `Perform initial blockchain sync to the current tip. This command will:
 - Sync all blocks from the first block to the current tip
 - Not start continuous scanning or servers
-- Not rebuild static indexes`,
+- Not rebuild static indexes
+
+Flags:
+--skip-precheck flag to skip database integrity checks`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		logging.L.Info().Msg("Starting initial blockchain sync...")
 
@@ -129,6 +192,12 @@ var syncCmd = &cobra.Command{
 		defer cancel()
 
 		builder := indexer.NewBuilder(ctx, store)
+
+		// Perform database integrity check unless skipped
+		err = performDBIntegrityCheck(builder)
+		if err != nil {
+			return err
+		}
 
 		err = builder.InitialSyncToTip(ctx)
 		if err != nil {
@@ -148,7 +217,10 @@ var runCmd = &cobra.Command{
 - Continuous scanning for new blocks
 - HTTP API server
 - gRPC server (if configured)
-- Static index building`,
+
+Flags:
+--reindex-static flag to force rebuild of static indexes (optional, default: false)
+--skip-precheck flag to skip database integrity checks (optional, default: false)`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		logging.L.Info().Msg("Starting BlindBit Oracle service...")
 
@@ -180,6 +252,13 @@ var runCmd = &cobra.Command{
 		go func() {
 			builder := indexer.NewBuilder(ctx, store)
 
+			// Perform database integrity check unless skipped
+			err = performDBIntegrityCheck(builder)
+			if err != nil {
+				errChan <- err
+				return
+			}
+
 			// Do initial sync
 			err = builder.InitialSyncToTip(ctx)
 			if err != nil {
@@ -188,27 +267,25 @@ var runCmd = &cobra.Command{
 			}
 			logging.L.Info().Msg("initial sync done")
 
-			// Flush batch before continuous sync
-			err = store.FlushBatch()
-			if err != nil {
-				errChan <- fmt.Errorf("flushing batch failed: %w", err)
-				return
+			// Build static indexes if requested
+			if reindexStatic {
+				logging.L.Info().Msg("Building static indexes...")
+				err = store.BuildStaticIndexing(true)
+				if err != nil {
+					errChan <- fmt.Errorf("static indexing failed: %w", err)
+					return
+				}
+				logging.L.Info().Msg("static indexes built")
+			} else {
+				logging.L.Info().Msg("Skipping static index build (--reindex-static flag not set)")
 			}
 
-			// Build static indexes
-			// err = store.BuildStaticIndexing()
-			// if err != nil {
-			// 	errChan <- fmt.Errorf("static indexing failed: %w", err)
-			// 	return
-			// }
-			// logging.L.Info().Msg("static indexes built")
-			//
-			// // Start continuous sync
-			// err = builder.ContinuousSync(ctx)
-			// if err != nil {
-			// 	errChan <- fmt.Errorf("continuous sync failed: %w", err)
-			// 	return
-			// }
+			// Start continuous sync
+			err = builder.ContinuousSync(ctx)
+			if err != nil {
+				errChan <- fmt.Errorf("continuous sync failed: %w", err)
+				return
+			}
 		}()
 
 		// Wait for interrupt or error

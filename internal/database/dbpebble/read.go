@@ -8,6 +8,7 @@ import (
 
 	"github.com/cockroachdb/pebble"
 	"github.com/setavenger/blindbit-lib/logging"
+	"github.com/setavenger/blindbit-lib/proto/pb"
 	"github.com/setavenger/blindbit-lib/utils"
 	"github.com/setavenger/blindbit-oracle/internal/database"
 )
@@ -66,14 +67,46 @@ func (s *Store) FirstBlock() ([]byte, uint32, error) {
 func (s *Store) GetBlockHashByHeight(height uint32) ([]byte, error) {
 	key := KeyCIHeight(height)
 	blockhash, closer, err := s.DB.Get(key)
-	if err != nil {
-		if errors.Is(err, pebble.ErrNotFound) {
-			return nil, fmt.Errorf("height not found in chain index %d", height)
-		}
+	if err != nil && !errors.Is(err, pebble.ErrNotFound) {
 		return nil, err
+	} else if errors.Is(err, pebble.ErrNotFound) {
+		return nil, nil
 	}
 	defer closer.Close()
 	return blockhash, err
+}
+
+// ChainIterator returns a channel of block hashes in the chain
+// if asc is true, the channel will be in ascending order
+// if asc is false, the channel will be in descending order
+func (s *Store) ChainIterator(asc bool) (<-chan []byte, error) {
+	lb, ub := BoundsCIHeight()
+	it, err := s.DB.NewIter(&pebble.IterOptions{LowerBound: lb, UpperBound: ub})
+	if err != nil {
+		return nil, err
+	}
+
+	blockhashChan := make(chan []byte)
+	go func() {
+		defer it.Close()
+		if asc {
+			for ok := it.First(); ok; ok = it.Next() {
+				blockhashChan <- it.Value()
+			}
+		} else {
+			for ok := it.Last(); ok; ok = it.Prev() {
+				blockhashChan <- it.Value()
+			}
+		}
+
+		if it.Error() != nil {
+			logging.L.Err(err).Msg("error iterating chain")
+			return
+		}
+		close(blockhashChan)
+	}()
+
+	return blockhashChan, nil
 }
 
 func (s *Store) BlockTxids(blockHash []byte) ([][]byte, error) {
@@ -123,11 +156,10 @@ func (s *Store) OutputsForTx(txid []byte) ([]*database.Output, error) {
 
 func (s *Store) LoadTweak(txid []byte) ([]byte, bool, error) {
 	val, closer, err := s.DB.Get(KeyTx(txid))
-	if err != nil {
-		if errors.Is(err, pebble.ErrNotFound) {
-			return nil, false, nil
-		}
+	if err != nil && !errors.Is(err, pebble.ErrNotFound) {
 		return nil, false, err
+	} else if errors.Is(err, pebble.ErrNotFound) {
+		return nil, false, nil
 	}
 	defer closer.Close()
 	out := make([]byte, len(val))
@@ -217,11 +249,10 @@ func (s *Store) TweaksForBlock(
 // heightIfOnBestChain returns (height,true) if blockHash is on best chain; otherwise (0,false).
 func (s *Store) heightIfOnBestChain(blockHash []byte) (uint32, bool, error) {
 	val, closer, err := s.DB.Get(KeyCIBlock(blockHash)) // ci:b:<blockHash> -> [4]heightBE
-	if err != nil {
-		if errors.Is(err, pebble.ErrNotFound) {
-			return 0, false, nil
-		}
+	if err != nil && !errors.Is(err, pebble.ErrNotFound) {
 		return 0, false, err
+	} else if errors.Is(err, pebble.ErrNotFound) {
+		return 0, false, nil
 	}
 	defer closer.Close()
 	if len(val) != SizeHeight {
@@ -475,6 +506,13 @@ func (s *Store) TweaksForBlockCutThroughDustLimit(
 // -----Statics ------
 
 func (s *Store) FetchTweaksStatic(blockhash []byte) ([][]byte, error) {
+	timeStart := time.Now()
+	defer func() {
+		logging.L.Trace().
+			Dur("duration", time.Since(timeStart)).
+			Hex("blockhash", utils.ReverseBytesCopy(blockhash)).
+			Msg("fetching_tweaks_static_timing")
+	}()
 	val, closer, err := s.DB.Get(KeyTweaksStatic(blockhash))
 	if err != nil {
 		if errors.Is(err, pebble.ErrNotFound) {
@@ -497,6 +535,13 @@ func (s *Store) FetchTweaksStatic(blockhash []byte) ([][]byte, error) {
 }
 
 func (s *Store) FetchOutputsStatic(blockhash []byte) ([]*database.Output, error) {
+	timeStart := time.Now()
+	defer func() {
+		logging.L.Trace().
+			Dur("duration", time.Since(timeStart)).
+			Hex("blockhash", utils.ReverseBytesCopy(blockhash)).
+			Msg("fetching_outputs_static_timing")
+	}()
 	val, closer, err := s.DB.Get(KeyKUTXOsStatic(blockhash))
 	if err != nil {
 		if errors.Is(err, pebble.ErrNotFound) {
@@ -515,4 +560,87 @@ func (s *Store) FetchOutputsStatic(blockhash []byte) ([]*database.Output, error)
 		out[i].BinaryDeSerialisation(val[i*76 : (i+1)*76])
 	}
 	return out, nil
+}
+
+func (s *Store) FetchTweaksStaticProto(blockhash []byte) ([][]byte, error) {
+	return s.FetchTweaksStatic(blockhash)
+}
+
+func (s *Store) FetchOutputsStaticProto(blockhash []byte) ([]pb.UTXO, error) {
+	// some rough tests showed that returning a slice of values is faster
+	// than returning a slice of pointer
+	timeStart := time.Now()
+	defer func() {
+		logging.L.Trace().
+			Dur("duration", time.Since(timeStart)).
+			Hex("blockhash", utils.ReverseBytesCopy(blockhash)).
+			Msg("fetching_outputs_static_proto_timing")
+	}()
+	val, closer, err := s.DB.Get(KeyKUTXOsStatic(blockhash))
+	if err != nil {
+		if errors.Is(err, pebble.ErrNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer closer.Close()
+	if len(val)%76 != 0 {
+		logging.L.Panic().Msg("bad outputs static value length")
+	}
+	numOutputs := len(val) / 76
+	out := make([]pb.UTXO, numOutputs)
+	for i := range out {
+		utxoSlice := val[i*76 : (i+1)*76]
+		// todo: try with and without
+		// _ = utxoSlice[75] // early check once
+		// utxoSlice := [76]byte(val[i*76 : (i+1)*76])
+
+		out[i].ScriptPubKey = utxoSlice[44:76]
+		out[i].Txid = utxoSlice[:32]
+
+		// copy(out[i].Txid[:], utxoSlice[:32])
+		out[i].Vout = binary.BigEndian.Uint32(utxoSlice[32:36])
+		out[i].Value = binary.BigEndian.Uint64(utxoSlice[36:44])
+	}
+	return out, nil
+}
+
+// Filters
+
+// FetchTaprootUnspentFilter returns nBytes directly without metadata of filter
+func (s *Store) FetchTaprootUnspentFilter(blockhash []byte) ([]byte, error) {
+	val, closer, err := s.DB.Get(KeyTaprootUnspentFilter(blockhash))
+	if err != nil {
+		if errors.Is(err, pebble.ErrNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer closer.Close()
+	return val, nil
+}
+
+// ---------------- Static key exists checks ----------------
+// key exists checks for static data
+func (s *Store) KeyExistsStatic(key []byte) (bool, error) {
+	val, closer, err := s.DB.Get(key)
+	if err != nil && !errors.Is(err, pebble.ErrNotFound) {
+		return false, err
+	} else if err != nil {
+		return false, nil
+	}
+	defer closer.Close()
+	return val != nil, nil
+}
+
+func (s *Store) KeyExistsStaticTweaks(blockhash []byte) (bool, error) {
+	return s.KeyExistsStatic(KeyTweaksStatic(blockhash))
+}
+
+func (s *Store) KeyExistsStaticOutputs(blockhash []byte) (bool, error) {
+	return s.KeyExistsStatic(KeyKUTXOsStatic(blockhash))
+}
+
+func (s *Store) KeyExistsStaticTaprootUnspentFilter(blockhash []byte) (bool, error) {
+	return s.KeyExistsStatic(KeyTaprootUnspentFilter(blockhash))
 }

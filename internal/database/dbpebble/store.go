@@ -98,7 +98,10 @@ func (s *Store) FlushBatch(sync bool) error {
 	if s.batchCounter == 0 {
 		return nil
 	}
-	logging.L.Info().Int("batch_counter", s.batchCounter).Bool("sync", sync).Msg("flushing batch")
+	logging.L.Info().
+		Int("batch_counter", s.batchCounter).
+		Bool("sync", sync).
+		Msg("flushing batch")
 
 	return s.commitBatch(sync)
 }

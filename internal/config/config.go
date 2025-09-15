@@ -109,11 +109,15 @@ func LoadConfigs(pathToConfig string) {
 		logging.SetLogLevel(zerolog.ErrorLevel)
 	}
 
-	// todo print settings
-	logging.L.Info().Msgf("tweaks_only: %t", TweaksOnly)
-	logging.L.Info().Msgf("tweaks_full_basic: %t", TweakIndexFullNoDust)
-	logging.L.Info().Msgf("tweaks_full_with_dust_filter: %t", TweakIndexFullIncludingDust)
-	logging.L.Info().Msgf("tweaks_cut_through_with_dust_filter: %t", TweaksCutThroughWithDust)
+	// Log configuration summary
+	logging.L.Info().
+		Bool("tweaks_only", TweaksOnly).
+		Bool("tweaks_full_basic", TweakIndexFullNoDust).
+		Bool("tweaks_full_with_dust_filter", TweakIndexFullIncludingDust).
+		Bool("tweaks_cut_through_with_dust_filter", TweaksCutThroughWithDust).
+		Str("chain", chainInput).
+		Str("log_level", LogLevel).
+		Msg("Configuration loaded")
 
 	if !TweakIndexFullNoDust && !TweakIndexFullIncludingDust && !TweaksCutThroughWithDust {
 		logging.L.Warn().Msg("no tweaks are being collected, all tweak settings were set to 0")

@@ -63,7 +63,7 @@ func (s *Store) DBComputeComputeIndex(
 
 	counter := 0
 
-	logging.L.Info().Msgf("Processing compute indexes from %d to %d", startHeight, endHeight)
+	logging.L.Debug().Msgf("Processing compute indexes from %d to %d", startHeight, endHeight)
 	for ok := it.First(); ok; ok = it.Next() {
 		select {
 		case <-ctx.Done():
@@ -94,7 +94,7 @@ func (s *Store) DBComputeComputeIndex(
 			keyData = keyData[1:] // remove the prefix
 			height := binary.BigEndian.Uint32(keyData[:SizeHeight])
 			txid := keyData[SizeHeight:]
-			logging.L.Warn().Msgf(
+			logging.L.Debug().Msgf(
 				"Found %d outputs at height %d and txid %x",
 				len(foundPerTx), height, utils.ReverseBytesCopy(txid[:]),
 			)
@@ -105,12 +105,6 @@ func (s *Store) DBComputeComputeIndex(
 			}
 			foundOutputs = append(foundOutputs, foundPerTx...)
 			// <-time.After(10 * time.Second)
-		}
-		if counter%10_000 == 0 {
-			keyData := it.Key()
-			keyData = keyData[1:] // remove the prefix
-			height := binary.BigEndian.Uint32(keyData[:SizeHeight])
-			logging.L.Info().Msgf("Processed %d tweaks at height %d", counter, height)
 		}
 	}
 
@@ -153,18 +147,18 @@ func (pt *ProgressTracker) UpdateProgress(processed int64) {
 	total := int64(pt.totalRanges)
 	pt.mu.Unlock()
 
-	// Log every 10% or every 5 ranges, whichever is more frequent
-	logInterval := total / 10
+	// Log every 12.5% progress
+	logInterval := total / 8
 	if logInterval < 1 {
 		logInterval = 1
 	}
-	if current%logInterval == 0 || current%5 == 0 {
+	if current%logInterval == 0 {
 		percentage := float64(current) / float64(total) * 100
 		logging.L.Info().
 			Int64("processedRanges", current).
 			Int64("totalRanges", total).
 			Float64("percentage", percentage).
-			Msg("Overall progress")
+			Msg("Progress")
 	}
 }
 
@@ -233,17 +227,15 @@ func (s *Store) DBComputeComputeIndexParallel(
 		Uint32("startHeight", startHeight).
 		Uint32("endHeight", endHeight).
 		Int("numWorkers", numWorkers).
-		Uint32("rangeSize", rangeSize).
-		Int("totalRanges", len(workQueue.ranges)).
-		Msg("Starting parallel compute index processing")
+		Msg("Starting parallel processing")
 
 	// Create channels for results and errors
 	results := make(chan []*FoundOutputShort, numWorkers)
-	errors := make(chan error, numWorkers)
+	errorChan := make(chan error, numWorkers)
 
 	// Start workers
 	var wg sync.WaitGroup
-	for i := 0; i < numWorkers; i++ {
+	for i := 0; i < min(numWorkers, len(workQueue.ranges)); i++ {
 		wg.Add(1)
 		go func(workerID int) {
 			defer wg.Done()
@@ -257,10 +249,6 @@ func (s *Store) DBComputeComputeIndexParallel(
 			for {
 				select {
 				case <-workerCtx.Done():
-					logging.L.Info().
-						Int("workerID", workerID).
-						Int("processedRanges", processedRanges).
-						Msg("Worker cancelled")
 					return
 				default:
 				}
@@ -274,14 +262,16 @@ func (s *Store) DBComputeComputeIndexParallel(
 				processedRanges++
 
 				// Call the existing function with the range bounds
-				rangeResults, err := s.DBComputeComputeIndex(workerCtx, workRange.startHeight, workRange.endHeight)
+				rangeResults, err := s.DBComputeComputeIndex(
+					workerCtx, workRange.startHeight, workRange.endHeight,
+				)
 				if err != nil {
 					logging.L.Err(err).
 						Int("workerID", workerID).
 						Uint32("startHeight", workRange.startHeight).
 						Uint32("endHeight", workRange.endHeight).
 						Msg("Error processing range")
-					errors <- err
+					errorChan <- err
 					return
 				}
 
@@ -291,41 +281,38 @@ func (s *Store) DBComputeComputeIndexParallel(
 				progressTracker.UpdateProgress(1)
 			}
 
-			logging.L.Info().
-				Int("workerID", workerID).
-				Int("processedRanges", processedRanges).
-				Int("foundOutputs", len(workerResults)).
-				Msg("Worker completed")
-
 			results <- workerResults
 		}(i)
 	}
 
 	// Wait for all workers to complete
 	wg.Wait()
-	close(results)
-	close(errors)
 
-	// Check for errors
+	// Close channels after all workers are done
+	close(results)
+
+	// Collect all results
+	var allFoundOutputs []*FoundOutputShort
+	resultsCollected := 0
+
+	for workerResults := range results {
+		allFoundOutputs = append(allFoundOutputs, workerResults...)
+		resultsCollected++
+	}
+
+	// Check for errors - exit on first error
 	select {
-	case err := <-errors:
+	case err := <-errorChan:
+		logging.L.Err(err).Msg("Error during processing")
 		return nil, err
 	default:
 	}
 
-	// Collect all results
-	var allFoundOutputs []*FoundOutputShort
-	for workerResults := range results {
-		allFoundOutputs = append(allFoundOutputs, workerResults...)
-	}
-
-	// Log final progress
-	processed, total := progressTracker.GetProgress()
 	logging.L.Info().
-		Int64("processedRanges", processed).
-		Int64("totalRanges", total).
 		Int("totalFoundOutputs", len(allFoundOutputs)).
-		Msg("Parallel compute index processing completed")
+		Msg("Processing completed")
+
+	close(errorChan)
 
 	return allFoundOutputs, nil
 }

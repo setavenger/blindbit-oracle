@@ -2,6 +2,7 @@ package dbpebble
 
 import (
 	"sync"
+	"sync/atomic"
 
 	"github.com/cockroachdb/pebble"
 	"github.com/setavenger/blindbit-lib/logging"
@@ -14,6 +15,10 @@ type Store struct {
 	batchCounter int
 	batchSync    *sync.Mutex
 	batchSize    int
+	// Guard fields for safe closing
+	pendingCommits int64          // atomic counter for pending background commits
+	closed         int32          // atomic flag to indicate if store is closed
+	closeWaitGroup sync.WaitGroup // wait group for pending commits
 }
 
 func NewStore(db *pebble.DB) *Store {
@@ -98,7 +103,15 @@ func (s *Store) FlushBatch(sync bool) error {
 	return s.commitBatch(sync)
 }
 
+// commitBatch commits the batch and rotates the old batch
+// if sync is true, the batch is committed synchronously
+// false is for background commits
 func (s *Store) commitBatch(sync bool) error {
+	// Check if store is already closed
+	if atomic.LoadInt32(&s.closed) == 1 {
+		return nil // Store is closed, don't commit
+	}
+
 	s.batchSync.Lock()
 
 	// rotate out the old bath and commit the old one subsequently
@@ -119,7 +132,16 @@ func (s *Store) commitBatch(sync bool) error {
 	if sync {
 		return closeOldBatch()
 	} else {
+		// Track pending background commit
+		atomic.AddInt64(&s.pendingCommits, 1)
+		s.closeWaitGroup.Add(1)
+
 		go func() {
+			defer func() {
+				atomic.AddInt64(&s.pendingCommits, -1)
+				s.closeWaitGroup.Done()
+			}()
+
 			err := closeOldBatch()
 			if err != nil {
 				logging.L.Err(err).Msg("failed to write Batch")
@@ -215,4 +237,35 @@ func attachBlockToBatch(batch *pebble.Batch, block *database.DBBlock) error {
 
 func (s *Store) ApplyBlock(block *database.DBBlock) error {
 	return s.collectAndWrite(block)
+}
+
+// WaitForPendingCommits waits for all pending background commits to complete
+func (s *Store) WaitForPendingCommits() {
+	logging.L.Info().Int64("pending_commits", atomic.LoadInt64(&s.pendingCommits)).Msg("waiting for pending commits")
+	s.closeWaitGroup.Wait()
+	logging.L.Info().Msg("all pending commits completed")
+}
+
+// Close safely closes the store by waiting for all pending commits before closing the database
+func (s *Store) Close() error {
+	// Mark store as closed to prevent new commits
+	atomic.StoreInt32(&s.closed, 1)
+
+	// Wait for all pending background commits to complete
+	s.WaitForPendingCommits()
+
+	// Flush any remaining batch synchronously
+	if err := s.FlushBatch(true); err != nil {
+		logging.L.Err(err).Msg("failed to flush final batch")
+		return err
+	}
+
+	// Close the underlying database
+	if err := s.DB.Close(); err != nil {
+		logging.L.Err(err).Msg("failed to close database")
+		return err
+	}
+
+	logging.L.Info().Msg("store closed successfully")
+	return nil
 }

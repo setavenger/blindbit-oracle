@@ -83,6 +83,7 @@ func main() {
 		return
 	}
 	store := dbpebble.NewStore(db)
+	defer store.Close()
 
 	//moved into go routine such that the interrupt signal will apply properly
 	go func() {
@@ -93,14 +94,6 @@ func main() {
 		if config.GRPCHost != "" {
 			go v2.RunGRPCServer(store)
 		}
-	}()
-
-	defer func() {
-		err := db.Close()
-		if err != nil {
-			logging.L.Err(err).Msg("db close failed")
-		}
-		logging.L.Debug().Msg("db closed successfully")
 	}()
 
 	ctx, cancel := context.WithCancel(context.Background())

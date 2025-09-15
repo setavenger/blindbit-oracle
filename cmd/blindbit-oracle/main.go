@@ -9,6 +9,7 @@ import (
 	"path"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/setavenger/blindbit-lib/logging"
 	"github.com/setavenger/blindbit-oracle/internal/config"
@@ -27,6 +28,13 @@ var (
 	configFile    string
 	reindexStatic bool
 	skipPrecheck  bool
+
+	// Static indexes flags
+	buildComputeIndex bool
+
+	// Wallet compute flags
+	startHeight uint32
+	endHeight   uint32
 )
 
 func init() {
@@ -55,9 +63,59 @@ func init() {
 		false,
 		"Skip database integrity checks and other pre-checks (default: false)",
 	)
+
+	// sync flags
+	syncCmd.Flags().Uint32Var(
+		&startHeight,
+		"start-height",
+		0,
+		"Start height",
+	)
+	syncCmd.Flags().Uint32Var(
+		&endHeight,
+		"end-height",
+		0,
+		"End height",
+	)
+
+	// static indexes flags
+	staticIndexesCmd.Flags().BoolVar(
+		&buildComputeIndex,
+		"compute-index",
+		false,
+		"Compute index for all blocks (default: false)",
+	)
+	staticIndexesCmd.Flags().Uint32Var(
+		&startHeight,
+		"start-height",
+		0,
+		"Start height",
+	)
+	staticIndexesCmd.Flags().Uint32Var(
+		&endHeight,
+		"end-height",
+		0,
+		"End height",
+	)
+
+	// Wallet compute flags
+	walletComputeCmd.Flags().Uint32Var(
+		&startHeight,
+		"start-height",
+		0,
+		"Start height",
+	)
+	walletComputeCmd.Flags().Uint32Var(
+		&endHeight,
+		"end-height",
+		0,
+		"End height",
+	)
+
 }
 
 // performDBIntegrityCheck performs database integrity check unless skipped by flag
+// todo: debug it just tries syncing. Maybe when different ranges were synced in between. might be an issue mainly in dev settings. Could define a breka if gap greated x don't do the patch fixes. Alternatively do a concurrent sync so it goes at normal speed
 func performDBIntegrityCheck(builder *indexer.Builder) error {
 	if !skipPrecheck {
 		logging.L.Info().Msg("Performing database integrity check...")
@@ -117,6 +175,7 @@ var staticIndexesCmd = &cobra.Command{
 - Not start continuous scanning or servers
 
 Flags:
+--compute-index flag to compute index for all blocks,
 --reindex-static flag to force rebuild of existing indexes`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		interrupt := make(chan os.Signal, 1)
@@ -138,16 +197,30 @@ Flags:
 				errChan <- fmt.Errorf("failed opening db: %w", err)
 				return
 			}
-			defer db.Close()
 
 			store := dbpebble.NewStore(db)
-			defer store.FlushBatch(true)
+			defer store.Close()
 
-			// todo: should be in an indexer.Builder
-			err = store.BuildStaticIndexing(reindexStatic)
+			_, syncTipHeight, err := store.GetChainTip()
 			if err != nil {
-				errChan <- fmt.Errorf("static indexing failed: %w", err)
+				errChan <- fmt.Errorf("failed getting chain tip: %w", err)
 				return
+			}
+			endHeight = min(endHeight, syncTipHeight)
+
+			if buildComputeIndex {
+				err = store.BuildComputeIndexByRange(startHeight, endHeight)
+				if err != nil {
+					errChan <- fmt.Errorf("compute indexing failed: %w", err)
+					return
+				}
+			} else {
+				// todo: should be in an indexer.Builder
+				err = store.BuildStaticIndexing(reindexStatic)
+				if err != nil {
+					errChan <- fmt.Errorf("static indexing failed: %w", err)
+					return
+				}
 			}
 		}()
 
@@ -184,9 +257,9 @@ Flags:
 		if err != nil {
 			return fmt.Errorf("failed opening db: %w", err)
 		}
-		defer db.Close()
 
 		store := dbpebble.NewStore(db)
+		defer store.Close()
 
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -194,14 +267,21 @@ Flags:
 		builder := indexer.NewBuilder(ctx, store)
 
 		// Perform database integrity check unless skipped
-		err = performDBIntegrityCheck(builder)
-		if err != nil {
-			return err
-		}
+		// err = performDBIntegrityCheck(builder)
+		// if err != nil {
+		// 	return err
+		// }
 
-		err = builder.InitialSyncToTip(ctx)
-		if err != nil {
-			return fmt.Errorf("initial sync failed: %w", err)
+		if startHeight > 0 && endHeight > 0 {
+			err = builder.SyncBlocks(ctx, int64(startHeight), int64(endHeight))
+			if err != nil {
+				return fmt.Errorf("initial sync failed: %w", err)
+			}
+		} else {
+			err = builder.InitialSyncToTip(ctx)
+			if err != nil {
+				return fmt.Errorf("initial sync failed: %w", err)
+			}
 		}
 
 		logging.L.Info().Msg("Initial blockchain sync completed successfully")
@@ -220,7 +300,9 @@ var runCmd = &cobra.Command{
 
 Flags:
 --reindex-static flag to force rebuild of static indexes (optional, default: false)
---skip-precheck flag to skip database integrity checks (optional, default: false)`,
+--skip-precheck flag to skip database integrity checks (optional, default: false)
+--start-height flag to start height (optional, default: 0)
+--end-height flag to end height (optional, default: 0)`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		logging.L.Info().Msg("Starting BlindBit Oracle service...")
 
@@ -228,9 +310,9 @@ Flags:
 		if err != nil {
 			return fmt.Errorf("failed opening db: %w", err)
 		}
-		defer db.Close()
 
 		store := dbpebble.NewStore(db)
+		defer store.Close()
 
 		// Start servers
 		go server.RunServer(&server.ApiHandler{})
@@ -303,11 +385,55 @@ Flags:
 	},
 }
 
+var walletComputeCmd = &cobra.Command{
+	Use:   "wallet-compute",
+	Short: "Compute wallet for all blocks",
+	Long: `Compute wallet for all blocks in the database. This command will:
+- Compute wallet for all blocks in the database
+- Not start continuous scanning or servers`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		logging.L.Info().Msg("Starting wallet compute...")
+
+		db, err := dbpebble.OpenDB()
+		if err != nil {
+			return fmt.Errorf("failed opening db: %w", err)
+		}
+
+		store := dbpebble.NewStore(db)
+		defer store.Close()
+
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+		defer cancel()
+
+		_, syncTipHeight, err := store.GetChainTip()
+		if err != nil {
+			return fmt.Errorf("failed getting chain tip: %w", err)
+		}
+
+		endHeight = min(endHeight, syncTipHeight)
+
+		// foundOutputs, err := store.DBComputeComputeIndex(ctx, startHeight, endHeight)
+		// if err != nil {
+		// 	return fmt.Errorf("failed computing wallet: %w", err)
+		// }
+		foundOutputs, err := store.DBComputeComputeIndexParallel(
+			ctx, startHeight, endHeight, config.MaxParallelTweakComputations, 144,
+		)
+		if err != nil {
+			return fmt.Errorf("failed computing wallet: %w", err)
+		}
+
+		logging.L.Info().Msgf("Found %d outputs", len(foundOutputs))
+		return nil
+	},
+}
+
 func main() {
 	// Add subcommands
 	rootCmd.AddCommand(staticIndexesCmd)
 	rootCmd.AddCommand(syncCmd)
 	rootCmd.AddCommand(runCmd)
+	rootCmd.AddCommand(walletComputeCmd)
 
 	// Execute the root command
 	if err := rootCmd.Execute(); err != nil {

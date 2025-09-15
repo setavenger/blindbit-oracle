@@ -154,6 +154,26 @@ func KeyTaprootSpentFilter(blockhash []byte) []byte {
 	return k
 }
 
+// ---------------- Compute Index ----------------
+
+func KeyComputeIndex(height uint32, txid []byte) []byte {
+	k := make([]byte, 1+SizeHeight+SizeTxid)
+	k[0] = KComputeIndex
+	be32(height, k[1:1+SizeHeight])
+	copy(k[1+SizeHeight:], txid)
+	return k
+}
+
+func BoundsComputeIndex(startHeight, endHeight uint32) (lb, ub []byte) {
+	lb = make([]byte, 1+SizeHeight+SizeTxid)
+	lb[0] = KComputeIndex
+	be32(startHeight, lb[1:1+SizeHeight])
+	ub = make([]byte, 1+SizeHeight+SizeTxid)
+	ub[0] = KComputeIndex
+	be32(endHeight, ub[1:1+SizeHeight])
+	return
+}
+
 // ---------------- Values ----------------
 
 func ValTxTweak(tweak []byte) ([]byte, error) {

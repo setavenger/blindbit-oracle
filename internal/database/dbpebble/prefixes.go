@@ -35,4 +35,7 @@ const (
 
 	// Inlcudes all taproot spent outputs for block
 	KTaprootSpentFilter = 0x0C
+
+	// Compute Index
+	KComputeIndex = 0x0D
 )

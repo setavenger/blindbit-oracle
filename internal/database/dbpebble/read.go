@@ -244,6 +244,20 @@ func (s *Store) TweaksForBlock(
 
 }
 
+// BlockhashInDB maybe we can get the same result by simply checking for a height per blockhash reduces reduncancy of functions
+func (s *Store) BlockhashInDB(blockhash []byte) (bool, error) {
+	key := KeyCIBlock(blockhash)
+	_, closer, err := s.DB.Get(key)
+	if err != nil && !errors.Is(err, pebble.ErrNotFound) {
+		return false, err
+	} else if err != nil && errors.Is(err, pebble.ErrNotFound) {
+		return false, nil
+	}
+	defer closer.Close()
+
+	return true, nil
+}
+
 // --- new internal helpers ---------------------------------------------------
 
 // heightIfOnBestChain returns (height,true) if blockHash is on best chain; otherwise (0,false).

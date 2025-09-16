@@ -79,7 +79,7 @@ func (s *Store) DBComputeComputeIndex(
 		countOutputs := len(data[SizeTweak:]) / 8
 		shortOutputs := make([][8]byte, countOutputs)
 		outputs := data[SizeTweak:]
-		for i := 0; i < countOutputs; i++ {
+		for i := range countOutputs {
 			copy(shortOutputs[i][:], outputs[i*8:(i+1)*8])
 		}
 		var foundPerTx []*FoundOutputShort
@@ -148,10 +148,7 @@ func (pt *ProgressTracker) UpdateProgress(processed int64) {
 	pt.mu.Unlock()
 
 	// Log every 12.5% progress
-	logInterval := total / 8
-	if logInterval < 1 {
-		logInterval = 1
-	}
+	logInterval := max(total/8, 1)
 	if current%logInterval == 0 {
 		percentage := float64(current) / float64(total) * 100
 		logging.L.Info().
@@ -174,10 +171,7 @@ func NewWorkStealingQueue(startHeight, endHeight uint32, rangeSize uint32) *Work
 	var ranges []WorkRange
 
 	for current := startHeight; current < endHeight; current += rangeSize {
-		rangeEnd := current + rangeSize
-		if rangeEnd > endHeight {
-			rangeEnd = endHeight
-		}
+		rangeEnd := min(current+rangeSize, endHeight)
 
 		lb, ub := BoundsComputeIndex(current, rangeEnd)
 		ranges = append(ranges, WorkRange{
@@ -339,7 +333,7 @@ func (f *FoundOutputShort) GetLabel() *bip352.Label {
 	return f.Label
 }
 
-// ReceiverScanTransaction
+// ReceiverScanTransactionShortOutputs scans but with 8 byte outputs instead fo full outputs
 // scanKey: scanning secretKey of the receiver
 //
 // receiverSpendPubKey: spend pubKey of the receiver
@@ -378,11 +372,11 @@ func ReceiverScanTransactionShortOutputs(
 		}
 
 		var found bool
-		for i, txOutput := range txOutputs {
+		for i := range txOutputs {
 			// only check the first 8 bytes of the txOutput and outputPubKey
-			if bytes.Equal(outputPubKey[:8], txOutput[:]) {
+			if bytes.Equal(outputPubKey[:8], txOutputs[i][:]) {
 				foundOutputs = append(foundOutputs, &FoundOutputShort{
-					Output:      txOutput,
+					Output:      txOutputs[i],
 					SecKeyTweak: tweak,
 					Label:       nil,
 				})
@@ -405,7 +399,7 @@ func ReceiverScanTransactionShortOutputs(
 			// prependedTxOutput[0] = 0x02
 			// copy(prependedTxOutput[1:], txOutput[:])
 
-			prependedTxOutput := utils.ConvertToFixedLength33(append([]byte{0x02}, txOutput[:]...))
+			prependedTxOutput := utils.ConvertToFixedLength33(append([]byte{0x02}, txOutputs[i][:]...))
 			prependedOutputPubKey := utils.ConvertToFixedLength33(append([]byte{0x02}, outputPubKey[:]...))
 
 			// start with normal output
@@ -424,7 +418,7 @@ func ReceiverScanTransactionShortOutputs(
 					return nil, err
 				}
 				foundOutputs = append(foundOutputs, &FoundOutputShort{
-					Output:      txOutput,
+					Output:      txOutputs[i],
 					SecKeyTweak: secKeyTweak,
 					Label:       foundLabel,
 				})

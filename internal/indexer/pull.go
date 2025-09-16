@@ -1,6 +1,7 @@
 package indexer
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
@@ -62,8 +63,9 @@ func mergeBlockAndSpentTxOuts(b *btcutil.Block, spentTxOuts [][]*wire.TxOut) (*B
 	}
 
 	block := Block{
-		Hash: b.Hash(),
-		txs:  make([]*Transaction, len(spentTxOuts)),
+		Hash:          b.Hash(),
+		PrevBlockHash: &b.MsgBlock().Header.PrevBlock,
+		txs:           make([]*Transaction, len(spentTxOuts)),
 	}
 
 	for i := range block.txs {
@@ -94,4 +96,42 @@ func mergeBlockAndSpentTxOuts(b *btcutil.Block, spentTxOuts [][]*wire.TxOut) (*B
 	}
 
 	return &block, nil
+}
+
+// singleProcessBlock pulls a block and processes it.
+// If the previous blockhash is not in the db it will recursively pull the previous block.
+// Intended to handle reorgs not full chain syncs.
+func (b *Builder) SingleBlockPullAndHandle(
+	ctx context.Context, height uint32,
+) error {
+	block, err := b.pullBlock(int64(height))
+	if err != nil {
+		return err
+	}
+
+	err = b.handleBlock(ctx, block)
+	if err != nil {
+		return err
+	}
+
+	blockhashInDB, err := b.store.BlockhashInDB(block.PrevBlockHash[:])
+	if err != nil {
+		logging.L.Err(err).
+			Str("prev_blockhash", block.Hash.String()).
+			Msg("error hen trying to look up previous block hash")
+		return err
+	}
+	if !blockhashInDB {
+		// do previous block as well
+		err = b.SingleBlockPullAndHandle(ctx, height-1)
+		if err != nil {
+			logging.L.Err(err).
+				Str("blockhash", block.Hash.String()).
+				Str("blockhash_prev", block.PrevBlockHash.String()).
+				Msg("failed ot pull previous block")
+			return err
+		}
+	}
+
+	return nil
 }

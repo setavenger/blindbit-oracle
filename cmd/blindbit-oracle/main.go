@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/setavenger/blindbit-lib/logging"
 	"github.com/setavenger/blindbit-oracle/internal/config"
 	"github.com/setavenger/blindbit-oracle/internal/database/dbpebble"
@@ -116,10 +117,10 @@ func init() {
 
 // performDBIntegrityCheck performs database integrity check unless skipped by flag
 // todo: debug it just tries syncing. Maybe when different ranges were synced in between. might be an issue mainly in dev settings. Could define a breka if gap greated x don't do the patch fixes. Alternatively do a concurrent sync so it goes at normal speed
-func performDBIntegrityCheck(builder *indexer.Builder) error {
+func performDBIntegrityCheck(ctx context.Context, builder *indexer.Builder) error {
 	if !skipPrecheck {
 		logging.L.Info().Msg("Performing database integrity check...")
-		err := builder.DBIntegrityCheck()
+		err := builder.DBIntegrityCheck(ctx)
 		if err != nil {
 			return fmt.Errorf("db integrity check failed: %w", err)
 		}
@@ -206,7 +207,16 @@ Flags:
 				errChan <- fmt.Errorf("failed getting chain tip: %w", err)
 				return
 			}
+
+			_, firstBlockHeight, err := store.FirstBlock()
+			if err != nil {
+				errChan <- fmt.Errorf("failed getting first block data: %w", err)
+			}
+
 			endHeight = min(endHeight, syncTipHeight)
+
+			// index starts where data is available
+			startHeight = max(startHeight, firstBlockHeight)
 
 			if buildComputeIndex {
 				err = store.BuildComputeIndexByRange(startHeight, endHeight)
@@ -267,10 +277,10 @@ Flags:
 		builder := indexer.NewBuilder(ctx, store)
 
 		// Perform database integrity check unless skipped
-		// err = performDBIntegrityCheck(builder)
-		// if err != nil {
-		// 	return err
-		// }
+		err = performDBIntegrityCheck(ctx, builder)
+		if err != nil {
+			return err
+		}
 
 		if startHeight > 0 && endHeight > 0 {
 			err = builder.SyncBlocks(ctx, int64(startHeight), int64(endHeight))
@@ -282,6 +292,12 @@ Flags:
 			if err != nil {
 				return fmt.Errorf("initial sync failed: %w", err)
 			}
+		}
+
+		// Perform database integrity check unless skipped
+		err = performDBIntegrityCheck(ctx, builder)
+		if err != nil {
+			return err
 		}
 
 		logging.L.Info().Msg("Initial blockchain sync completed successfully")
@@ -335,7 +351,7 @@ Flags:
 			builder := indexer.NewBuilder(ctx, store)
 
 			// Perform database integrity check unless skipped
-			err = performDBIntegrityCheck(builder)
+			err = performDBIntegrityCheck(ctx, builder)
 			if err != nil {
 				errChan <- err
 				return

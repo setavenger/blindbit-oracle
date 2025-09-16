@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/setavenger/blindbit-lib/logging"
 	"github.com/setavenger/blindbit-lib/utils"
 	"github.com/setavenger/blindbit-oracle/internal/config"
@@ -27,10 +28,16 @@ type Builder struct {
 
 func NewBuilder(ctx context.Context, db database.DB) *Builder {
 	return &Builder{
-		ctx:          ctx,
-		newBlockChan: make(chan *Block, config.MaxParallelRequests*20),
-		writerChan:   make(chan *database.DBBlock, config.MaxParallelTweakComputations*20),
-		store:        db,
+		ctx: ctx,
+		newBlockChan: make(
+			chan *Block,
+			config.MaxParallelRequests*20,
+		),
+		writerChan: make(
+			chan *database.DBBlock,
+			config.MaxParallelTweakComputations*20,
+		),
+		store: db,
 	}
 }
 
@@ -66,10 +73,12 @@ func (b *Builder) ContinuousSync(ctx context.Context) error {
 				logging.L.Err(err).Msg("failed to pull chainInfo")
 				return err
 			}
-			// use chainInfo.BestBlockhash to determine a reorg
+
+			// todo: change to single block pull
+			// we also check previous blockhash basically going backwards and overwriting if exists
 			if uint32(chainInfo.Blocks) > syncTip {
 				// +1 because we already processed the tip
-				err = b.SyncBlocks(ctx, int64(syncTip)+1, chainInfo.Blocks)
+				err = b.SingleBlockPullAndHandle(ctx, uint32(chainInfo.Blocks))
 				if err != nil {
 					logging.L.Err(err).Msg("failed syncing blocks")
 					return err
@@ -140,7 +149,7 @@ func (b *Builder) SyncBlocks(
 			logging.L.Trace().Int64("height", i).Msgf("pulling block %d", i)
 			go func(height int64) {
 				defer func() { <-pullSemaphore }() // Release semaphore
-				err := b.pullBlock(height)
+				err := b.pullBlockToChan(height)
 				if err != nil {
 					errChan <- err
 					return
@@ -251,16 +260,27 @@ func (b *Builder) SyncBlocks(
 			logging.L.Err(err).Msg("there was an error pulling blocks")
 			return err
 		case <-doneChan:
+			// should probably flush as a defer
 			return b.store.FlushBatch(true)
 		}
 	}
 }
 
-func (b *Builder) pullBlock(height int64) error {
+func (b *Builder) pullBlockToChan(height int64) error {
+	block, err := b.pullBlock(height)
+	if err != nil {
+		logging.L.Err(err).Int64("height", height).Msg("failed to pull blockhash")
+		return err
+	}
+	b.newBlockChan <- block
+	return err
+}
+
+func (b *Builder) pullBlock(height int64) (*Block, error) {
 	blockhash, err := getBlockHashByHeight(height)
 	if err != nil {
-		logging.L.Err(err).Int64("height", height).Msg("failed to pul blockhash")
-		return err
+		logging.L.Err(err).Int64("height", height).Msg("failed to pull blockhash")
+		return nil, err
 	}
 	logging.L.Trace().
 		Int64("height", height).
@@ -269,22 +289,37 @@ func (b *Builder) pullBlock(height int64) error {
 	block, err := PullBlockData(blockhash)
 	if err != nil {
 		logging.L.Err(err).Int64("height", height).Msg("failed to pull block")
-		return err
+		return nil, err
 	}
 	block.Height = height
-	b.newBlockChan <- block
 	logging.L.Trace().
 		Str("blockhash", blockhash.String()).
 		Int64("height", height).
 		Msgf("pulled block %d", height)
-	return err
+	return block, err
+}
+
+// pullBlockByBlockHash pulls a Block based on the blockhash
+// Deprecated: misses height on block
+func (b *Builder) pullBlockByBlockHash(blockhash *chainhash.Hash) (*Block, error) {
+	panic("not implemented, still needs height")
+	// block, err := PullBlockData(blockhash)
+	// if err != nil {
+	// 	logging.L.Err(err).Str("blockhash", blockhash.String()).Msg("failed to pull block")
+	// 	return nil, err
+	// }
+	// block.Height = height
+	// logging.L.Trace().
+	// 	Str("blockhash", blockhash.String()).
+	// 	Int64("height", height).
+	// 	Msgf("pulled block %d", height)
+	// return block, err
 }
 
 // handleBlock makes all computations for a block
 // and sends a DBBlock into the builders writerChan
 func (b *Builder) handleBlock(ctx context.Context, block *Block) error {
 	// todo: add filters to handleBlock
-
 	logging.L.Trace().
 		Str("blockhash", block.Hash.String()).
 		Int64("height", block.Height).

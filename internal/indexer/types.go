@@ -6,9 +6,10 @@ import (
 )
 
 type Block struct {
-	Height int64
-	Hash   *chainhash.Hash
-	txs    []*Transaction
+	Height        int64
+	Hash          *chainhash.Hash
+	PrevBlockHash *chainhash.Hash
+	txs           []*Transaction
 }
 
 type Transaction struct {

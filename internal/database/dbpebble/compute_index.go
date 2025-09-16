@@ -5,7 +5,6 @@ import (
 
 	"github.com/cockroachdb/pebble"
 	"github.com/setavenger/blindbit-lib/logging"
-	"github.com/setavenger/blindbit-lib/utils"
 	"github.com/setavenger/blindbit-oracle/internal/config"
 )
 
@@ -40,31 +39,7 @@ func (c *ComputeIndex) DeSerialiseKey(key []byte) error {
 }
 
 func (s *Store) BuildComputeIndexByRange(startHeight, endHeight uint32) error {
-	blockhashTip, heightTip, err := s.GetChainTip()
-	if err != nil {
-		return err
-	}
-	blockhashStart, heightStart, err := s.FirstBlock()
-	if err != nil {
-		return err
-	}
-
-	// heightStart = 100_000
-	// heightTip = 260_000
-
-	logging.L.Info().Msgf("Building static indexes from %d -> %d", heightStart, heightTip)
-	logging.L.Debug().
-		Hex("blockhash_start", utils.ReverseBytesCopy(blockhashStart)).
-		Hex("blockhash_tip", utils.ReverseBytesCopy(blockhashTip)).
-		Uint32("height_start", heightStart).
-		Uint32("height_tip", heightTip).
-		Msg("indexing details")
-
-	// if config.Chain == config.Mainnet {
-	// 	if heightStart < 700_000 {
-	// 		heightStart = 700_000
-	// 	}
-	// }
+	logging.L.Info().Msgf("Building static indexes from %d -> %d", startHeight, endHeight)
 
 	heightChan := make(chan uint32, 100) // Buffered channel for heights
 	errChan := make(chan error)

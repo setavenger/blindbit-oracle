@@ -7,16 +7,16 @@ host = "127.0.0.1:8000"
 chain = "signet"
 
 # default: http://127.0.0.1:8332
-rpc_endpoint = "http://127.0.0.1:18443"
+rpc_endpoint = "http://127.0.0.1:38332"
 
 # required, unless rpc_user and rpc_pass are set
 cookie_path = ""
 
 # required, unless cookie_path is set
-rpc_pass = "your-rpc-password"
+rpc_user = "your-rpc-user"
 
 # required, unless cookie_path is set
-rpc_user = "your-rpc-user"
+rpc_pass = "your-rpc-password"
 
 # required (has to be >= 1)
 sync_start_height = 1

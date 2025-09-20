@@ -26,10 +26,10 @@ core_rest_endpoint = "http://127.0.01:38332"
 cookie_path = ""
 
 # required, unless cookie_path is set
-rpc_pass = "your-rpc-password"
+rpc_user = "your-rpc-user"
 
 # required, unless cookie_path is set
-rpc_user = "your-rpc-user"
+rpc_pass = "your-rpc-password"
 
 # required (has to be >= 1)
 sync_start_height = 1

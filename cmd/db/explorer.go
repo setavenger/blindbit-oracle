@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 
 	"github.com/cockroachdb/pebble"
@@ -83,6 +84,200 @@ func (de *DatabaseExplorer) CountKeysByType(keyType string, startHeight, endHeig
 // CountComputeIndexKeys counts compute index keys in the specified height range (legacy method)
 func (de *DatabaseExplorer) CountComputeIndexKeys(startHeight, endHeight uint32) (int, error) {
 	return de.CountKeysByType("compute-index", startHeight, endHeight)
+}
+
+// LookupKey looks up a specific key in the database and returns its value
+func (de *DatabaseExplorer) LookupKey(keyType, keyData string, hexFormat bool) ([]byte, error) {
+	// Convert key data to bytes
+	var keyBytes []byte
+	var err error
+
+	if hexFormat {
+		keyBytes, err = hex.DecodeString(keyData)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode hex key: %w", err)
+		}
+	} else {
+		keyBytes = []byte(keyData)
+	}
+
+	// Get the prefix byte for the key type
+	prefix, err := de.getKeyTypePrefix(keyType)
+	if err != nil {
+		return nil, err
+	}
+
+	var fullKey []byte
+
+	// Check if the key already has the prefix byte
+	if len(keyBytes) > 0 && keyBytes[0] == prefix {
+		// Key already includes the prefix, use as-is
+		fullKey = keyBytes
+	} else {
+		// Construct the full key with prefix
+		fullKey = make([]byte, 1+len(keyBytes))
+		fullKey[0] = prefix
+		copy(fullKey[1:], keyBytes)
+	}
+
+	// Perform the lookup
+	value, closer, err := de.db.Get(fullKey)
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return nil, nil // Key not found
+		}
+		return nil, fmt.Errorf("database lookup failed: %w", err)
+	}
+	defer closer.Close()
+
+	// Return a copy of the value
+	result := make([]byte, len(value))
+	copy(result, value)
+	return result, nil
+}
+
+// IterateKeyRange iterates through a range of keys of a specific type
+func (de *DatabaseExplorer) IterateKeyRange(keyType, startKey string, limit int, showValues bool) error {
+	// Get the prefix byte for the key type
+	prefix, err := de.getKeyTypePrefix(keyType)
+	if err != nil {
+		return err
+	}
+
+	// Create iterator options
+	var opts *pebble.IterOptions
+
+	if startKey != "" {
+		// Convert start key to bytes
+		startKeyBytes, err := hex.DecodeString(startKey)
+		if err != nil {
+			return fmt.Errorf("failed to decode hex start key: %w", err)
+		}
+
+		var fullStartKey []byte
+
+		// Check if the key already has the prefix byte
+		if len(startKeyBytes) > 0 && startKeyBytes[0] == prefix {
+			// Key already includes the prefix, use as-is
+			fullStartKey = startKeyBytes
+		} else {
+			// Create full start key with prefix
+			fullStartKey = make([]byte, 1+len(startKeyBytes))
+			fullStartKey[0] = prefix
+			copy(fullStartKey[1:], startKeyBytes)
+		}
+
+		opts = &pebble.IterOptions{
+			LowerBound: fullStartKey,
+		}
+	} else {
+		// Start from the beginning of this key type
+		opts = &pebble.IterOptions{
+			LowerBound: []byte{prefix},
+			UpperBound: []byte{prefix + 1},
+		}
+	}
+
+	iter, err := de.db.NewIter(opts)
+	if err != nil {
+		return fmt.Errorf("failed to create iterator: %w", err)
+	}
+	defer iter.Close()
+
+	count := 0
+	for iter.First(); iter.Valid() && count < limit; iter.Next() {
+		key := iter.Key()
+
+		// Verify this is the correct key type (in case we're not using bounds)
+		if len(key) > 0 && key[0] == prefix {
+			count++
+
+			if showValues {
+				value := iter.Value()
+				fmt.Printf("%d: Key: %x, Value: %x\n", count, key, value)
+			} else {
+				fmt.Printf("%d: Key: %x\n", count, key)
+			}
+		}
+	}
+
+	if err := iter.Error(); err != nil {
+		return fmt.Errorf("iterator error: %w", err)
+	}
+
+	fmt.Printf("Iterated through %d %s keys\n", count, keyType)
+	return nil
+}
+
+// ScanKeyPrefix scans keys that start with a specific prefix
+func (de *DatabaseExplorer) ScanKeyPrefix(keyType, prefix string, limit int, showValues bool) error {
+	// Get the prefix byte for the key type
+	keyTypePrefix, err := de.getKeyTypePrefix(keyType)
+	if err != nil {
+		return err
+	}
+
+	// Convert prefix to bytes
+	prefixBytes, err := hex.DecodeString(prefix)
+	if err != nil {
+		return fmt.Errorf("failed to decode hex prefix: %w", err)
+	}
+
+	// Create full prefix with key type prefix
+	fullPrefix := make([]byte, 1+len(prefixBytes))
+	fullPrefix[0] = keyTypePrefix
+	copy(fullPrefix[1:], prefixBytes)
+
+	// Create iterator options for prefix scanning
+	opts := &pebble.IterOptions{
+		LowerBound: fullPrefix,
+	}
+
+	iter, err := de.db.NewIter(opts)
+	if err != nil {
+		return fmt.Errorf("failed to create iterator: %w", err)
+	}
+	defer iter.Close()
+
+	count := 0
+	for iter.First(); iter.Valid() && count < limit; iter.Next() {
+		key := iter.Key()
+
+		// Check if key starts with our full prefix
+		if len(key) >= len(fullPrefix) {
+			matches := true
+			for i, b := range fullPrefix {
+				if key[i] != b {
+					matches = false
+					break
+				}
+			}
+
+			if matches {
+				count++
+
+				if showValues {
+					value := iter.Value()
+					fmt.Printf("%d: Key: %x, Value: %x\n", count, key, value)
+				} else {
+					fmt.Printf("%d: Key: %x\n", count, key)
+				}
+			} else {
+				// No more keys with this prefix, break
+				break
+			}
+		} else {
+			// Key too short, break
+			break
+		}
+	}
+
+	if err := iter.Error(); err != nil {
+		return fmt.Errorf("iterator error: %w", err)
+	}
+
+	fmt.Printf("Found %d %s keys with prefix %s\n", count, keyType, prefix)
+	return nil
 }
 
 // GetDatabaseStats returns basic statistics about the database
@@ -342,4 +537,38 @@ func (de *DatabaseExplorer) getKeyTypeBounds(keyType string) ([]byte, []byte) {
 	upperBound := []byte{prefix + 1}
 
 	return lowerBound, upperBound
+}
+
+// getKeyTypePrefix returns the prefix byte for a given key type
+func (de *DatabaseExplorer) getKeyTypePrefix(keyType string) (byte, error) {
+	switch keyType {
+	case "block-tx":
+		return dbpebble.KBlockTx, nil
+	case "tx":
+		return dbpebble.KTx, nil
+	case "out":
+		return dbpebble.KOut, nil
+	case "spend":
+		return dbpebble.KSpend, nil
+	case "ci-height":
+		return dbpebble.KCIHeight, nil
+	case "ci-block":
+		return dbpebble.KCIBlock, nil
+	case "tx-occur":
+		return dbpebble.KTxOccur, nil
+	case "tweaks-static":
+		return dbpebble.KTweaksStatic, nil
+	case "utxos-static":
+		return dbpebble.KUTXOsStatic, nil
+	case "taproot-pubkey-filter":
+		return dbpebble.KTaprootPubkeyFilter, nil
+	case "taproot-unspent-filter":
+		return dbpebble.KTaprootUnspentFilter, nil
+	case "taproot-spent-filter":
+		return dbpebble.KTaprootSpentFilter, nil
+	case "compute-index":
+		return dbpebble.KComputeIndex, nil
+	default:
+		return 0, fmt.Errorf("unsupported key type: %s", keyType)
+	}
 }

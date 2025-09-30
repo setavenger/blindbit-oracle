@@ -20,6 +20,7 @@ type DB interface {
 	FetchOutputsStaticProto(blockhash []byte) ([]pb.UTXO, error)
 	FetchTaprootUnspentFilter(blockhash []byte) ([]byte, error)
 	ChainIterator(asc bool) (<-chan []byte, error)
+	FetchComputeIndex(height uint32) ([]*pb.ComputeIndexTxItem, error)
 	BlockhashInDB(blockhash []byte) (bool, error)
 	BatchSize() int
 }

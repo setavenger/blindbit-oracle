@@ -174,6 +174,19 @@ func BoundsComputeIndex(startHeight, endHeight uint32) (lb, ub []byte) {
 	return
 }
 
+func BoundsComputeIndexOneHeight(height uint32) (lb, ub []byte) {
+	lb = make([]byte, 1+SizeHeight+SizeTxid)
+	lb[0] = KComputeIndex
+	be32(height, lb[1:1+SizeHeight])
+	ub = make([]byte, 1+SizeHeight+SizeTxid)
+	ub[0] = KComputeIndex
+	be32(height, ub[1:1+SizeHeight])
+	for i := 1 + SizeHeight; i < 1+SizeHeight+SizeTxid; i++ {
+		ub[i] = 0xFF
+	}
+	return lb, ub
+}
+
 // ---------------- Values ----------------
 
 func ValTxTweak(tweak []byte) ([]byte, error) {

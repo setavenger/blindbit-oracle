@@ -5,6 +5,8 @@ import (
 
 	"github.com/cockroachdb/pebble"
 	"github.com/setavenger/blindbit-lib/logging"
+	"github.com/setavenger/blindbit-lib/proto/pb"
+	"github.com/setavenger/blindbit-lib/utils"
 	"github.com/setavenger/blindbit-oracle/internal/config"
 )
 
@@ -36,6 +38,48 @@ func (c *ComputeIndex) SerialiseData() []byte {
 
 func (c *ComputeIndex) DeSerialiseKey(key []byte) error {
 	return nil
+}
+
+func DeserialiseComputeIndexToProto(key, value []byte) *pb.ComputeIndexTxItem {
+	idx := new(pb.ComputeIndexTxItem)
+	idx.Txid = utils.ReverseBytes(key[1+SizeHeight:]) // assumption is that bytes in here can be modified
+	idx.Tweak = value[:SizeTweak]
+	idx.OutputsShort = value[SizeTweak:]
+	// newArr := make([]byte, len(idx.OutputsShort)/2)
+	// for i := range len(idx.OutputsShort) / 8 {
+	// 	copy(newArr[i*8:(i+1)*8], idx.OutputsShort[i*8:(i+1)*8])
+	// }
+	// idx.OutputsShort = newArr
+	return idx
+}
+
+func (s *Store) FetchComputeIndex(height uint32) ([]*pb.ComputeIndexTxItem, error) {
+	lb, ub := BoundsComputeIndexOneHeight(height)
+	it, err := s.DB.NewIter(&pebble.IterOptions{LowerBound: lb, UpperBound: ub})
+	if err != nil {
+		return nil, err
+	}
+	defer it.Close()
+
+	counter := 0
+	var computeIndexes []*pb.ComputeIndexTxItem
+	for ok := it.First(); ok; ok = it.Next() {
+		counter++
+
+		// copy bytes to avoid missed references
+		dataIt := it.Value()
+		keyIt := it.Key()
+		// need to copy out the bytes
+		data := make([]byte, len(dataIt))
+		key := make([]byte, len(keyIt))
+
+		copy(data, dataIt)
+		copy(key, keyIt)
+
+		idx := DeserialiseComputeIndexToProto(key, data)
+		computeIndexes = append(computeIndexes, idx)
+	}
+	return computeIndexes, nil
 }
 
 func (s *Store) BuildComputeIndexByRange(startHeight, endHeight uint32) error {

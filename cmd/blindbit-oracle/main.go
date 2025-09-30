@@ -432,14 +432,57 @@ var walletComputeCmd = &cobra.Command{
 		// if err != nil {
 		// 	return fmt.Errorf("failed computing wallet: %w", err)
 		// }
-		foundOutputs, err := store.DBComputeComputeIndexParallel(
-			ctx, startHeight, endHeight, config.MaxParallelTweakComputations, 144,
+		// this is to prewarm cache
+		logging.SetLogLevel(zerolog.WarnLevel)
+		_, _ = store.DBComputeComputeIndexParallel(
+			ctx, startHeight, endHeight, config.MaxParallelTweakComputations, 256,
 		)
+		logging.SetLogLevel(zerolog.InfoLevel)
+		foundOutputs, err := store.DBComputeComputeIndexParallel(
+			ctx, startHeight, endHeight, config.MaxParallelTweakComputations, 256,
+		)
+
 		if err != nil {
 			return fmt.Errorf("failed computing wallet: %w", err)
 		}
 
 		logging.L.Info().Msgf("Found %d outputs", len(foundOutputs))
+		return nil
+	},
+}
+
+// server only command no syncing only servers are set up
+var serverCmd = &cobra.Command{
+	Use:   "server-only",
+	Short: "Run the full BlindBit Oracle service",
+	Long: `Run the complete BlindBit Oracle service including:
+- HTTP API server
+- gRPC server (if configured)`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		logging.L.Info().Msg("Starting BlindBit Oracle service...")
+
+		db, err := dbpebble.OpenDB()
+		if err != nil {
+			return fmt.Errorf("failed opening db: %w", err)
+		}
+
+		store := dbpebble.NewStore(db)
+		defer store.Close()
+
+		// Start servers
+		go server.RunServer(&server.ApiHandler{})
+
+		if config.GRPCHost != "" {
+			go v2.RunGRPCServer(store)
+		}
+
+		// Wait for interrupt or error
+		interrupt := make(chan os.Signal, 1)
+		signal.Notify(interrupt, os.Interrupt)
+
+		<-interrupt
+		logging.L.Info().Msg("Service interrupted")
+
 		return nil
 	},
 }
@@ -450,6 +493,7 @@ func main() {
 	rootCmd.AddCommand(syncCmd)
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(walletComputeCmd)
+	rootCmd.AddCommand(serverCmd)
 
 	// Execute the root command
 	if err := rootCmd.Execute(); err != nil {

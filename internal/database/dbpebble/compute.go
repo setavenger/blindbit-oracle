@@ -63,7 +63,10 @@ func (s *Store) DBComputeComputeIndex(
 
 	counter := 0
 
-	logging.L.Debug().Msgf("Processing compute indexes from %d to %d", startHeight, endHeight)
+	logging.L.Debug().Msgf(
+		"Processing compute indexes from %d to %d",
+		startHeight, endHeight,
+	)
 	for ok := it.First(); ok; ok = it.Next() {
 		select {
 		case <-ctx.Done():

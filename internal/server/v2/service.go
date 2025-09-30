@@ -3,6 +3,7 @@ package v2
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -31,7 +32,11 @@ func NewOracleService(db database.DB) *OracleService {
 }
 
 // GetInfo returns oracle information
-func (s *OracleService) GetInfo(ctx context.Context, _ *emptypb.Empty) (*pb.InfoResponse, error) {
+func (s *OracleService) GetInfo(
+	ctx context.Context, _ *emptypb.Empty,
+) (
+	*pb.InfoResponse, error,
+) {
 	blockhash, height, err := s.db.GetChainTip()
 	if err != nil {
 		logging.L.Err(err).Msg("failed pulling chain tip")
@@ -515,6 +520,47 @@ func (s *OracleService) StreamBlockBatchSlimStatic(
 			},
 			SpentUtxosFilter: nil,
 		}
+
+		if err := stream.Send(batch); err != nil {
+			logging.L.Err(err).Msg("error sending block batch")
+			return status.Errorf(codes.Internal, "failed to send block batch for height %d", height)
+		}
+	}
+
+	return nil
+}
+
+func (s *OracleService) StreamIndexShortOuts(
+	req *pb.RangedBlockHeightRequestFiltered, stream pb.OracleService_StreamIndexShortOutsServer,
+) error {
+	for height := req.Start; height <= req.End; height++ {
+		blockhash, err := s.db.GetBlockHashByHeight(uint32(height))
+		if err != nil {
+			logging.L.Err(err).Uint64("height", height).Msg("failed to blockash by height")
+			return err
+		}
+
+		shortOuts, err := s.db.FetchComputeIndex(uint32(height))
+		if err != nil {
+			logging.L.Err(err).Uint64("height", height).Msg("failed to pull short outs")
+			return err
+		}
+
+		// for i := range shortOuts {
+		// 	for j := range shortOuts[i].OutputsShort {
+		// 		shortOuts[i].OutputsShort = shortOuts[i].OutputsShort[:4]
+		// 	}
+		// }
+
+		batch := &pb.IndexShortOuts{
+			BlockIdentifier: &pb.BlockIdentifier{
+				BlockHash:   utils.ReverseBytesCopy(blockhash),
+				BlockHeight: height,
+			},
+			Index: shortOuts,
+		}
+
+		fmt.Printf("return height: %d - %d\n", height, len(shortOuts))
 
 		if err := stream.Send(batch); err != nil {
 			logging.L.Err(err).Msg("error sending block batch")

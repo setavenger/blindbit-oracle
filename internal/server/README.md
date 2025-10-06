@@ -83,7 +83,7 @@ Returns spent output information in a compact format using the first 8 bytes of 
     ]
 }
 ```
-_Open question: Should we jump straight to outpoints and not do this with shortened outputs_
+_Open question: Should we jump straight to outpoints and not do this with shortened outputs?_
 
 ### Compute Index
 
@@ -100,17 +100,26 @@ Returns a compact transaction index with tweak mappings and output information.
         {
             "txid": "deadbeef987654",
             "tweak": "02deadbeef",
-            "outputs": "12345acbdef1234512345acbdef12345"
+            "outputs": [
+                "12345acbdef12345",
+                "67890fedcba98765",
+                "abcdef1234567890"
+            ]
         },
         {
             "txid": "beefdead1234",
             "tweak": "02deadbeef",
-            "outputs": "12345acbdef1234512345acbdef12345"
+            "outputs": [
+                "fedcba9876543210",
+                "13579bdf2468ace0"
+            ]
         },
         {
             "txid": "beef987654dead",
             "tweak": "02deadbeef",
-            "outputs": "12345acbdef1234512345acbdef12345"
+            "outputs": [
+                "2468ace13579bdf0"
+            ]
         }
     ]
 }

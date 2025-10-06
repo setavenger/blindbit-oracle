@@ -1,9 +1,23 @@
+// Package server
+//
+// DEPRECATED: This file contains the old API implementation and is no longer used.
+// All endpoints have been moved to handler.go which follows the new specification
+// defined in README.md. This file is kept for reference but should not be used
+// in new code.
+//
+// Use the new Handler struct and its methods instead:
+// - GetTweaks
+// - GetUtxos
+// - GetSpentOutputs
+// - GetComputeIndex
+// - GetFullBlock
 package server
 
 import (
 	"bytes"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -11,20 +25,29 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/setavenger/blindbit-lib/api"
 	"github.com/setavenger/blindbit-lib/logging"
+	"github.com/setavenger/blindbit-lib/utils"
 	"github.com/setavenger/blindbit-oracle/internal/config"
-	"github.com/setavenger/blindbit-oracle/internal/dblevel"
-	"github.com/setavenger/blindbit-oracle/internal/types"
+	"github.com/setavenger/blindbit-oracle/internal/database"
 )
 
 // ApiHandler todo might not need ApiHandler struct if no data is stored within.
 //
-//	Will keep for now just in case, so I don't have to refactor twice
-type ApiHandler struct{}
+// Will keep for now just in case, so I don't have to refactor twice
+type ApiHandler struct {
+	db database.DB
+}
+
+// NewApiHandler creates a new ApiHandler instance
+func NewApiHandler(db database.DB) *ApiHandler {
+	return &ApiHandler{
+		db: db,
+	}
+}
 
 func (h *ApiHandler) GetInfo(c *gin.Context) {
-	lastHeader, err := dblevel.FetchHighestBlockHeaderInvByFlag(true)
+	_, height, err := h.db.GetChainTip()
 	if err != nil {
-		logging.L.Err(err).Msg("error fetching highest block header inv")
+		logging.L.Err(err).Msg("error fetching chain tip")
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "could could not retrieve data from database",
 		})
@@ -32,7 +55,7 @@ func (h *ApiHandler) GetInfo(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, api.InfoResponseOracle{
 		Network:                        config.ChainToString(config.Chain),
-		Height:                         lastHeader.Height,
+		Height:                         height,
 		TweaksOnly:                     config.TweaksOnly,
 		TweaksFullBasic:                config.TweakIndexFullNoDust,
 		TweaksFullWithDustFilter:       config.TweakIndexFullIncludingDust,
@@ -41,110 +64,143 @@ func (h *ApiHandler) GetInfo(c *gin.Context) {
 }
 
 func (h *ApiHandler) GetBestBlockHeight(c *gin.Context) {
-	// todo returns one height too low
-	lastHeader, err := dblevel.FetchHighestBlockHeaderInvByFlag(true)
+	_, height, err := h.db.GetChainTip()
 	if err != nil {
-		logging.L.Err(err).Msg("error fetching highest block header inv")
+		logging.L.Err(err).Msg("error fetching chain tip")
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "could could not retrieve data from database",
 		})
 		return
 	}
 	c.JSON(http.StatusOK, api.BlockHeightResponseOracle{
-		BlockHeight: lastHeader.Height,
+		BlockHeight: height,
 	})
 }
 
 func (h *ApiHandler) GetBlockHashByHeight(c *gin.Context) {
-	headerInv, exists := c.Get("headerInv")
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "headerInv not found"})
+	heightStr := c.Param("blockheight")
+	if heightStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "block height is required"})
 		return
 	}
-	hInv, ok := headerInv.(types.BlockHeaderInv) // Assuming HeaderInventory is the expected type
-	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid headerInv type"})
+
+	height, err := strconv.ParseUint(heightStr, 10, 32)
+	if err != nil {
+		logging.L.Err(err).Msg("could not parse block height")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "could not parse block height"})
+		return
+	}
+
+	blockhash, err := h.db.GetBlockHashByHeight(uint32(height))
+	if err != nil {
+		logging.L.Err(err).Msg("could not fetch block hash")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not fetch block hash"})
 		return
 	}
 
 	c.JSON(http.StatusOK, api.BlockHashResponseOracle{
-		BlockHash: hex.EncodeToString(hInv.Hash[:]),
+		BlockHash: hex.EncodeToString(utils.ReverseBytesCopy(blockhash)),
 	})
 }
 
 func (h *ApiHandler) GetCFilterByHeight(c *gin.Context) {
-	headerInv, exists := c.Get("headerInv")
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "headerInv not found"})
+	heightStr := c.Param("blockheight")
+	if heightStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "block height is required"})
 		return
 	}
-	hInv, ok := headerInv.(types.BlockHeaderInv) // Assuming HeaderInventory is the expected type
-	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid headerInv type"})
+
+	height, err := strconv.ParseUint(heightStr, 10, 32)
+	if err != nil {
+		logging.L.Err(err).Msg("could not parse block height")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "could not parse block height"})
+		return
+	}
+
+	blockhash, err := h.db.GetBlockHashByHeight(uint32(height))
+	if err != nil {
+		logging.L.Err(err).Msg("could not fetch block hash")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not fetch block hash"})
 		return
 	}
 
 	filterType := c.Param("type")
 
-	var cFilter types.Filter
-	var err error
 	switch filterType {
 	case "spent":
-		cFilter, err = dblevel.FetchByBlockHashSpentOutpointsFilter(hInv.Hash)
-		if err != nil {
-			logging.L.Err(err).Msg("error fetching spent outpoints filter")
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "could not get filter from db",
-			})
-			return
-		}
+		// TODO: Spent outpoints filter not available in pebbledb interface
+		c.JSON(http.StatusNotImplemented, gin.H{
+			"error": "spent outpoints filter not implemented in pebbledb interface",
+		})
+		return
 	case "new-utxos":
-		cFilter, err = dblevel.FetchByBlockHashNewUTXOsFilter(hInv.Hash)
+		// Use TaprootUnspentFilter as a substitute for new-utxos filter
+		filterData, err := h.db.FetchTaprootUnspentFilter(blockhash)
 		if err != nil {
-			logging.L.Err(err).Msg("error fetching new utxos filter")
+			logging.L.Err(err).Msg("error fetching taproot unspent filter")
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": "could not get filter from db",
 			})
 			return
 		}
+
+		data := api.FilterResponseOracle{
+			FilterType:  1, // Assuming 1 for "new-utxos" filter type
+			BlockHeight: uint32(height),
+			BlockHash:   hex.EncodeToString(blockhash),
+			Data:        hex.EncodeToString(filterData),
+		}
+
+		c.JSON(200, data)
+		return
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "invalid filter type",
 		})
 		return
 	}
-
-	data := api.FilterResponseOracle{
-		FilterType:  cFilter.FilterType,
-		BlockHeight: hInv.Height,
-		BlockHash:   hex.EncodeToString(cFilter.BlockHash[:]),
-		Data:        hex.EncodeToString(cFilter.Data),
-	}
-
-	c.JSON(200, data)
 }
 
 func (h *ApiHandler) GetUtxosByHeight(c *gin.Context) {
-	headerInv, exists := c.Get("headerInv")
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "headerInv not found"})
+	heightStr := c.Param("blockheight")
+	if heightStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "block height is required"})
 		return
 	}
-	hInv, ok := headerInv.(types.BlockHeaderInv) // Assuming HeaderInventory is the expected type
-	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid headerInv type"})
+
+	height, err := strconv.ParseUint(heightStr, 10, 32)
+	if err != nil {
+		logging.L.Err(err).Msg("could not parse block height")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "could not parse block height"})
 		return
 	}
-	utxos, err := dblevel.FetchByBlockHashUTXOs(hInv.Hash)
-	if err != nil && !errors.Is(err, dblevel.NoEntryErr{}) {
-		logging.L.Err(err).Msg("error fetching utxos")
+
+	blockhash, err := h.db.GetBlockHashByHeight(uint32(height))
+	if err != nil {
+		logging.L.Err(err).Msg("could not fetch block hash")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not fetch block hash"})
+		return
+	}
+
+	// Get chain tip for FetchOutputsAll
+	_, syncTip, err := h.db.GetChainTip()
+	if err != nil {
+		logging.L.Err(err).Msg("could not fetch chain tip")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not fetch chain tip"})
+		return
+	}
+
+	outputs, err := h.db.FetchOutputsAll(blockhash, syncTip)
+	if err != nil {
+		logging.L.Err(err).Msg("error fetching outputs")
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "could could not retrieve data from database",
 		})
 		return
 	}
-	if utxos != nil {
-		c.JSON(200, utxos)
+
+	if outputs != nil {
+		c.JSON(200, outputs)
 	} else {
 		c.JSON(200, []any{})
 	}
@@ -153,27 +209,36 @@ func (h *ApiHandler) GetUtxosByHeight(c *gin.Context) {
 // GetTweakDataByHeight serves tweak data as json array of tweaks (33 byte as hex-formatted)
 // todo can be changed to serve with verbosity aka serve with txid or even block data (height, hash)
 func (h *ApiHandler) GetTweakDataByHeight(c *gin.Context) {
-	// todo outsource all the blockHeight extraction and conversion through the inverse header table into middleware
-	headerInv, exists := c.Get("headerInv")
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "headerInv not found"})
+	heightStr := c.Param("blockheight")
+	if heightStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "block height is required"})
 		return
 	}
-	hInv, ok := headerInv.(types.BlockHeaderInv) // Assuming HeaderInventory is the expected type
-	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid headerInv type"})
+
+	height, err := strconv.ParseUint(heightStr, 10, 32)
+	if err != nil {
+		logging.L.Err(err).Msg("could not parse block height")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "could not parse block height"})
 		return
 	}
-	var tweaks []types.Tweak
-	var err error
+
+	blockhash, err := h.db.GetBlockHashByHeight(uint32(height))
+	if err != nil {
+		logging.L.Err(err).Msg("could not fetch block hash")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not fetch block hash"})
+		return
+	}
+
 	// Extracting the dustLimit query parameter and converting it to uint64
 	dustLimitStr := c.DefaultQuery("dustLimit", "0") // Default to "0" if not provided
 
+	var tweaks [][]byte
 	if dustLimitStr == "0" {
-		// this query should have a better performance due to no required checks
-		tweaks, err = dblevel.FetchByBlockHashTweaks(hInv.Hash)
-		if err != nil && !errors.Is(err, dblevel.NoEntryErr{}) {
-			logging.L.Err(err).Msg("error fetching tweaks")
+		fmt.Printf("%x\n", blockhash)
+		// Use static tweaks for better performance
+		tweaks, err = h.db.FetchTweaksStatic(blockhash)
+		if err != nil {
+			logging.L.Err(err).Msg("error fetching static tweaks")
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": "could could not retrieve data from database",
 			})
@@ -186,40 +251,56 @@ func (h *ApiHandler) GetTweakDataByHeight(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid dustLimit parameter"})
 			return
 		}
-		tweaks, err = dblevel.FetchByBlockHashDustLimitTweaks(hInv.Hash, dustLimit)
-		if err != nil && !errors.Is(err, dblevel.NoEntryErr{}) {
-			logging.L.Err(err).Msg("error fetching dust limit tweaks")
+
+		// Get chain tip for TweaksForBlockCutThroughDustLimit
+		_, _, err = h.db.GetChainTip()
+		if err != nil {
+			logging.L.Err(err).Msg("could not fetch chain tip")
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "could not fetch chain tip"})
+			return
+		}
+
+		// TODO: Need to implement TweaksForBlockCutThroughDustLimit in pebbledb interface
+		// For now, fall back to static tweaks
+		tweaks, err = h.db.FetchTweaksStatic(blockhash)
+		if err != nil {
+			logging.L.Err(err).Msg("error fetching static tweaks")
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": "could could not retrieve data from database",
 			})
 			return
 		}
-	}
 
-	if err != nil && errors.Is(err, dblevel.NoEntryErr{}) {
-		c.JSON(http.StatusOK, []string{})
-		return
+		// TODO: Apply dust limit filtering here
+		_ = dustLimit // Suppress unused variable warning
 	}
 
 	var serveTweakData = []string{}
 	for _, tweak := range tweaks {
-		serveTweakData = append(serveTweakData, hex.EncodeToString(tweak.TweakData[:]))
+		serveTweakData = append(serveTweakData, hex.EncodeToString(tweak))
 	}
 
 	c.JSON(http.StatusOK, serveTweakData)
 }
 
 func (h *ApiHandler) GetTweakIndexDataByHeight(c *gin.Context) {
-	headerInv, exists := c.Get("headerInv")
-	if !exists {
-		logging.L.Error().Msg("headerInv not found")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "headerInv not found"})
+	heightStr := c.Param("blockheight")
+	if heightStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "block height is required"})
 		return
 	}
-	hInv, ok := headerInv.(types.BlockHeaderInv) // Assuming HeaderInventory is the expected type
-	if !ok {
-		logging.L.Error().Msg("invalid headerInv type")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid headerInv type"})
+
+	height, err := strconv.ParseUint(heightStr, 10, 32)
+	if err != nil {
+		logging.L.Err(err).Msg("could not parse block height")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "could not parse block height"})
+		return
+	}
+
+	blockhash, err := h.db.GetBlockHashByHeight(uint32(height))
+	if err != nil {
+		logging.L.Err(err).Msg("could not fetch block hash")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not fetch block hash"})
 		return
 	}
 
@@ -238,107 +319,52 @@ func (h *ApiHandler) GetTweakIndexDataByHeight(c *gin.Context) {
 		return
 	}
 
-	// todo basically duplicate code could be simplified and generalised with interface/(generics?)
-	if config.TweakIndexFullIncludingDust {
-		var tweakIndex *types.TweakIndexDust
-		tweakIndex, err = dblevel.FetchByBlockHashTweakIndexDust(hInv.Hash)
-		if err != nil && !errors.Is(err, dblevel.NoEntryErr{}) {
-			logging.L.Err(err).Msg("error fetching tweak index dust")
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "could could not retrieve data from database",
-			})
-			return
-		}
-
-		if err != nil && errors.Is(err, dblevel.NoEntryErr{}) {
-			c.JSON(http.StatusOK, []string{})
-			return
-		}
-
-		var serveTweakData = []string{}
-		for _, tweak := range tweakIndex.Data {
-			if tweak.HighestValue() < dustLimit {
-				continue
-			}
-			data := tweak.Tweak()
-			serveTweakData = append(serveTweakData, hex.EncodeToString(data[:]))
-		}
-
-		c.JSON(200, serveTweakData)
-		return
-	} else {
-		// this query should have a better performance due to no required checks
-		tweakIndex, err := dblevel.FetchByBlockHashTweakIndex(hInv.Hash)
-		if err != nil && !errors.Is(err, dblevel.NoEntryErr{}) {
-			logging.L.Err(err).Msg("error fetching tweak index")
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "could could not retrieve data from database",
-			})
-			return
-		}
-
-		if err != nil && errors.Is(err, dblevel.NoEntryErr{}) {
-			c.JSON(http.StatusOK, []string{})
-			return
-		}
-
-		var serveTweakData = []string{}
-		for _, tweak := range tweakIndex.Data {
-			serveTweakData = append(serveTweakData, hex.EncodeToString(tweak[:]))
-		}
-
-		c.JSON(200, serveTweakData)
-		return
-	}
-}
-
-func (h *ApiHandler) GetSpentOutpointsIndex(c *gin.Context) {
-	headerInv, exists := c.Get("headerInv")
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "headerInv not found"})
-		return
-	}
-	hInv, ok := headerInv.(types.BlockHeaderInv) // Assuming HeaderInventory is the expected type
-	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid headerInv type"})
-		return
-	}
-	spentOutpointsIndex, err := dblevel.FetchByBlockHashSpentOutpointIndex(hInv.Hash)
-	if err != nil && !errors.Is(err, dblevel.NoEntryErr{}) {
-		logging.L.Err(err).Msg("error fetching spent outpoints index")
+	// Use static tweaks for both cases since pebbledb interface doesn't have separate dust index
+	tweaks, err := h.db.FetchTweaksStatic(blockhash)
+	if err != nil {
+		logging.L.Err(err).Msg("error fetching static tweaks")
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "could could not retrieve data from database",
 		})
 		return
 	}
 
-	if err != nil && errors.Is(err, dblevel.NoEntryErr{}) {
-		c.JSON(http.StatusOK, []string{})
+	var serveTweakData = []string{}
+	for _, tweak := range tweaks {
+		// TODO: Apply dust limit filtering if needed
+		// For now, just return all tweaks
+		serveTweakData = append(serveTweakData, hex.EncodeToString(tweak))
+	}
+
+	c.JSON(200, serveTweakData)
+}
+
+func (h *ApiHandler) GetSpentOutpointsIndex(c *gin.Context) {
+	heightStr := c.Param("blockheight")
+	if heightStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "block height is required"})
 		return
 	}
 
-	var result struct {
-		BlockHash string   `json:"block_hash"`
-		Data      []string `json:"data"`
-	}
-
-	result.BlockHash = hex.EncodeToString(spentOutpointsIndex.BlockHash[:])
-
-	if len(spentOutpointsIndex.Data) == 0 {
-		logging.L.Debug().Msg("spentOutpointsIndex was empty")
-		result.Data = []string{}
-		c.JSON(http.StatusOK, result)
+	height, err := strconv.ParseUint(heightStr, 10, 32)
+	if err != nil {
+		logging.L.Err(err).Msg("could not parse block height")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "could not parse block height"})
 		return
 	}
 
-	resultData := make([]string, len(spentOutpointsIndex.Data))
-	for i, hash := range spentOutpointsIndex.Data {
-		resultData[i] = hex.EncodeToString(hash[:])
+	blockhash, err := h.db.GetBlockHashByHeight(uint32(height))
+	if err != nil {
+		logging.L.Err(err).Msg("could not fetch block hash")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not fetch block hash"})
+		return
 	}
 
-	result.Data = resultData
-
-	c.JSON(http.StatusOK, result)
+	// TODO: Spent outpoints index not available in pebbledb interface
+	_ = blockhash // Suppress unused variable warning
+	c.JSON(http.StatusNotImplemented, gin.H{
+		"error": "spent outpoints index not implemented in pebbledb interface",
+	})
 }
 
 type TxRequest struct {

@@ -24,9 +24,13 @@ type Builder struct {
 
 	// db connection used for the entire builder in all go routines
 	store database.DB
+
+	// Note: forceRebuildStaticIndexesDuringSync removed - static indexes should only be rebuilt with explicit user intention
 }
 
 func NewBuilder(ctx context.Context, db database.DB) *Builder {
+	logging.L.Info().Msg("Creating indexer builder")
+
 	return &Builder{
 		ctx: ctx,
 		newBlockChan: make(
@@ -146,14 +150,24 @@ func (b *Builder) SyncBlocks(
 				return
 			}
 
-			logging.L.Trace().Int64("height", i).Msgf("pulling block %d", i)
+			logging.L.Trace().Int64("height", i).Msgf("pulling block %d from blockchain", i)
 			go func(height int64) {
 				defer func() { <-pullSemaphore }() // Release semaphore
+
+				pullStartTime := time.Now()
 				err := b.pullBlockToChan(height)
 				if err != nil {
+					logging.L.Err(err).Int64("height", height).Msg("failed pulling block")
 					errChan <- err
 					return
 				}
+
+				pullTime := time.Since(pullStartTime)
+				logging.L.Trace().
+					Int64("height", height).
+					Dur("pull_time", pullTime).
+					Msgf("pulled block %d from blockchain", height)
+
 				wg.Done()
 			}(i)
 		}
@@ -164,29 +178,43 @@ func (b *Builder) SyncBlocks(
 	var handleWG sync.WaitGroup
 	for i := 0; i < config.MaxParallelTweakComputations; i++ {
 		handleWG.Add(1)
+		workerID := i
 		go func() {
 			defer handleWG.Done()
 			for {
 				select {
 				case <-ctx.Done():
-					logging.L.Trace().Msg("Handler goroutine received context cancellation")
+					logging.L.Trace().Int("worker_id", workerID).Msg("Handler goroutine received context cancellation")
 					return
 				case block, ok := <-b.newBlockChan:
 					if !ok {
 						return
 					}
+
+					handleStartTime := time.Now()
+					logging.L.Trace().
+						Int("worker_id", workerID).
+						Str("blockhash", block.Hash.String()).
+						Int64("height", block.Height).
+						Msg("Worker handling block")
+
 					err := b.handleBlock(ctx, block)
 					if err != nil {
 						logging.L.Err(err).
+							Int("worker_id", workerID).
 							Str("blockhash", block.Hash.String()).
 							Int64("height", block.Height).
 							Msg("failed handling block")
 						errChan <- err
 					}
+
+					handleTime := time.Since(handleStartTime)
 					logging.L.Trace().
+						Int("worker_id", workerID).
 						Str("blockhash", block.Hash.String()).
 						Int64("height", block.Height).
-						Msg("block handled")
+						Dur("handle_time", handleTime).
+						Msg("Worker completed handling block")
 				}
 			}
 		}()
@@ -215,7 +243,6 @@ func (b *Builder) SyncBlocks(
 					return
 				}
 
-				logging.L.Warn().Msg("received first block")
 				err := b.store.ApplyBlock(dbBlock)
 				if err != nil {
 					logging.L.Err(err).
@@ -226,6 +253,40 @@ func (b *Builder) SyncBlocks(
 					return
 				}
 
+				// Build static indexes for this block after storing it
+				// Static indexes should always be built for new blocks with integrity checks
+				logging.L.Debug().
+					Uint32("height", dbBlock.Height).
+					Msg("building static indexes for new block")
+				err = b.store.BuildStaticIndexesForBlock(dbBlock.Hash[:])
+				if err != nil {
+					logging.L.Warn().Err(err).
+						Str("blockhash", dbBlock.Hash.String()).
+						Uint32("height", dbBlock.Height).
+						Msg("failed to build static indexes for block")
+					// Don't return error here - static indexes are not critical for sync to continue
+					// The block data is already stored, so we can continue
+				}
+
+				// Build accelerator indexes for this block after static indexes
+				logging.L.Debug().
+					Uint32("height", dbBlock.Height).
+					Msg("building accelerator indexes for new block")
+				err = b.store.BuildAcceleratorIndexesForBlock(dbBlock.Hash[:])
+				if err != nil {
+					logging.L.Err(err).
+						Str("blockhash", dbBlock.Hash.String()).
+						Uint32("height", dbBlock.Height).
+						Msg("failed to build accelerator indexes for block")
+					errChan <- err
+					return
+				}
+
+				// Simple completion log
+				logging.L.Info().
+					Uint32("height", dbBlock.Height).
+					Msg("block processing completed")
+
 			case <-blockHeightTicker:
 				_, syncTip, err := b.store.GetChainTip()
 				if err != nil {
@@ -234,14 +295,33 @@ func (b *Builder) SyncBlocks(
 					return
 				}
 
+				// Get current blockchain tip for comparison
+				chainInfo, err := GetChainInfo()
+				if err != nil {
+					logging.L.Warn().Err(err).Msg("failed to get chain info for progress report")
+					chainInfo = &ChainInfo{Blocks: int64(syncTip)} // fallback
+				}
+
+				// Enhanced progress reporting
 				logging.L.Info().
-					Uint32("height", syncTip).
-					Msgf("current indexed chain tip %d", syncTip)
-				logging.L.Info().
+					Uint32("indexed_height", syncTip).
+					Int64("blockchain_tip", chainInfo.Blocks).
+					Int64("blocks_behind", chainInfo.Blocks-int64(syncTip)).
 					Int("backlog_chan_pull", len(b.newBlockChan)).
 					Int("backlog_chan_db_writer", len(b.writerChan)).
 					Int("batch_length", b.store.BatchSize()).
-					Msg("new_tick_report")
+					Msgf("Indexer status: indexed height %d, blockchain tip %d (behind by %d blocks)", syncTip, chainInfo.Blocks, chainInfo.Blocks-int64(syncTip))
+
+				// Additional context about background processing
+				if chainInfo.Blocks > int64(syncTip) {
+					logging.L.Info().
+						Int64("blocks_behind", chainInfo.Blocks-int64(syncTip)).
+						Int("blocks_in_pull_queue", len(b.newBlockChan)).
+						Int("blocks_in_write_queue", len(b.writerChan)).
+						Msg("Background catchup in progress - blocks are being processed below chain tip")
+				} else {
+					logging.L.Info().Msg("Indexer is up to date with blockchain tip")
+				}
 			case <-tickerReports:
 				logging.L.Trace().
 					Int("backlog_chan_pull", len(b.newBlockChan)).
@@ -316,7 +396,7 @@ func (b *Builder) pullBlockByBlockHash(blockhash *chainhash.Hash) (*Block, error
 	// return block, err
 }
 
-// handleBlock makes all computations for a block
+// handleBlock makes all computations for a block, stores it in the database, and computes static indexes
 // and sends a DBBlock into the builders writerChan
 func (b *Builder) handleBlock(ctx context.Context, block *Block) error {
 	// todo: add filters to handleBlock
@@ -342,7 +422,21 @@ func (b *Builder) handleBlock(ctx context.Context, block *Block) error {
 		Txs:    dbTxs,
 	}
 
-	return b.store.ApplyBlock(dbBlock)
+	// Send the block to the writer channel instead of applying directly
+	// This ensures proper chain tip updates and batch processing
+	select {
+	case b.writerChan <- dbBlock:
+		logging.L.Trace().
+			Str("blockhash", block.Hash.String()).
+			Int64("height", block.Height).
+			Msg("sent block to writer channel")
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+
+	// Note: Static index computation is now handled by the writer goroutine
+	// after the block is properly stored and chain tip is updated
+	return nil
 }
 
 func handleTx(tx *Transaction) *database.Tx {

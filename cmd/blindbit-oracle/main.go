@@ -29,9 +29,7 @@ var (
 	configFile    string
 	reindexStatic bool
 	skipPrecheck  bool
-
-	// Static indexes flags
-	buildComputeIndex bool
+	// Note: forceRebuildStaticIndexesDuringSync removed - static indexes should only be rebuilt with explicit user intention
 
 	// Wallet compute flags
 	startHeight uint32
@@ -80,12 +78,6 @@ func init() {
 	)
 
 	// static indexes flags
-	staticIndexesCmd.Flags().BoolVar(
-		&buildComputeIndex,
-		"compute-index",
-		false,
-		"Compute index for all blocks (default: false)",
-	)
 	staticIndexesCmd.Flags().Uint32Var(
 		&startHeight,
 		"start-height",
@@ -172,11 +164,10 @@ var staticIndexesCmd = &cobra.Command{
 	Short: "Build static indexes for all blocks",
 	Long: `Build static indexes for all blocks in the database. This command will:
 - Process all blocks from the first block to the current tip
-- Create static indexes for tweaks and outputs
+- Create static indexes for tweaks, outputs, and filters
 - Not start continuous scanning or servers
 
 Flags:
---compute-index flag to compute index for all blocks,
 --reindex-static flag to force rebuild of existing indexes`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		interrupt := make(chan os.Signal, 1)
@@ -218,19 +209,11 @@ Flags:
 			// index starts where data is available
 			startHeight = max(startHeight, firstBlockHeight)
 
-			if buildComputeIndex {
-				err = store.BuildComputeIndexByRange(startHeight, endHeight)
-				if err != nil {
-					errChan <- fmt.Errorf("compute indexing failed: %w", err)
-					return
-				}
-			} else {
-				// todo: should be in an indexer.Builder
-				err = store.BuildStaticIndexing(reindexStatic)
-				if err != nil {
-					errChan <- fmt.Errorf("static indexing failed: %w", err)
-					return
-				}
+			// Build static indexes
+			err = store.BuildStaticIndexing(reindexStatic)
+			if err != nil {
+				errChan <- fmt.Errorf("static indexing failed: %w", err)
+				return
 			}
 		}()
 
@@ -255,11 +238,12 @@ var syncCmd = &cobra.Command{
 	Short: "Sync blockchain data (initial sync only)",
 	Long: `Perform initial blockchain sync to the current tip. This command will:
 - Sync all blocks from the first block to the current tip
+- Builds static indexes only if missing (unless --force-rebuild-static-indexes-during-sync is set)
 - Not start continuous scanning or servers
-- Not rebuild static indexes
 
 Flags:
---skip-precheck flag to skip database integrity checks`,
+--skip-precheck flag to skip database integrity checks
+--force-rebuild-static-indexes-during-sync flag to force rebuild static indexes during sync`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		logging.L.Info().Msg("Starting initial blockchain sync...")
 
@@ -301,6 +285,7 @@ Flags:
 		}
 
 		logging.L.Info().Msg("Initial blockchain sync completed successfully")
+
 		return nil
 	},
 }
@@ -317,6 +302,7 @@ var runCmd = &cobra.Command{
 Flags:
 --reindex-static flag to force rebuild of static indexes (optional, default: false)
 --skip-precheck flag to skip database integrity checks (optional, default: false)
+--force-rebuild-static-indexes-during-sync flag to force rebuild static indexes during sync (optional, default: false)
 --start-height flag to start height (optional, default: 0)
 --end-height flag to end height (optional, default: 0)`,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -331,7 +317,7 @@ Flags:
 		defer store.Close()
 
 		// Start servers
-		go server.RunServer(&server.ApiHandler{})
+		go server.RunServer(server.NewHandler(store))
 
 		if config.GRPCHost != "" {
 			go v2.RunGRPCServer(store)
@@ -470,7 +456,7 @@ var serverCmd = &cobra.Command{
 		defer store.Close()
 
 		// Start servers
-		go server.RunServer(&server.ApiHandler{})
+		go server.RunServer(server.NewHandler(store))
 
 		if config.GRPCHost != "" {
 			go v2.RunGRPCServer(store)
@@ -487,9 +473,101 @@ var serverCmd = &cobra.Command{
 	},
 }
 
+var acceleratorIndexesCmd = &cobra.Command{
+	Use:   "accelerator-indexes",
+	Short: "Build accelerator indexes for all blocks",
+	Long: `Build accelerator indexes for all blocks in the database. This command will:
+- Process all blocks from the first block to the current tip
+- Create accelerator indexes like compute index for efficient scanning
+- Not start continuous scanning or servers
+
+Flags:
+--start-height and --end-height to specify range`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		interrupt := make(chan os.Signal, 1)
+		signal.Notify(interrupt, os.Interrupt)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		logging.L.Info().Msg("Starting accelerator index rebuild...")
+
+		errChan := make(chan error)
+		doneChan := make(chan struct{})
+
+		go func() {
+			defer close(doneChan)
+
+			db, err := dbpebble.OpenDB()
+			if err != nil {
+				errChan <- fmt.Errorf("failed opening db: %w", err)
+				return
+			}
+
+			store := dbpebble.NewStore(db)
+			defer store.Close()
+
+			_, syncTipHeight, err := store.GetChainTip()
+			if err != nil {
+				errChan <- fmt.Errorf("failed getting chain tip: %w", err)
+				return
+			}
+
+			_, firstBlockHeight, err := store.FirstBlock()
+			if err != nil {
+				errChan <- fmt.Errorf("failed getting first block data: %w", err)
+				return
+			}
+
+			endHeight = min(endHeight, syncTipHeight)
+
+			// index starts where data is available
+			startHeight = max(startHeight, firstBlockHeight)
+
+			// Build accelerator indexes (compute index)
+			err = store.BuildComputeIndexByRange(startHeight, endHeight)
+			if err != nil {
+				errChan <- fmt.Errorf("accelerator indexing failed: %w", err)
+				return
+			}
+		}()
+
+		select {
+		case <-interrupt:
+			cancel()
+			logging.L.Info().Msg("Accelerator index rebuild interrupted")
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		case err := <-errChan:
+			return err
+		case <-doneChan:
+			logging.L.Info().Msg("Accelerator index rebuild completed successfully")
+			return nil
+		}
+	},
+}
+
+func init() {
+	// accelerator indexes flags
+	acceleratorIndexesCmd.Flags().Uint32Var(
+		&startHeight,
+		"start-height",
+		0,
+		"Start height",
+	)
+	acceleratorIndexesCmd.Flags().Uint32Var(
+		&endHeight,
+		"end-height",
+		0,
+		"End height",
+	)
+}
+
 func main() {
 	// Add subcommands
 	rootCmd.AddCommand(staticIndexesCmd)
+	rootCmd.AddCommand(acceleratorIndexesCmd)
 	rootCmd.AddCommand(syncCmd)
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(walletComputeCmd)

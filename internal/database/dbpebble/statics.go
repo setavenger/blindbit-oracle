@@ -4,13 +4,16 @@ import (
 	"math"
 	"sync"
 	"sync/atomic"
+	"time"
 
+	"github.com/btcsuite/btcd/btcutil/gcs"
+	"github.com/btcsuite/btcd/btcutil/gcs/builder"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/cockroachdb/pebble"
 	"github.com/setavenger/blindbit-lib/logging"
 	"github.com/setavenger/blindbit-lib/utils"
 	"github.com/setavenger/blindbit-oracle/internal/config"
 	"github.com/setavenger/blindbit-oracle/internal/database"
-	"github.com/setavenger/blindbit-oracle/internal/indexer"
 )
 
 // BuildStaticIndexing pulls the entire DB and rewrites as static indexes.
@@ -39,7 +42,12 @@ func (s *Store) BuildStaticIndexing(force bool) error {
 	// heightStart = 100_000
 	// heightTip = 260_000
 
-	logging.L.Info().Msgf("Building static indexes from %d -> %d", heightStart, heightTip)
+	totalBlocks := heightTip - heightStart + 1
+	logging.L.Info().
+		Uint32("height_start", heightStart).
+		Uint32("height_tip", heightTip).
+		Uint32("total_blocks", totalBlocks).
+		Msgf("Building static indexes from %d -> %d (%d blocks)", heightStart, heightTip, totalBlocks)
 	logging.L.Debug().
 		Hex("blockhash_start", utils.ReverseBytesCopy(blockhashStart)).
 		Hex("blockhash_tip", utils.ReverseBytesCopy(blockhashTip)).
@@ -60,6 +68,8 @@ func (s *Store) BuildStaticIndexing(force bool) error {
 	errChan := make(chan error)
 	var wg sync.WaitGroup
 	var blockCounter int64
+	var lastProgressTime time.Time
+	var startTime time.Time
 
 	// Start worker goroutines
 	for i := 0; i < config.MaxParallelTweakComputations; i++ {
@@ -68,6 +78,12 @@ func (s *Store) BuildStaticIndexing(force bool) error {
 			defer wg.Done()
 			for blockhash := range blockhashChan {
 				count := atomic.AddInt64(&blockCounter, 1)
+
+				// Set start time on first block
+				if count == 1 {
+					startTime = time.Now()
+				}
+
 				err := s.ReindexBlock(blockhash, force)
 				if err != nil {
 					logging.L.Err(err).
@@ -76,7 +92,12 @@ func (s *Store) BuildStaticIndexing(force bool) error {
 					errChan <- err
 					return
 				}
-				if count%100 == 0 {
+
+				// Enhanced progress reporting
+				now := time.Now()
+				shouldReport := count%50 == 0 || now.Sub(lastProgressTime) >= 10*time.Second
+
+				if shouldReport {
 					height, ok, err := s.heightIfOnBestChain(blockhash)
 					if err != nil {
 						logging.L.Err(err).
@@ -91,7 +112,35 @@ func (s *Store) BuildStaticIndexing(force bool) error {
 							Msg("block not on best chain")
 						continue
 					}
-					logging.L.Info().Msgf("Processed %d blocks, height %d", count, height)
+
+					// Calculate progress and ETA
+					progress := float64(count) / float64(totalBlocks) * 100
+					remainingBlocks := totalBlocks - uint32(count)
+
+					// Calculate ETA
+					elapsed := now.Sub(startTime)
+					blocksPerSecond := float64(count) / elapsed.Seconds()
+					var eta time.Duration
+					if blocksPerSecond > 0 {
+						eta = time.Duration(float64(remainingBlocks)/blocksPerSecond) * time.Second
+					}
+
+					// Get current blockchain tip for context
+					// Note: Removed chainInfo call to avoid circular dependency
+					// The progress reporting will work without this information
+
+					logging.L.Info().
+						Int64("processed_blocks", count).
+						Uint32("current_height", height).
+						Uint32("total_blocks", totalBlocks).
+						Float64("progress_percent", progress).
+						Uint32("remaining_blocks", remainingBlocks).
+						Float64("blocks_per_second", blocksPerSecond).
+						Dur("elapsed_time", elapsed).
+						Dur("eta", eta).
+						Msgf("Static index progress: %d/%d blocks (%.1f%%) - processing height %d - ETA: %v", count, totalBlocks, progress, height, eta)
+
+					lastProgressTime = now
 				}
 			}
 		}()
@@ -113,34 +162,232 @@ func (s *Store) BuildStaticIndexing(force bool) error {
 	return nil
 }
 
-func (s *Store) ReindexBlock(blockhash []byte, force bool) error {
-	// make point check to see if we need to rebuild the static data
-	if !force {
-		existsTweaks, err := s.KeyExistsStaticTweaks(blockhash)
+// BuildStaticIndexesForBlock builds static indexes for a single block with integrity checks
+// This function builds static indexes if they are missing, but does not force rebuild existing ones
+func (s *Store) BuildStaticIndexesForBlock(blockhash []byte) error {
+	// Check which static indexes exist
+	existsTweaks, err := s.KeyExistsStaticTweaks(blockhash)
+	if err != nil {
+		return err
+	}
+	existsOutputs, err := s.KeyExistsStaticOutputs(blockhash)
+	if err != nil {
+		return err
+	}
+	existsUnspentFilter, err := s.KeyExistsStaticTaprootUnspentFilter(blockhash)
+	if err != nil {
+		return err
+	}
+
+	// If all static indexes exist, nothing to do
+	if existsTweaks && existsOutputs && existsUnspentFilter {
+		logging.L.Trace().
+			Hex("blockhash", utils.ReverseBytesCopy(blockhash)).
+			Msg("all static indexes exist, skipping build")
+		return nil
+	}
+
+	logging.L.Debug().
+		Hex("blockhash", utils.ReverseBytesCopy(blockhash)).
+		Bool("existsTweaks", existsTweaks).
+		Bool("existsOutputs", existsOutputs).
+		Bool("existsUnspentFilter", existsUnspentFilter).
+		Msg("building missing static indexes")
+
+	// Fetch data for indexes that need building
+	var outputs []*database.Output
+	var tweaks []*database.TweakRow
+	var outputDBValue []byte
+	var tweaksDBValue []byte
+	var unspentFilter []byte
+
+	if !existsTweaks || !existsOutputs || !existsUnspentFilter {
+		outputs, err = s.FetchOutputsAll(blockhash, math.MaxUint32)
 		if err != nil {
-			logging.L.Err(err).
-				Hex("blockhash", utils.ReverseBytesCopy(blockhash)).
-				Msg("failed to check if tweaks exist")
 			return err
 		}
-		existsOutputs, err := s.KeyExistsStaticOutputs(blockhash)
+
+		tweaks, err = s.TweaksForBlockAll(blockhash)
 		if err != nil {
-			logging.L.Err(err).
-				Hex("blockhash", utils.ReverseBytesCopy(blockhash)).
-				Msg("failed to check if outputs exist")
 			return err
 		}
-		existsUnspentFilter, err := s.KeyExistsStaticTaprootUnspentFilter(blockhash)
+
+		// Convert to static DB values
+		outputDBValue = convertOutputsToStaticDBValue(outputs)
+		tweaksDBValue = convertTweakRowToStaticDBValue(tweaks)
+
+		unspentFilter, err = buildUnspentFilter(blockhash, outputs)
 		if err != nil {
-			logging.L.Err(err).
-				Hex("blockhash", utils.ReverseBytesCopy(blockhash)).
-				Msg("failed to check if unspent filter exists")
 			return err
-		}
-		if existsTweaks && existsOutputs && existsUnspentFilter {
-			return nil
 		}
 	}
+
+	// Use existing data for indexes that don't need rebuilding
+	if existsTweaks {
+		existingTweaks, err := s.FetchTweaksStatic(blockhash)
+		if err != nil {
+			logging.L.Warn().Err(err).
+				Hex("blockhash", utils.ReverseBytesCopy(blockhash)).
+				Msg("failed to fetch existing tweaks, will rebuild")
+			if tweaks == nil {
+				tweaks, err = s.TweaksForBlockAll(blockhash)
+				if err != nil {
+					return err
+				}
+			}
+			tweaksDBValue = convertTweakRowToStaticDBValue(tweaks)
+		} else {
+			// Convert existing tweaks to DB format
+			tweaksDBValue = make([]byte, 33*len(existingTweaks))
+			for i, tweak := range existingTweaks {
+				copy(tweaksDBValue[i*33:(i+1)*33], tweak)
+			}
+		}
+	}
+
+	if existsOutputs {
+		existingOutputs, err := s.FetchOutputsStatic(blockhash)
+		if err != nil {
+			logging.L.Warn().Err(err).
+				Hex("blockhash", utils.ReverseBytesCopy(blockhash)).
+				Msg("failed to fetch existing outputs, will rebuild")
+			if outputs == nil {
+				outputs, err = s.FetchOutputsAll(blockhash, math.MaxUint32)
+				if err != nil {
+					return err
+				}
+			}
+			outputDBValue = convertOutputsToStaticDBValue(outputs)
+		} else {
+			// Convert existing outputs to DB format
+			outputDBValue = convertOutputsToStaticDBValue(existingOutputs)
+		}
+	}
+
+	if existsUnspentFilter {
+		existingUnspentFilter, err := s.FetchTaprootUnspentFilter(blockhash)
+		if err != nil {
+			logging.L.Warn().Err(err).
+				Hex("blockhash", utils.ReverseBytesCopy(blockhash)).
+				Msg("failed to fetch existing unspent filter, will rebuild")
+			if outputs == nil {
+				outputs, err = s.FetchOutputsAll(blockhash, math.MaxUint32)
+				if err != nil {
+					return err
+				}
+			}
+			unspentFilter, err = buildUnspentFilter(blockhash, outputs)
+			if err != nil {
+				return err
+			}
+		} else {
+			unspentFilter = existingUnspentFilter
+		}
+	}
+
+	err = s.finishBlockStatics(blockhash, tweaksDBValue, outputDBValue, unspentFilter)
+	if err != nil {
+		return err
+	}
+
+	logging.L.Debug().
+		Hex("blockhash", utils.ReverseBytesCopy(blockhash)).
+		Msg("static indexes built successfully")
+
+	return nil
+}
+
+// BuildAcceleratorIndexesForBlock builds accelerator indexes (like compute index) for a block
+// These are indexes that are built on-demand and used for efficient scanning
+func (s *Store) BuildAcceleratorIndexesForBlock(blockhash []byte) error {
+	// Check if compute index exists
+	existsComputeIndex, err := s.KeyExistsComputeIndex(blockhash)
+	if err != nil {
+		return err
+	}
+
+	// If compute index exists, nothing to do
+	if existsComputeIndex {
+		logging.L.Trace().
+			Hex("blockhash", utils.ReverseBytesCopy(blockhash)).
+			Msg("compute index exists, skipping accelerator index build")
+		return nil
+	}
+
+	logging.L.Debug().
+		Hex("blockhash", utils.ReverseBytesCopy(blockhash)).
+		Msg("building accelerator indexes")
+
+	// Build compute index
+	height, ok, err := s.heightIfOnBestChain(blockhash)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		logging.L.Warn().
+			Hex("blockhash", utils.ReverseBytesCopy(blockhash)).
+			Msg("block not on best chain, skipping accelerator index build")
+		return nil
+	}
+
+	computeIndexes, err := s.BuildComputeIndexForHeight(height)
+	if err != nil {
+		logging.L.Err(err).
+			Hex("blockhash", utils.ReverseBytesCopy(blockhash)).
+			Uint32("height", height).
+			Msg("failed to build compute index")
+		return err
+	}
+
+	err = s.FinishComputeIndex(height, computeIndexes)
+	if err != nil {
+		logging.L.Err(err).
+			Hex("blockhash", utils.ReverseBytesCopy(blockhash)).
+			Uint32("height", height).
+			Msg("failed to finish compute index")
+		return err
+	}
+
+	logging.L.Debug().
+		Hex("blockhash", utils.ReverseBytesCopy(blockhash)).
+		Uint32("height", height).
+		Int("compute_index_count", len(computeIndexes)).
+		Msg("accelerator indexes built successfully")
+
+	return nil
+}
+
+// ReindexBlock rebuilds static indexes for a block only if explicitly requested with force=true
+// This function should only be called with user intention, not automatically
+func (s *Store) ReindexBlock(blockhash []byte, force bool) error {
+	if !force {
+		logging.L.Warn().
+			Hex("blockhash", utils.ReverseBytesCopy(blockhash)).
+			Msg("ReindexBlock called without force=true, skipping rebuild")
+		return nil
+	}
+
+	logging.L.Info().
+		Hex("blockhash", utils.ReverseBytesCopy(blockhash)).
+		Msg("force rebuilding static indexes (user requested)")
+
+	// Force rebuild all static indexes
+	return s.ReindexBlockWithOptions(blockhash, true, false)
+}
+
+// ReindexBlockWithOptions provides fine-grained control over which indexes to rebuild
+// This function should only be called with explicit user intention (force flags)
+// forceAll: if true, rebuilds all indexes regardless of whether they exist
+// forceInexpensive: if true, rebuilds cheap indexes (tweaks, outputs, unspent filter) even if they exist
+func (s *Store) ReindexBlockWithOptions(blockhash []byte, forceAll bool, forceInexpensive bool) error {
+	logging.L.Info().
+		Hex("blockhash", utils.ReverseBytesCopy(blockhash)).
+		Bool("forceAll", forceAll).
+		Bool("forceInexpensive", forceInexpensive).
+		Msg("force rebuilding static indexes (user requested)")
+
+	// For force rebuilds, we rebuild everything regardless of existence
+	// This is simpler and more predictable than the complex logic we had before
 	outputs, err := s.FetchOutputsAll(blockhash, math.MaxUint32)
 	if err != nil {
 		return err
@@ -151,8 +398,7 @@ func (s *Store) ReindexBlock(blockhash []byte, force bool) error {
 		return err
 	}
 
-	// can be integrated with filters.
-	// Just add another copy of the pubkey during serialisation into the filter
+	// Convert to static DB values
 	outputDBValue := convertOutputsToStaticDBValue(outputs)
 	tweaksDBValue := convertTweakRowToStaticDBValue(tweaks)
 
@@ -165,27 +411,36 @@ func (s *Store) ReindexBlock(blockhash []byte, force bool) error {
 	if err != nil {
 		return err
 	}
-	return err
+
+	logging.L.Info().
+		Hex("blockhash", utils.ReverseBytesCopy(blockhash)).
+		Msg("force rebuild completed successfully")
+
+	return nil
 }
 
 func (s *Store) finishBlockStatics(
 	blockhash, tweaks, outputs, unspentFilter []byte,
 ) error {
+	// Use a more efficient approach: queue the write operation
+	// This reduces lock contention by minimizing the time spent in the critical section
 	s.batchSync.Lock()
+	defer s.batchSync.Unlock()
+
 	err := attachStaticsToBatch(s.dbBatch, blockhash, tweaks, outputs, unspentFilter)
 	if err != nil {
 		return err
 	}
-	s.batchSync.Unlock()
 
 	s.batchCounter++
-	if s.batchCounter >= 200 {
+	// Increase batch size to reduce commit frequency and improve throughput
+	if s.batchCounter >= 500 { // Increased from 200 to 500
 		err = s.commitBatch(false)
 		if err != nil {
 			return err
 		}
 	}
-	return err
+	return nil
 }
 
 func attachStaticsToBatch(
@@ -204,6 +459,7 @@ func attachStaticsToBatch(
 		return err
 	}
 
+	// Note: spent outpoints are now accelerator indexes, not static indexes
 	return nil
 }
 
@@ -229,5 +485,36 @@ func buildUnspentFilter(blockhash []byte, outputs []*database.Output) ([]byte, e
 	for i := range outputs {
 		taprootOutputs[i] = outputs[i].Pubkey
 	}
-	return indexer.BuildTaprootPubkeyFilter(blockhash, taprootOutputs)
+	return buildTaprootPubkeyFilter(blockhash, taprootOutputs)
 }
+
+// buildTaprootPubkeyFilter creates the taproot only filter (local version to avoid circular dependency)
+func buildTaprootPubkeyFilter(blockhash []byte, taprootOutputs [][]byte) ([]byte, error) {
+	// blockhash is already reversed
+	c := chainhash.Hash{}
+	err := c.SetBytes(blockhash)
+
+	if err != nil {
+		logging.L.Fatal().
+			Err(err).Hex("blockhash", blockhash).
+			Msg("failed to set block hash")
+		return nil, err
+	}
+	key := builder.DeriveKey(&c)
+
+	filter, err := gcs.BuildGCSFilter(builder.DefaultP, builder.DefaultM, key, taprootOutputs)
+	if err != nil {
+		logging.L.Fatal().Err(err).Hex("blockhash", blockhash).Msg("failed to build GCS filter")
+		return nil, err
+	}
+
+	nBytes, err := filter.NBytes()
+	if err != nil {
+		logging.L.Fatal().Err(err).Hex("blockhash", blockhash).Msg("failed to get NBytes")
+		return nil, err
+	}
+
+	return nBytes, nil
+}
+
+// Note: spent outpoints functions removed - they are now accelerator indexes, not static indexes

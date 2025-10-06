@@ -154,6 +154,20 @@ func KeyTaprootSpentFilter(blockhash []byte) []byte {
 	return k
 }
 
+func KeySpentOutpointsAccelerator(blockhash []byte) []byte {
+	k := make([]byte, 1+SizeHash)
+	k[0] = KSpentOutpointsAccelerator
+	copy(k[1:], blockhash)
+	return k
+}
+
+func KeySpentOutputsShort(blockhash []byte) []byte {
+	k := make([]byte, 1+SizeHash)
+	k[0] = KSpentOutputsShort
+	copy(k[1:], blockhash)
+	return k
+}
+
 // ---------------- Compute Index ----------------
 
 func KeyComputeIndex(height uint32, txid []byte) []byte {

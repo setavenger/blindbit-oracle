@@ -88,7 +88,7 @@ func main() {
 	//moved into go routine such that the interrupt signal will apply properly
 	go func() {
 		// so we can start fetching data while not fully synced.
-		go server.RunServer(&server.ApiHandler{})
+		go server.RunServer(server.NewHandler(store))
 
 		// keep it optional for now
 		if config.GRPCHost != "" {

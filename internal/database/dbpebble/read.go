@@ -80,6 +80,7 @@ func (s *Store) GetBlockHashByHeight(height uint32) ([]byte, error) {
 // if asc is true, the channel will be in ascending order
 // if asc is false, the channel will be in descending order
 func (s *Store) ChainIterator(asc bool) (<-chan []byte, error) {
+	// todo: add context
 	lb, ub := BoundsCIHeight()
 	it, err := s.DB.NewIter(&pebble.IterOptions{LowerBound: lb, UpperBound: ub})
 	if err != nil {
@@ -634,6 +635,46 @@ func (s *Store) FetchTaprootUnspentFilter(blockhash []byte) ([]byte, error) {
 	return val, nil
 }
 
+func (s *Store) FetchSpentOutpointsAccelerator(blockhash []byte) ([][36]byte, error) {
+	timeStart := time.Now()
+	defer func() {
+		logging.L.Trace().
+			Dur("duration", time.Since(timeStart)).
+			Hex("blockhash", utils.ReverseBytesCopy(blockhash)).
+			Msg("fetching_spent_outpoints_accelerator_timing")
+	}()
+	val, closer, err := s.DB.Get(KeySpentOutpointsAccelerator(blockhash))
+	if err != nil {
+		if errors.Is(err, pebble.ErrNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer closer.Close()
+	if len(val)%36 != 0 {
+		panic("bad spent outpoints accelerator value length")
+	}
+	numOutpoints := len(val) / 36
+	out := make([][36]byte, numOutpoints)
+	for i := range out {
+		copy(out[i][:], val[i*36:(i+1)*36])
+	}
+	return out, nil
+}
+
+func (s *Store) FetchSpentOutputs(blockhash []byte) ([]byte, error) {
+	// Returns first 8 bytes of x-only pubkeys for spent outputs
+	val, closer, err := s.DB.Get(KeySpentOutputsShort(blockhash))
+	if err != nil {
+		if errors.Is(err, pebble.ErrNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer closer.Close()
+	return val, nil
+}
+
 // ---------------- Static key exists checks ----------------
 // key exists checks for static data
 func (s *Store) KeyExistsStatic(key []byte) (bool, error) {
@@ -657,4 +698,30 @@ func (s *Store) KeyExistsStaticOutputs(blockhash []byte) (bool, error) {
 
 func (s *Store) KeyExistsStaticTaprootUnspentFilter(blockhash []byte) (bool, error) {
 	return s.KeyExistsStatic(KeyTaprootUnspentFilter(blockhash))
+}
+
+func (s *Store) KeyExistsSpentOutpointsAccelerator(blockhash []byte) (bool, error) {
+	return s.KeyExistsStatic(KeySpentOutpointsAccelerator(blockhash))
+}
+
+func (s *Store) KeyExistsComputeIndex(blockhash []byte) (bool, error) {
+	// Check if any compute index entries exist for this block
+	// We need to get the height first, then check if any compute index entries exist
+	height, ok, err := s.heightIfOnBestChain(blockhash)
+	if err != nil {
+		return false, err
+	}
+	if !ok {
+		return false, nil // Block not on best chain
+	}
+
+	lb, ub := BoundsComputeIndexOneHeight(height)
+	it, err := s.DB.NewIter(&pebble.IterOptions{LowerBound: lb, UpperBound: ub})
+	if err != nil {
+		return false, err
+	}
+	defer it.Close()
+
+	// If we can find at least one entry, the compute index exists for this block
+	return it.First(), nil
 }

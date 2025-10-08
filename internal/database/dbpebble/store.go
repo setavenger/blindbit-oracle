@@ -175,9 +175,11 @@ func attachBlockToBatch(batch *pebble.Batch, block *database.DBBlock) error {
 		return err
 	}
 
-	// Collect spent outpoints for static index
-	var spentOutpoints [][36]byte
+	// Collect spent outputs short (first 8 bytes of x-only pubkeys)
 	var spentOutputsShort [][8]byte // First 8 bytes of x-only pubkeys
+
+	// Collect txid to outpoints mappings
+	txidOutpointsMap := make(map[[32]byte][][36]byte) // txid -> outpoints array
 
 	// block → txs + transaction records
 	for i := range txs {
@@ -226,6 +228,18 @@ func attachBlockToBatch(batch *pebble.Batch, block *database.DBBlock) error {
 			// optional accelerator outv:<txid>:<amountBE>:<voutBE> -> "" could be added later
 		}
 
+		// Collect outpoints for txid-outpoints mapping
+		var txOutpoints [][36]byte
+		for _, o := range t.Outs {
+			var outpoint [36]byte
+			copy(outpoint[:32], o.Txid)
+			be32(o.Vout, outpoint[32:])
+			txOutpoints = append(txOutpoints, outpoint)
+		}
+		if len(txOutpoints) > 0 {
+			txidOutpointsMap[[32]byte(t.Txid)] = txOutpoints
+		}
+
 		// spend events
 		for _, in := range t.Ins {
 			val, err := ValSpend(in.Pubkey) // or nil for keys-only
@@ -239,38 +253,12 @@ func attachBlockToBatch(batch *pebble.Batch, block *database.DBBlock) error {
 				return err
 			}
 
-			// Collect spent outpoint for static index
-			var outpoint [36]byte
-			copy(outpoint[:32], in.PrevTxid)
-			be32(in.PrevVout, outpoint[32:]) // for ranged iters is be or le better?
-			spentOutpoints = append(spentOutpoints, outpoint)
-
 			// Collect first 8 bytes of x-only pubkey for spent outputs
 			if len(in.Pubkey) >= 8 {
 				var outputShort [8]byte
 				copy(outputShort[:], in.Pubkey[:8])
 				spentOutputsShort = append(spentOutputsShort, outputShort)
 			}
-		}
-	}
-
-	// Store spent outpoints accelerator index
-	if len(spentOutpoints) > 0 {
-		spentOutpointsValue := make([]byte, 36*len(spentOutpoints))
-		for i, outpoint := range spentOutpoints {
-			copy(spentOutpointsValue[i*36:(i+1)*36], outpoint[:])
-		}
-		// should one do <blockhash><txid><vout> as one key (no value) for other types of lookups?
-		// value could be extended later on and would be compatible
-		if err := b.Set(KeySpentOutpointsAccelerator(blockHash), spentOutpointsValue, nil); err != nil {
-			logging.L.Err(err).Msg("insert spent outpoints accelerator failed")
-			return err
-		}
-	} else {
-		// Store empty array for blocks with no spent outpoints
-		if err := b.Set(KeySpentOutpointsAccelerator(blockHash), []byte{}, nil); err != nil {
-			logging.L.Err(err).Msg("insert spent outpoints accelerator failed")
-			return err
 		}
 	}
 
@@ -288,6 +276,19 @@ func attachBlockToBatch(batch *pebble.Batch, block *database.DBBlock) error {
 		// Store empty array for blocks with no spent outputs
 		if err := b.Set(KeySpentOutputsShort(blockHash), []byte{}, nil); err != nil {
 			logging.L.Err(err).Msg("insert spent outputs short failed")
+			return err
+		}
+	}
+
+	// Store txid to outpoints mappings
+	for txid, outpoints := range txidOutpointsMap {
+		val, err := ValTxidOutpoints(outpoints)
+		if err != nil {
+			logging.L.Err(err).Hex("txid", txid[:]).Msg("failed to encode txid outpoints")
+			return err
+		}
+		if err := b.Set(KeyTxidOutpoints(blockHash, txid[:]), val, nil); err != nil {
+			logging.L.Err(err).Hex("txid", txid[:]).Msg("insert txid outpoints failed")
 			return err
 		}
 	}

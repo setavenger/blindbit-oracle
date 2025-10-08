@@ -20,7 +20,6 @@ type DB interface {
 	FetchOutputsStaticProto(blockhash []byte) ([]pb.UTXO, error)
 	FetchTaprootUnspentFilter(blockhash []byte) ([]byte, error)
 	FetchSpentOutputs(blockhash []byte) ([]byte, error)
-	FetchSpentOutpointsAccelerator(blockhash []byte) ([][36]byte, error)
 	ChainIterator(asc bool) (<-chan []byte, error) // todo: add context
 	FetchComputeIndex(height uint32) ([]*pb.ComputeIndexTxItem, error)
 	BlockhashInDB(blockhash []byte) (bool, error)
@@ -34,8 +33,11 @@ type DB interface {
 	KeyExistsStaticTweaks(blockhash []byte) (bool, error)
 	KeyExistsStaticOutputs(blockhash []byte) (bool, error)
 	KeyExistsStaticTaprootUnspentFilter(blockhash []byte) (bool, error)
-	KeyExistsSpentOutpointsAccelerator(blockhash []byte) (bool, error)
 	KeyExistsComputeIndex(blockhash []byte) (bool, error)
+
+	// Txid-outpoints mapping functions
+	FetchTxidOutpoints(blockhash, txid []byte) ([][36]byte, error)
+	FetchAllTxidOutpointsForBlock(blockhash []byte) (map[[32]byte][][36]byte, error)
 }
 
 type TweakRow struct {

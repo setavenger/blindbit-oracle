@@ -21,9 +21,8 @@ func (b BlockIdentifier) MarshalJSON() ([]byte, error) {
 }
 
 type FullBlockResponse struct {
-	BlockIdentifier BlockIdentifier     `json:"block_identifier"`
-	Index           []FullTxItem        `json:"index"`
-	SpentOutpoints  SpentOutpointsIndex `json:"spent_outpoints"`
+	BlockIdentifier BlockIdentifier `json:"block_identifier"`
+	Index           []FullTxItem    `json:"index"`
 }
 
 // TweakIndexResponse is tweak index response
@@ -109,9 +108,9 @@ func (s SpentIndex) MarshalJSON() ([]byte, error) {
 }
 
 // SpentOutpointsIndex is a slice of 36 bytes each (32-byte txid + 4-byte vout)
-type SpentOutpointsIndex [][36]byte // 36 bytes each
+type SpentOutpoints [][36]byte // 36 bytes each
 
-func (s SpentOutpointsIndex) MarshalJSON() ([]byte, error) {
+func (s SpentOutpoints) MarshalJSON() ([]byte, error) {
 	out := make([]string, len(s))
 	for i := range s {
 		out[i] = hex.EncodeToString(s[i][:])
@@ -123,20 +122,29 @@ func (s SpentOutpointsIndex) MarshalJSON() ([]byte, error) {
 // Will be sent for Full Block Batch lots of data,
 // should be avoided if possible
 type FullTxItem struct {
-	TxId  [32]byte        `json:"txid"`
-	Tweak [33]byte        `json:"tweak"`
-	UTXOs []UTXOItemLight `json:"utxos"` // should probably be optional
+	TxId   [32]byte        `json:"txid"`
+	Tweak  [33]byte        `json:"tweak"`
+	Inputs SpentOutpoints  `json:"inputs"`
+	UTXOs  []UTXOItemLight `json:"utxos"` // should probably be optional
 }
 
 func (f FullTxItem) MarshalJSON() ([]byte, error) {
+	// Convert SpentOutpoints to []string for JSON marshaling
+	inputs := make([]string, len(f.Inputs))
+	for i, outpoint := range f.Inputs {
+		inputs[i] = hex.EncodeToString(outpoint[:])
+	}
+
 	return json.Marshal(struct {
-		TxId  string          `json:"txid"`
-		Tweak string          `json:"tweak"`
-		UTXOs []UTXOItemLight `json:"utxos"`
+		TxId   string          `json:"txid"`
+		Tweak  string          `json:"tweak"`
+		Inputs []string        `json:"inputs"`
+		UTXOs  []UTXOItemLight `json:"utxos"`
 	}{
-		TxId:  hex.EncodeToString(f.TxId[:]),
-		Tweak: hex.EncodeToString(f.Tweak[:]),
-		UTXOs: f.UTXOs,
+		TxId:   hex.EncodeToString(f.TxId[:]),
+		Tweak:  hex.EncodeToString(f.Tweak[:]),
+		Inputs: inputs,
+		UTXOs:  f.UTXOs,
 	})
 }
 

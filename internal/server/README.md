@@ -20,15 +20,21 @@ Returns a simple list of tweaks as 33-byte public keys. For bandwidth-constraine
 
 **Response Format:**
 ```json
-[
-    "03<x-only pubkey>",
-    "02<x-only pubkey>",
-    "03<x-only pubkey>",
-    "03<x-only pubkey>",
-    "02<x-only pubkey>",
-    "03<x-only pubkey>",
-    "02<x-only pubkey>"
-]
+{
+    "block_identifier": {
+        "block_hash": "0000003223acbdef....",
+        "block_height": 894012
+    },
+    "index": [
+        "03<x-only pubkey>",
+        "02<x-only pubkey>",
+        "03<x-only pubkey>",
+        "03<x-only pubkey>",
+        "02<x-only pubkey>",
+        "03<x-only pubkey>",
+        "02<x-only pubkey>"
+    ]
+}
 ```
 
 ### Outputs/UTXOs
@@ -140,6 +146,10 @@ Returns complete block data with all transaction details and spent outpoints acc
         {
             "txid": "deadbeef987654",
             "tweak": "02deadbeef",
+            "inputs": [
+                "<36byte outpoint hex>",
+                "<36byte outpoint hex>",
+            ],
             "utxos": [
                 {
                     "vout": 0,
@@ -152,12 +162,27 @@ Returns complete block data with all transaction details and spent outpoints acc
                     "amount": 220042
                 }
             ]
+        },
+        {
+            "txid": "987654deadbeef",
+            "tweak": "02beefdeadefddeefdad",
+            "inputs": [
+                "<36byte outpoint hex>",
+                "<36byte outpoint hex>",
+            ],
+            "utxos": [
+                {
+                    "vout": 0,
+                    "pubkey": "<x-only pubkey>",
+                    "amount": 380042
+                },
+                {
+                    "vout": 1,
+                    "pubkey": "<x-only pubkey>",
+                    "amount": 380021
+                }
+            ]
         }
-    ],
-    "spent_outpoints": [
-        "deadbeef9876543210deadbeef9876543210deadbeef9876543210deadbeef00000000",
-        "beefdead1234567890beefdead1234567890beefdead1234567890beefdead00000001",
-        "cafebabeabcdef1234cafebabeabcdef1234cafebabeabcdef1234cafebabe00000002"
     ]
 }
 ```

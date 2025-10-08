@@ -39,9 +39,9 @@ const (
 	// Compute Index (accelerator)
 	KComputeIndex = 0x0D
 
-	// Spent Outpoints Accelerator (moved from static)
-	KSpentOutpointsAccelerator = 0x0E
-
 	// Spent Outputs Short (first 8 bytes of x-only pubkeys)
-	KSpentOutputsShort = 0x0F
+	KSpentOutputsShort = 0x0E
+
+	// Txid to Outpoints mapping (blockhash+txid -> concatenated outpoints)
+	KTxidOutpoints = 0x0F
 )

@@ -302,20 +302,6 @@ func (h *Handler) GetFullBlock(c *gin.Context) {
 		return
 	}
 
-	// Fetch spent outpoints accelerator index
-	spentOutpoints, err := h.db.FetchSpentOutpointsAccelerator(blockhash)
-	if err != nil {
-		logging.L.Err(err).Msg("error fetching spent outpoints accelerator")
-		c.JSON(http.StatusInternalServerError, NewErrorResponse(errors.New("could not retrieve spent outpoints from database")))
-		return
-	}
-
-	// reverse the spent outpoints - only txid part (first 32 bytes)
-	for i := range spentOutpoints {
-		// intentionally no copy as we swap within the array itself
-		utils.ReverseBytes(spentOutpoints[i][:32])
-	}
-
 	// Group outputs by transaction ID
 	txOutputs := make(map[string][]*database.Output)
 	for _, output := range outputs {
@@ -332,6 +318,14 @@ func (h *Handler) GetFullBlock(c *gin.Context) {
 			txid := hex.EncodeToString(tweakRow.Txid[:])
 			txidToTweak[txid] = tweakRow.Tweak
 		}
+	}
+
+	// Fetch all txid-outpoints mappings for this block
+	txidOutpointsMap, err := h.db.FetchAllTxidOutpointsForBlock(blockhash)
+	if err != nil {
+		logging.L.Err(err).Msg("error fetching txid-outpoints mappings")
+		c.JSON(http.StatusInternalServerError, NewErrorResponse(errors.New("could not retrieve txid-outpoints from database")))
+		return
 	}
 
 	// Build the full transaction items
@@ -352,6 +346,12 @@ func (h *Handler) GetFullBlock(c *gin.Context) {
 			tweak = tweakBytes
 		}
 
+		// Get inputs (spent outpoints) for this transaction
+		var inputs SpentOutpoints
+		if outpoints, exists := txidOutpointsMap[txidArray]; exists {
+			inputs = SpentOutpoints(outpoints)
+		}
+
 		// Convert outputs to UTXO items
 		var utxoItems []UTXOItemLight
 		for _, output := range outputs {
@@ -366,9 +366,10 @@ func (h *Handler) GetFullBlock(c *gin.Context) {
 		}
 
 		fullTxItems = append(fullTxItems, FullTxItem{
-			TxId:  [32]byte(utils.ReverseBytesCopy(txidArray[:])),
-			Tweak: tweak,
-			UTXOs: utxoItems,
+			TxId:   [32]byte(utils.ReverseBytesCopy(txidArray[:])),
+			Tweak:  tweak,
+			Inputs: inputs,
+			UTXOs:  utxoItems,
 		})
 	}
 
@@ -377,8 +378,7 @@ func (h *Handler) GetFullBlock(c *gin.Context) {
 			BlockHash:   utils.ReverseBytesCopy(blockhash),
 			BlockHeight: uint32(height),
 		},
-		Index:          fullTxItems,
-		SpentOutpoints: SpentOutpointsIndex(spentOutpoints),
+		Index: fullTxItems,
 	}
 
 	c.JSON(http.StatusOK, response)

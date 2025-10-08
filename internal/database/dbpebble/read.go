@@ -635,33 +635,6 @@ func (s *Store) FetchTaprootUnspentFilter(blockhash []byte) ([]byte, error) {
 	return val, nil
 }
 
-func (s *Store) FetchSpentOutpointsAccelerator(blockhash []byte) ([][36]byte, error) {
-	timeStart := time.Now()
-	defer func() {
-		logging.L.Trace().
-			Dur("duration", time.Since(timeStart)).
-			Hex("blockhash", utils.ReverseBytesCopy(blockhash)).
-			Msg("fetching_spent_outpoints_accelerator_timing")
-	}()
-	val, closer, err := s.DB.Get(KeySpentOutpointsAccelerator(blockhash))
-	if err != nil {
-		if errors.Is(err, pebble.ErrNotFound) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	defer closer.Close()
-	if len(val)%36 != 0 {
-		panic("bad spent outpoints accelerator value length")
-	}
-	numOutpoints := len(val) / 36
-	out := make([][36]byte, numOutpoints)
-	for i := range out {
-		copy(out[i][:], val[i*36:(i+1)*36])
-	}
-	return out, nil
-}
-
 func (s *Store) FetchSpentOutputs(blockhash []byte) ([]byte, error) {
 	// Returns first 8 bytes of x-only pubkeys for spent outputs
 	val, closer, err := s.DB.Get(KeySpentOutputsShort(blockhash))
@@ -700,10 +673,6 @@ func (s *Store) KeyExistsStaticTaprootUnspentFilter(blockhash []byte) (bool, err
 	return s.KeyExistsStatic(KeyTaprootUnspentFilter(blockhash))
 }
 
-func (s *Store) KeyExistsSpentOutpointsAccelerator(blockhash []byte) (bool, error) {
-	return s.KeyExistsStatic(KeySpentOutpointsAccelerator(blockhash))
-}
-
 func (s *Store) KeyExistsComputeIndex(blockhash []byte) (bool, error) {
 	// Check if any compute index entries exist for this block
 	// We need to get the height first, then check if any compute index entries exist
@@ -724,4 +693,70 @@ func (s *Store) KeyExistsComputeIndex(blockhash []byte) (bool, error) {
 
 	// If we can find at least one entry, the compute index exists for this block
 	return it.First(), nil
+}
+
+// FetchTxidOutpoints retrieves all outpoints for a given transaction ID in a specific block
+func (s *Store) FetchTxidOutpoints(blockhash, txid []byte) ([][36]byte, error) {
+	start := time.Now()
+	defer func() {
+		logging.L.Debug().
+			Dur("duration", time.Since(start)).
+			Hex("blockhash", blockhash).
+			Hex("txid", txid).
+			Msg("fetching_txid_outpoints_timing")
+	}()
+
+	val, closer, err := s.DB.Get(KeyTxidOutpoints(blockhash, txid))
+	if err != nil {
+		if errors.Is(err, pebble.ErrNotFound) {
+			return [][36]byte{}, nil // No outpoints found for this txid
+		}
+		return nil, err
+	}
+	defer closer.Close()
+
+	return ParseTxidOutpointsValue(val)
+}
+
+// FetchAllTxidOutpointsForBlock retrieves all txid-outpoints mappings for a given block
+// This uses contiguous iteration for efficient retrieval
+func (s *Store) FetchAllTxidOutpointsForBlock(blockhash []byte) (map[[32]byte][][36]byte, error) {
+	// I guess a map is fine as we have lost the "original" ordering of the block anyways
+	// <blockhash><txid> is the key and sorts by txid on second hierarchy level
+	start := time.Now()
+	defer func() {
+		logging.L.Debug().
+			Dur("duration", time.Since(start)).
+			Hex("blockhash", blockhash).
+			Msg("fetching_all_txid_outpoints_for_block_timing")
+	}()
+
+	lb, ub := BoundsTxidOutpoints(blockhash)
+	it, err := s.DB.NewIter(&pebble.IterOptions{LowerBound: lb, UpperBound: ub})
+	if err != nil {
+		return nil, err
+	}
+	defer it.Close()
+
+	result := make(map[[32]byte][][36]byte)
+
+	for it.First(); it.Valid(); it.Next() {
+		key := it.Key()
+		if len(key) != 1+SizeHash+SizeTxid {
+			err := errors.New("malformed key")
+			logging.L.Err(err).Hex("key", key).Msg("skipping malformed key")
+			return nil, err
+		}
+
+		txid := key[1+SizeHash:]
+		outpoints, err := ParseTxidOutpointsValue(it.Value())
+		if err != nil {
+			logging.L.Err(err).Hex("txid", txid).Msg("failed to parse txid outpoints")
+			return nil, err
+		}
+
+		result[[32]byte(txid)] = outpoints
+	}
+
+	return result, nil
 }

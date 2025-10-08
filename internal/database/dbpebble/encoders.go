@@ -4,6 +4,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"math"
+
+	"github.com/setavenger/blindbit-lib/logging"
 )
 
 // ---------------- Keys ----------------
@@ -154,18 +156,37 @@ func KeyTaprootSpentFilter(blockhash []byte) []byte {
 	return k
 }
 
-func KeySpentOutpointsAccelerator(blockhash []byte) []byte {
-	k := make([]byte, 1+SizeHash)
-	k[0] = KSpentOutpointsAccelerator
-	copy(k[1:], blockhash)
-	return k
-}
-
 func KeySpentOutputsShort(blockhash []byte) []byte {
 	k := make([]byte, 1+SizeHash)
 	k[0] = KSpentOutputsShort
 	copy(k[1:], blockhash)
 	return k
+}
+
+// ---------------- Txid Outpoints Mapping ----------------
+
+func KeyTxidOutpoints(blockhash, txid []byte) []byte {
+	k := make([]byte, 1+SizeHash+SizeTxid)
+	k[0] = KTxidOutpoints
+	copy(k[1:1+SizeHash], blockhash)
+	copy(k[1+SizeHash:], txid)
+	return k
+}
+
+func BoundsTxidOutpoints(blockhash []byte) (lb, ub []byte) {
+	lb = make([]byte, 1+SizeHash+SizeTxid)
+	lb[0] = KTxidOutpoints
+	copy(lb[1:1+SizeHash], blockhash)
+	// txid = 0x00000000...
+
+	ub = make([]byte, 1+SizeHash+SizeTxid)
+	ub[0] = KTxidOutpoints
+	copy(ub[1:1+SizeHash], blockhash)
+	// txid = 0xFFFFFFFF... (exclusive upper bound)
+	for i := 1 + SizeHash; i < 1+SizeHash+SizeTxid; i++ {
+		ub[i] = 0xFF
+	}
+	return
 }
 
 // ---------------- Compute Index ----------------
@@ -244,4 +265,36 @@ func ValSpend(spendPub []byte) ([]byte, error) {
 	v := make([]byte, SizePubKey)
 	copy(v, spendPub)
 	return v, nil
+}
+
+func ValTxidOutpoints(outpoints [][36]byte) ([]byte, error) {
+	if len(outpoints) == 0 {
+		return []byte{}, nil // empty array
+	}
+
+	// Each outpoint is 36 bytes (32-byte txid + 4-byte vout)
+	value := make([]byte, 36*len(outpoints))
+	for i, outpoint := range outpoints {
+		copy(value[i*36:(i+1)*36], outpoint[:])
+	}
+	return value, nil
+}
+
+func ParseTxidOutpointsValue(v []byte) ([][36]byte, error) {
+	if len(v) == 0 {
+		return [][36]byte{}, nil // empty array
+	}
+
+	if len(v)%36 != 0 {
+		err := errors.New("bad txid outpoints value length - must be multiple of 36")
+		logging.L.Err(err).Hex("value", v).Msg("bad values in txid outpoints")
+		return nil, err
+	}
+
+	numOutpoints := len(v) / 36
+	outpoints := make([][36]byte, numOutpoints)
+	for i := range numOutpoints {
+		copy(outpoints[i][:], v[i*36:(i+1)*36])
+	}
+	return outpoints, nil
 }

@@ -255,32 +255,32 @@ func (b *Builder) SyncBlocks(
 
 				// Build static indexes for this block after storing it
 				// Static indexes should always be built for new blocks with integrity checks
-				logging.L.Debug().
-					Uint32("height", dbBlock.Height).
-					Msg("building static indexes for new block")
-				err = b.store.BuildStaticIndexesForBlock(dbBlock.Hash[:])
-				if err != nil {
-					logging.L.Warn().Err(err).
-						Str("blockhash", dbBlock.Hash.String()).
-						Uint32("height", dbBlock.Height).
-						Msg("failed to build static indexes for block")
-					// Don't return error here - static indexes are not critical for sync to continue
-					// The block data is already stored, so we can continue
-				}
+				// logging.L.Debug().
+				// 	Uint32("height", dbBlock.Height).
+				// 	Msg("building static indexes for new block")
+				// err = b.store.BuildStaticIndexesForBlock(dbBlock.Hash[:])
+				// if err != nil {
+				// 	logging.L.Warn().Err(err).
+				// 		Str("blockhash", dbBlock.Hash.String()).
+				// 		Uint32("height", dbBlock.Height).
+				// 		Msg("failed to build static indexes for block")
+				// 	// Don't return error here - static indexes are not critical for sync to continue
+				// 	// The block data is already stored, so we can continue
+				// }
 
 				// Build accelerator indexes for this block after static indexes
-				logging.L.Debug().
-					Uint32("height", dbBlock.Height).
-					Msg("building accelerator indexes for new block")
-				err = b.store.BuildAcceleratorIndexesForBlock(dbBlock.Hash[:])
-				if err != nil {
-					logging.L.Err(err).
-						Str("blockhash", dbBlock.Hash.String()).
-						Uint32("height", dbBlock.Height).
-						Msg("failed to build accelerator indexes for block")
-					errChan <- err
-					return
-				}
+				// logging.L.Debug().
+				// 	Uint32("height", dbBlock.Height).
+				// 	Msg("building accelerator indexes for new block")
+				// err = b.store.BuildAcceleratorIndexesForBlock(dbBlock.Hash[:]) // does this actually still build anything necessary? the normal builder should do this already. The is_on_best_chain check is also always going to fail if placed here - apply block is async and blockhash will not be in best chain yet
+				// if err != nil {
+				// 	logging.L.Err(err).
+				// 		Str("blockhash", dbBlock.Hash.String()).
+				// 		Uint32("height", dbBlock.Height).
+				// 		Msg("failed to build accelerator indexes for block")
+				// 	errChan <- err
+				// 	return
+				// }
 
 				// Simple completion log
 				logging.L.Info().
@@ -474,6 +474,7 @@ func handleTx(tx *Transaction) *database.Tx {
 		v := tx.ins[i]
 		if bip352.IsP2TR(v.prevOut.PkScript) {
 			dbIns = append(dbIns, &database.In{
+				Pubkey:    v.prevOut.PkScript[2:],
 				SpendTxid: tx.txid[:],
 				Idx:       uint32(i), // todo: this should be right
 				PrevTxid:  v.txIn.PreviousOutPoint.Hash[:],

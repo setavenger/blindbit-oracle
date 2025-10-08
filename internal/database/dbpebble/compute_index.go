@@ -175,6 +175,10 @@ func (s *Store) BuildComputeIndexForHeight(height uint32) ([]ComputeIndex, error
 	return computeIndexes, nil
 }
 
+func BuildComputeIndexForTx(tx *Tx) (*ComputeIndex, error) {
+	return nil, nil
+}
+
 func attachComputeIndexToBatch(
 	batch *pebble.Batch,
 	computeIndexes []ComputeIndex,

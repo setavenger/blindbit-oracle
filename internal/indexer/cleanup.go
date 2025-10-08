@@ -51,11 +51,11 @@ func (b *Builder) DBIntegrityCheck(ctx context.Context) error {
 	}
 
 	// Check for missing static indexes
-	logging.L.Info().Msg("Checking static index integrity...")
-	err = b.checkStaticIndexIntegrity(startHeight, endHeight)
-	if err != nil {
-		return err
-	}
+	// logging.L.Info().Msg("Checking static index integrity...")
+	// err = b.checkStaticIndexIntegrity(startHeight, endHeight)
+	// if err != nil {
+	// 	return err
+	// }
 
 	// for height := config.SyncStartHeight; height <= syncTip; height++ {
 	// 	// todo: turn into more efficient sync blocks (concurrent)

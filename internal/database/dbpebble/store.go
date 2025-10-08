@@ -6,6 +6,7 @@ import (
 
 	"github.com/cockroachdb/pebble"
 	"github.com/setavenger/blindbit-lib/logging"
+	"github.com/setavenger/blindbit-lib/utils"
 	"github.com/setavenger/blindbit-oracle/internal/database"
 )
 
@@ -183,7 +184,6 @@ func attachBlockToBatch(batch *pebble.Batch, block *database.DBBlock) error {
 
 	// block → txs + transaction records
 	for i := range txs {
-
 		t := txs[i]
 		if t == nil {
 			// we skip nil txs here to so that we have exact positions.
@@ -201,44 +201,8 @@ func attachBlockToBatch(batch *pebble.Batch, block *database.DBBlock) error {
 			return err
 		}
 
-		// tx tweak
-		if t.Tweak != nil {
-			val, err := ValTxTweak(t.Tweak[:])
-			if err != nil {
-				logging.L.Err(err).Msg("insert failed")
-				return err
-			}
-			if err := b.Set(KeyTx(t.Txid), val, nil); err != nil {
-				logging.L.Err(err).Msg("insert failed")
-				return err
-			}
-		}
-
-		// outputs
-		for _, o := range t.Outs {
-			val, err := ValOut(o.Amount, o.Pubkey)
-			if err != nil {
-				logging.L.Err(err).Any("output", o).Msg("insert failed")
-				return err
-			}
-			if err := b.Set(KeyOut(o.Txid, o.Vout), val, nil); err != nil {
-				logging.L.Err(err).Any("output", o).Msg("insert failed")
-				return err
-			}
-			// optional accelerator outv:<txid>:<amountBE>:<voutBE> -> "" could be added later
-		}
-
-		// Collect outpoints for txid-outpoints mapping
-		var txOutpoints [][36]byte
-		for _, o := range t.Outs {
-			var outpoint [36]byte
-			copy(outpoint[:32], o.Txid)
-			be32(o.Vout, outpoint[32:])
-			txOutpoints = append(txOutpoints, outpoint)
-		}
-		if len(txOutpoints) > 0 {
-			txidOutpointsMap[[32]byte(t.Txid)] = txOutpoints
-		}
+		// we keep them here to not do it twice for compute index
+		var txSpentsShort [][8]byte
 
 		// spend events
 		for _, in := range t.Ins {
@@ -254,12 +218,70 @@ func attachBlockToBatch(batch *pebble.Batch, block *database.DBBlock) error {
 			}
 
 			// Collect first 8 bytes of x-only pubkey for spent outputs
-			if len(in.Pubkey) >= 8 {
-				var outputShort [8]byte
-				copy(outputShort[:], in.Pubkey[:8])
-				spentOutputsShort = append(spentOutputsShort, outputShort)
+			var outputShort [8]byte
+			copy(outputShort[:], in.Pubkey[:8])
+			txSpentsShort = append(txSpentsShort, outputShort)
+		}
+
+		// tx tweak
+		if t.Tweak != nil {
+			// Data only stored if a valid tweak exists
+			// - tweaks
+			// - outputs (new utxos; spent is always relevant)
+			// - compute index
+
+			val, err := ValTxTweak(t.Tweak[:])
+			if err != nil {
+				logging.L.Err(err).Msg("insert failed")
+				return err
+			}
+			if err := b.Set(KeyTx(t.Txid), val, nil); err != nil {
+				logging.L.Err(err).Msg("insert failed")
+				return err
+			}
+
+			// outputs
+			var newOutsShort [][8]byte
+			for _, o := range t.Outs {
+				val, err := ValOut(o.Amount, o.Pubkey)
+				if err != nil {
+					logging.L.Err(err).Any("output", o).Msg("insert failed")
+					return err
+				}
+				if err := b.Set(KeyOut(o.Txid, o.Vout), val, nil); err != nil {
+					logging.L.Err(err).Any("output", o).Msg("insert failed")
+					return err
+				}
+				var newOut [8]byte
+				copy(newOut[:], o.Pubkey[:8])
+				newOutsShort = append(newOutsShort, newOut)
+				// optional accelerator outv:<txid>:<amountBE>:<voutBE> -> "" could be added later
+			}
+
+			computeIndex := ComputeIndex{
+				TxId:         t.Txid,
+				Height:       height,
+				Tweak:        t.Tweak[:],
+				OutputsShort: newOutsShort,
+			}
+			if err := b.Set(computeIndex.SerialiseKey(), computeIndex.SerialiseData(), nil); err != nil {
+				return err
 			}
 		}
+
+		// Collect outpoints for txid-outpoints mapping
+		var txOutpoints [][36]byte
+		for _, in := range t.Ins {
+			var outpoint [36]byte
+			copy(outpoint[:32], in.PrevTxid)
+			be32(in.PrevVout, outpoint[32:])
+			txOutpoints = append(txOutpoints, outpoint)
+		}
+		if len(txOutpoints) > 0 {
+			txidOutpointsMap[[32]byte(t.Txid)] = txOutpoints
+		}
+
+		spentOutputsShort = append(spentOutputsShort, txSpentsShort...)
 	}
 
 	// Store spent outputs short (first 8 bytes of x-only pubkeys)
@@ -274,6 +296,10 @@ func attachBlockToBatch(batch *pebble.Batch, block *database.DBBlock) error {
 		}
 	} else {
 		// Store empty array for blocks with no spent outputs
+		logging.L.Warn().
+			Uint32("height", height).
+			Hex("block_hash", utils.ReverseBytesCopy(blockHash)).
+			Msg("no spent outputs for block")
 		if err := b.Set(KeySpentOutputsShort(blockHash), []byte{}, nil); err != nil {
 			logging.L.Err(err).Msg("insert spent outputs short failed")
 			return err

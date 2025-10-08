@@ -19,7 +19,7 @@ type DB interface {
 	FetchOutputsStatic(blockhash []byte) ([]*Output, error)
 	FetchOutputsStaticProto(blockhash []byte) ([]pb.UTXO, error)
 	FetchTaprootUnspentFilter(blockhash []byte) ([]byte, error)
-	FetchSpentOutputs(blockhash []byte) ([]byte, error)
+	FetchSpentOutputsShort(blockhash []byte) ([]byte, error)
 	ChainIterator(asc bool) (<-chan []byte, error) // todo: add context
 	FetchComputeIndex(height uint32) ([]*pb.ComputeIndexTxItem, error)
 	BlockhashInDB(blockhash []byte) (bool, error)

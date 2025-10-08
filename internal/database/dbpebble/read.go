@@ -635,7 +635,7 @@ func (s *Store) FetchTaprootUnspentFilter(blockhash []byte) ([]byte, error) {
 	return val, nil
 }
 
-func (s *Store) FetchSpentOutputs(blockhash []byte) ([]byte, error) {
+func (s *Store) FetchSpentOutputsShort(blockhash []byte) ([]byte, error) {
 	// Returns first 8 bytes of x-only pubkeys for spent outputs
 	val, closer, err := s.DB.Get(KeySpentOutputsShort(blockhash))
 	if err != nil {
@@ -649,6 +649,7 @@ func (s *Store) FetchSpentOutputs(blockhash []byte) ([]byte, error) {
 }
 
 // ---------------- Static key exists checks ----------------
+
 // key exists checks for static data
 func (s *Store) KeyExistsStatic(key []byte) (bool, error) {
 	val, closer, err := s.DB.Get(key)

@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -158,22 +159,24 @@ func (h *Handler) GetSpentOutputs(c *gin.Context) {
 	}
 
 	// Fetch spent outputs data
-	spentOutputsData, err := h.db.FetchSpentOutputs(blockhash)
+	spentOutputsData, err := h.db.FetchSpentOutputsShort(blockhash)
 	if err != nil {
 		logging.L.Err(err).Msg("error fetching spent outputs")
 		c.JSON(http.StatusInternalServerError, NewErrorResponse(errors.New("could not retrieve spent outputs from database")))
 		return
 	}
 
+	fmt.Println("short outputs:", len(spentOutputsData))
+
 	// Convert spent outputs data to SpentIndex format
 	var spentOutputsShort SpentIndex
 	if len(spentOutputsData) > 0 {
-		for i := 0; i < len(spentOutputsData); i += 8 {
-			if i+8 <= len(spentOutputsData) {
-				var outputBytes [8]byte
-				copy(outputBytes[:], spentOutputsData[i:i+8])
-				spentOutputsShort = append(spentOutputsShort, outputBytes)
-			}
+		for i := 0; i+8 <= len(spentOutputsData); i += 8 {
+			// if i+8 <= len(spentOutputsData) {
+			var outputBytes [8]byte
+			copy(outputBytes[:], spentOutputsData[i:i+8])
+			spentOutputsShort = append(spentOutputsShort, outputBytes)
+			// }
 		}
 	}
 
@@ -349,6 +352,9 @@ func (h *Handler) GetFullBlock(c *gin.Context) {
 		// Get inputs (spent outpoints) for this transaction
 		var inputs SpentOutpoints
 		if outpoints, exists := txidOutpointsMap[txidArray]; exists {
+			for i := range outpoints {
+				utils.ReverseBytes(outpoints[i][:32])
+			}
 			inputs = SpentOutpoints(outpoints)
 		}
 

@@ -117,45 +117,6 @@ func KeyCIBlock(blockHash []byte) []byte {
 	return k
 }
 
-// ---------------- Statics ----------------
-
-func KeyTweaksStatic(blockhash []byte) []byte {
-	k := make([]byte, 1+SizeHash)
-	k[0] = KTweaksStatic
-	copy(k[1:], blockhash)
-	return k
-}
-
-func KeyKUTXOsStatic(blockhash []byte) []byte {
-	k := make([]byte, 1+SizeHash)
-	k[0] = KUTXOsStatic
-	copy(k[1:], blockhash)
-	return k
-}
-
-// ---------------- Filters ----------------
-
-func KeyTaprootPubkeyFilter(blockhash []byte) []byte {
-	k := make([]byte, 1+SizeHash)
-	k[0] = KTaprootPubkeyFilter
-	copy(k[1:], blockhash)
-	return k
-}
-
-func KeyTaprootUnspentFilter(blockhash []byte) []byte {
-	k := make([]byte, 1+SizeHash)
-	k[0] = KTaprootUnspentFilter
-	copy(k[1:], blockhash)
-	return k
-}
-
-func KeyTaprootSpentFilter(blockhash []byte) []byte {
-	k := make([]byte, 1+SizeHash)
-	k[0] = KTaprootSpentFilter
-	copy(k[1:], blockhash)
-	return k
-}
-
 func KeySpentOutputsShort(blockhash []byte) []byte {
 	k := make([]byte, 1+SizeHash)
 	k[0] = KSpentOutputsShort

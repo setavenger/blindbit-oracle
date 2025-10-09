@@ -40,16 +40,6 @@ func (de *DatabaseExplorer) CountKeysByType(keyType string, startHeight, endHeig
 		lowerBound, upperBound = dbpebble.BoundsComputeIndex(startHeight, endHeight)
 	case "ci-height":
 		lowerBound, upperBound = de.getCIHeightBounds(startHeight, endHeight)
-	case "tweaks-static":
-		lowerBound, upperBound = de.getTweaksStaticBounds(startHeight, endHeight)
-	case "utxos-static":
-		lowerBound, upperBound = de.getUTXOsStaticBounds(startHeight, endHeight)
-	case "taproot-pubkey-filter":
-		lowerBound, upperBound = de.getTaprootPubkeyFilterBounds(startHeight, endHeight)
-	case "taproot-unspent-filter":
-		lowerBound, upperBound = de.getTaprootUnspentFilterBounds(startHeight, endHeight)
-	case "taproot-spent-filter":
-		lowerBound, upperBound = de.getTaprootSpentFilterBounds(startHeight, endHeight)
 	case "block-tx", "tx", "out", "spend", "ci-block", "tx-occur":
 		// These key types don't use height ranges, count all keys of this type
 		lowerBound, upperBound = de.getKeyTypeBounds(keyType)
@@ -323,19 +313,14 @@ func (de *DatabaseExplorer) PrintKeyTypeSummary() error {
 
 	// Define key type names for better readability
 	keyTypeNames := map[byte]string{
-		dbpebble.KBlockTx:              "BlockTx",
-		dbpebble.KTx:                   "Tx",
-		dbpebble.KOut:                  "Out",
-		dbpebble.KSpend:                "Spend",
-		dbpebble.KCIHeight:             "CIHeight",
-		dbpebble.KCIBlock:              "CIBlock",
-		dbpebble.KTxOccur:              "TxOccur",
-		dbpebble.KTweaksStatic:         "TweaksStatic",
-		dbpebble.KUTXOsStatic:          "UTXOsStatic",
-		dbpebble.KTaprootPubkeyFilter:  "TaprootPubkeyFilter",
-		dbpebble.KTaprootUnspentFilter: "TaprootUnspentFilter",
-		dbpebble.KTaprootSpentFilter:   "TaprootSpentFilter",
-		dbpebble.KComputeIndex:         "ComputeIndex",
+		dbpebble.KBlockTx:      "BlockTx",
+		dbpebble.KTx:           "Tx",
+		dbpebble.KOut:          "Out",
+		dbpebble.KSpend:        "Spend",
+		dbpebble.KCIHeight:     "CIHeight",
+		dbpebble.KCIBlock:      "CIBlock",
+		dbpebble.KTxOccur:      "TxOccur",
+		dbpebble.KComputeIndex: "ComputeIndex",
 	}
 
 	totalKeys := 0
@@ -454,65 +439,6 @@ func (de *DatabaseExplorer) getCIHeightBounds(startHeight, endHeight uint32) ([]
 	return lowerBound, upperBound
 }
 
-func (de *DatabaseExplorer) getTweaksStaticBounds(startHeight, endHeight uint32) ([]byte, []byte) {
-	// TweaksStatic keys: KTweaksStatic + blockhash (32 bytes)
-	// We need to get block hashes for the height range
-	lowerBound := make([]byte, 1+dbpebble.SizeHash)
-	lowerBound[0] = dbpebble.KTweaksStatic
-
-	upperBound := make([]byte, 1+dbpebble.SizeHash)
-	upperBound[0] = dbpebble.KTweaksStatic
-
-	// For now, we'll use a simple approach - iterate through heights
-	// In a real implementation, you'd want to get the actual block hashes
-	// This is a simplified version that will work for counting
-	return lowerBound, upperBound
-}
-
-func (de *DatabaseExplorer) getUTXOsStaticBounds(startHeight, endHeight uint32) ([]byte, []byte) {
-	// UTXOsStatic keys: KUTXOsStatic + blockhash (32 bytes)
-	lowerBound := make([]byte, 1+dbpebble.SizeHash)
-	lowerBound[0] = dbpebble.KUTXOsStatic
-
-	upperBound := make([]byte, 1+dbpebble.SizeHash)
-	upperBound[0] = dbpebble.KUTXOsStatic
-
-	return lowerBound, upperBound
-}
-
-func (de *DatabaseExplorer) getTaprootPubkeyFilterBounds(startHeight, endHeight uint32) ([]byte, []byte) {
-	// TaprootPubkeyFilter keys: KTaprootPubkeyFilter + blockhash (32 bytes)
-	lowerBound := make([]byte, 1+dbpebble.SizeHash)
-	lowerBound[0] = dbpebble.KTaprootPubkeyFilter
-
-	upperBound := make([]byte, 1+dbpebble.SizeHash)
-	upperBound[0] = dbpebble.KTaprootPubkeyFilter
-
-	return lowerBound, upperBound
-}
-
-func (de *DatabaseExplorer) getTaprootUnspentFilterBounds(startHeight, endHeight uint32) ([]byte, []byte) {
-	// TaprootUnspentFilter keys: KTaprootUnspentFilter + blockhash (32 bytes)
-	lowerBound := make([]byte, 1+dbpebble.SizeHash)
-	lowerBound[0] = dbpebble.KTaprootUnspentFilter
-
-	upperBound := make([]byte, 1+dbpebble.SizeHash)
-	upperBound[0] = dbpebble.KTaprootUnspentFilter
-
-	return lowerBound, upperBound
-}
-
-func (de *DatabaseExplorer) getTaprootSpentFilterBounds(startHeight, endHeight uint32) ([]byte, []byte) {
-	// TaprootSpentFilter keys: KTaprootSpentFilter + blockhash (32 bytes)
-	lowerBound := make([]byte, 1+dbpebble.SizeHash)
-	lowerBound[0] = dbpebble.KTaprootSpentFilter
-
-	upperBound := make([]byte, 1+dbpebble.SizeHash)
-	upperBound[0] = dbpebble.KTaprootSpentFilter
-
-	return lowerBound, upperBound
-}
-
 func (de *DatabaseExplorer) getKeyTypeBounds(keyType string) ([]byte, []byte) {
 	var prefix byte
 
@@ -556,16 +482,6 @@ func (de *DatabaseExplorer) getKeyTypePrefix(keyType string) (byte, error) {
 		return dbpebble.KCIBlock, nil
 	case "tx-occur":
 		return dbpebble.KTxOccur, nil
-	case "tweaks-static":
-		return dbpebble.KTweaksStatic, nil
-	case "utxos-static":
-		return dbpebble.KUTXOsStatic, nil
-	case "taproot-pubkey-filter":
-		return dbpebble.KTaprootPubkeyFilter, nil
-	case "taproot-unspent-filter":
-		return dbpebble.KTaprootUnspentFilter, nil
-	case "taproot-spent-filter":
-		return dbpebble.KTaprootSpentFilter, nil
 	case "compute-index":
 		return dbpebble.KComputeIndex, nil
 	default:

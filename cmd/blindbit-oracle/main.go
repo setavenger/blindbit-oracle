@@ -209,12 +209,7 @@ Flags:
 			// index starts where data is available
 			startHeight = max(startHeight, firstBlockHeight)
 
-			// Build static indexes
-			err = store.BuildStaticIndexing(reindexStatic)
-			if err != nil {
-				errChan <- fmt.Errorf("static indexing failed: %w", err)
-				return
-			}
+			// Static indexes removed - using base data functions instead
 		}()
 
 		select {
@@ -352,17 +347,8 @@ Flags:
 			logging.L.Info().Msg("initial sync done")
 
 			// Build static indexes if requested
-			if reindexStatic {
-				logging.L.Info().Msg("Building static indexes...")
-				err = store.BuildStaticIndexing(true)
-				if err != nil {
-					errChan <- fmt.Errorf("static indexing failed: %w", err)
-					return
-				}
-				logging.L.Info().Msg("static indexes built")
-			} else {
-				logging.L.Info().Msg("Skipping static index build (--reindex-static flag not set)")
-			}
+			// Static indexes removed - using base data functions instead
+			logging.L.Info().Msg("Static indexes removed - using base data functions instead")
 
 			// Start continuous sync
 			err = builder.ContinuousSync(ctx)

@@ -8,8 +8,10 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/setavenger/blindbit-lib/api"
 	"github.com/setavenger/blindbit-lib/logging"
 	"github.com/setavenger/blindbit-lib/utils"
+	"github.com/setavenger/blindbit-oracle/internal/config"
 	"github.com/setavenger/blindbit-oracle/internal/database"
 )
 
@@ -19,6 +21,65 @@ type Handler struct {
 
 func NewHandler(db database.DB) *Handler {
 	return &Handler{db: db}
+}
+
+func (h *Handler) GetInfo(c *gin.Context) {
+	_, height, err := h.db.GetChainTip()
+	if err != nil {
+		logging.L.Err(err).Msg("error fetching chain tip")
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "could could not retrieve data from database",
+		})
+		return
+	}
+	c.JSON(http.StatusOK, api.InfoResponseOracle{
+		Network:                        config.ChainToString(config.Chain),
+		Height:                         height,
+		TweaksOnly:                     config.TweaksOnly,
+		TweaksFullBasic:                config.TweakIndexFullNoDust,
+		TweaksFullWithDustFilter:       config.TweakIndexFullIncludingDust,
+		TweaksCutThroughWithDustFilter: config.TweaksCutThroughWithDust,
+	})
+}
+
+func (h *Handler) GetBestBlockHeight(c *gin.Context) {
+	_, height, err := h.db.GetChainTip()
+	if err != nil {
+		logging.L.Err(err).Msg("error fetching chain tip")
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "could could not retrieve data from database",
+		})
+		return
+	}
+	c.JSON(http.StatusOK, api.BlockHeightResponseOracle{
+		BlockHeight: height,
+	})
+}
+
+func (h *Handler) GetBlockHashByHeight(c *gin.Context) {
+	heightStr := c.Param("blockheight")
+	if heightStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "block height is required"})
+		return
+	}
+
+	height, err := strconv.ParseUint(heightStr, 10, 32)
+	if err != nil {
+		logging.L.Err(err).Msg("could not parse block height")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "could not parse block height"})
+		return
+	}
+
+	blockhash, err := h.db.GetBlockHashByHeight(uint32(height))
+	if err != nil {
+		logging.L.Err(err).Msg("could not fetch block hash")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not fetch block hash"})
+		return
+	}
+
+	c.JSON(http.StatusOK, api.BlockHashResponseOracle{
+		BlockHash: hex.EncodeToString(utils.ReverseBytesCopy(blockhash)),
+	})
 }
 
 // GetUtxos returns UTXO information for a specific block
@@ -216,7 +277,10 @@ func (h *Handler) GetComputeIndex(c *gin.Context) {
 	computeIndexItems, err := h.db.FetchComputeIndex(uint32(height))
 	if err != nil {
 		logging.L.Err(err).Msg("error fetching compute index")
-		c.JSON(http.StatusInternalServerError, NewErrorResponse(errors.New("could not retrieve data from database")))
+		c.JSON(
+			http.StatusInternalServerError,
+			NewErrorResponse(errors.New("could not retrieve data from database")),
+		)
 		return
 	}
 

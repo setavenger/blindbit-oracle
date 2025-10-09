@@ -14,25 +14,11 @@ type DB interface {
 	TweaksForBlockAll([]byte) ([]*TweakRow, error)
 	TweaksForBlockCutThrough([]byte, uint32) ([]TweakRow, error)
 	FetchOutputsAll(blockhash []byte, tipheight uint32) ([]*Output, error)
-	FetchTweaksStatic(blockhash []byte) ([][]byte, error)
-	FetchTweaksStaticProto(blockhash []byte) ([][]byte, error) // todo: i guess redundant
-	FetchOutputsStatic(blockhash []byte) ([]*Output, error)
-	FetchOutputsStaticProto(blockhash []byte) ([]pb.UTXO, error)
-	FetchTaprootUnspentFilter(blockhash []byte) ([]byte, error)
 	FetchSpentOutputsShort(blockhash []byte) ([]byte, error)
 	ChainIterator(asc bool) (<-chan []byte, error) // todo: add context
 	FetchComputeIndex(height uint32) ([]*pb.ComputeIndexTxItem, error)
 	BlockhashInDB(blockhash []byte) (bool, error)
 	BatchSize() int
-	ReindexBlock(blockhash []byte, force bool) error
-	ReindexBlockWithOptions(blockhash []byte, forceAll bool, forceInexpensive bool) error
-	BuildStaticIndexesForBlock(blockhash []byte) error
-	BuildAcceleratorIndexesForBlock(blockhash []byte) error
-
-	// Static index existence checks
-	KeyExistsStaticTweaks(blockhash []byte) (bool, error)
-	KeyExistsStaticOutputs(blockhash []byte) (bool, error)
-	KeyExistsStaticTaprootUnspentFilter(blockhash []byte) (bool, error)
 	KeyExistsComputeIndex(blockhash []byte) (bool, error)
 
 	// Txid-outpoints mapping functions
@@ -49,7 +35,6 @@ type DBBlock struct {
 	Height uint32
 	Hash   *chainhash.Hash
 	Txs    []*Tx
-	// todo: add filters
 }
 
 type Output struct {

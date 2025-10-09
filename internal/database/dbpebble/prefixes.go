@@ -13,35 +13,23 @@ const (
 
 // Prefix Keys "K"
 const (
-	KBlockTx  = 0x01
-	KTx       = 0x02
-	KOut      = 0x03
-	KSpend    = 0x04
-	KCIHeight = 0x05
-	KCIBlock  = 0x06
-	KTxOccur  = 0x07
+	/* Basic data */
+	KBlockTx  = 0x01 // blockhash+position -> txid
+	KTx       = 0x02 // txid -> tweak
+	KOut      = 0x03 // txid+vout -> amount+pubkey
+	KSpend    = 0x04 // prev_txid+prev_vout+blockhash -> spend_pubkey
+	KCIHeight = 0x05 // height -> blockhash
+	KCIBlock  = 0x06 // blockhash -> height
+	KTxOccur  = 0x07 // txid+blockhash -> nil
 
-	// Statics
-	KTweaksStatic = 0x08
-	KUTXOsStatic  = 0x09
-
-	/* Filters */
-
-	// Inlcudes all taproot outputs for block
-	KTaprootPubkeyFilter = 0x0A
-
-	// Inlcudes all taproot unspent outputs for block
-	KTaprootUnspentFilter = 0x0B
-
-	// Inlcudes all taproot spent outputs for block
-	KTaprootSpentFilter = 0x0C
-
-	// Compute Index (accelerator)
-	KComputeIndex = 0x0D
+	// Compute Index
+	KComputeIndex = 0x0D // height+txid -> tweak+outputs_short
 
 	// Spent Outputs Short (first 8 bytes of x-only pubkeys)
-	KSpentOutputsShort = 0x0E
+	KSpentOutputsShort = 0x0E // blockhash -> spent_outputs_short
+
+	/* Accelerators */
 
 	// Txid to Outpoints mapping (blockhash+txid -> concatenated outpoints)
-	KTxidOutpoints = 0x0F
+	KTxidOutpoints = 0x0F // blockhash+txid -> outpoints
 )

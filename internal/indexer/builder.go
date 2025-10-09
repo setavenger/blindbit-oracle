@@ -399,7 +399,6 @@ func (b *Builder) pullBlockByBlockHash(blockhash *chainhash.Hash) (*Block, error
 // handleBlock makes all computations for a block, stores it in the database, and computes static indexes
 // and sends a DBBlock into the builders writerChan
 func (b *Builder) handleBlock(ctx context.Context, block *Block) error {
-	// todo: add filters to handleBlock
 	logging.L.Trace().
 		Str("blockhash", block.Hash.String()).
 		Int64("height", block.Height).

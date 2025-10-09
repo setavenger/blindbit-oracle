@@ -3,9 +3,8 @@ package v2
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
-	"sync"
-	"time"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -87,462 +86,24 @@ func (s *OracleService) GetBlockHashByHeight(
 	}, nil
 }
 
-// GetTweakArray returns tweaks for a specific block height
-func (s *OracleService) GetTweakArray(
-	ctx context.Context, req *pb.BlockHeightRequest,
-) (*pb.TweakArray, error) {
-	blockhash, err := s.db.GetBlockHashByHeight(uint32(req.BlockHeight))
-	if err != nil {
-		logging.L.Err(err).
-			Uint32("height", uint32(req.BlockHeight)).
-			Msg("failed to get blockhash for by height")
-		return nil, status.Errorf(
-			codes.Internal, "could not retrieve blockhash for height %d", req.BlockHeight,
-		)
-	}
-
-	tweakIndex, err := s.db.TweaksForBlockAll(blockhash)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "could not retrieve tweak data")
-	}
-
-	tweaks := make([][]byte, len(tweakIndex))
-	for i := range tweakIndex {
-		tweaks[i] = tweakIndex[i].Tweak[:]
-	}
-
-	return &pb.TweakArray{
-		BlockIdentifier: &pb.BlockIdentifier{
-			BlockHash:   utils.ReverseBytesCopy(blockhash),
-			BlockHeight: req.BlockHeight,
-		},
-		Tweaks: tweaks,
-	}, nil
-}
-
-// GetTweakIndexArray returns tweak index data for a specific block height
-func (s *OracleService) GetTweakIndexArray(
-	ctx context.Context, req *pb.GetTweakIndexRequest,
-) (*pb.TweakArray, error) {
-
-	blockhash, err := s.db.GetBlockHashByHeight(uint32(req.BlockHeight))
-	if err != nil {
-		logging.L.Err(err).
-			Uint32("height", req.BlockHeight).
-			Msg("failed to get blockhash for by height")
-		return nil, status.Errorf(
-			codes.Internal, "could not retrieve blockhash for height %d", req.BlockHeight,
-		)
-	}
-
-	_, syncTip, err := s.db.GetChainTip()
-	if err != nil {
-		logging.L.Err(err).
-			Msg("failed to get chain tip")
-		return nil, err
-	}
-
-	tweakIndex, err := s.db.TweaksForBlockCutThrough(blockhash, syncTip)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "could not retrieve dusted tweak data")
-	}
-
-	tweaks := make([][]byte, len(tweakIndex))
-	for i := range tweakIndex {
-		tweaks[i] = tweakIndex[i].Tweak[:]
-	}
-
-	return &pb.TweakArray{
-		BlockIdentifier: &pb.BlockIdentifier{
-			BlockHash:   utils.ReverseBytesCopy(blockhash),
-			BlockHeight: uint64(req.BlockHeight),
-		},
-		Tweaks: tweaks,
-	}, nil
-}
-
-// GetUTXOArray returns UTXOs for a specific block height
-func (s *OracleService) GetUTXOArray(
-	ctx context.Context, req *pb.BlockHeightRequest,
-) (*pb.UTXOArrayResponse, error) {
-
-	blockhash, err := s.db.GetBlockHashByHeight(uint32(req.BlockHeight))
-	if err != nil {
-		logging.L.Err(err).
-			Uint64("height", req.BlockHeight).
-			Msg("failed to get blockhash for by height")
-		return nil, status.Errorf(
-			codes.Internal, "could not retrieve blockhash for height %d", req.BlockHeight,
-		)
-	}
-
-	// todo: should we move this into the actual call
-	// at least make a wrapper which covers this
-	_, syncTip, err := s.db.GetChainTip()
-	if err != nil {
-		logging.L.Err(err).
-			Msg("failed to get chain tip")
-		return nil, err
-	}
-
-	// todo: change to dustlimit request
-	outputs, err := s.db.FetchOutputsAll(blockhash, syncTip)
-	if err != nil {
-		logging.L.Err(err).Msg("failed pulling utxos")
-		return nil, status.Errorf(
-			codes.Internal, "failed to pull utxos at height %d", req.BlockHeight,
-		)
-	}
-
-	// Convert internal UTXO types to protobuf types
-	pbUtxos := make([]*pb.UTXO, len(outputs))
-	for i, utxo := range outputs {
-		// todo: g in and change scriptpubKey to at least Byte slice if not even array
-		pbUtxos[i] = &pb.UTXO{
-			Txid:         utils.ReverseBytesCopy(utxo.Txid[:]),
-			Vout:         utxo.Vout,
-			Value:        utxo.Amount,
-			ScriptPubKey: utxo.Pubkey,
-			BlockHeight:  req.BlockHeight,
-			BlockHash:    blockhash,
-		}
-	}
-
-	return &pb.UTXOArrayResponse{
-		BlockIdentifier: &pb.BlockIdentifier{
-			BlockHash:   blockhash,
-			BlockHeight: req.BlockHeight,
-		},
-		Utxos: pbUtxos,
-	}, nil
-}
-
-// GetFilter returns filter data for a specific block height and type
-// func (s *OracleService) GetFilter(
-// 	ctx context.Context, req *pb.GetFilterRequest,
-// ) (*pb.FilterRepsonse, error) {
-// 	headerInv, err := dblevel.FetchByBlockHeightBlockHeaderInv(uint32(req.BlockHeight))
-// 	if err != nil {
-// 		logging.L.Err(err).Msg("error fetching block header inv")
-// 		return nil, status.Errorf(codes.Internal, "could not retrieve block data")
-// 	}
-//
-// 	var filter types.Filter
-// 	var err2 error
-//
-// 	switch req.FilterType {
-// 	case pb.FilterType_FILTER_TYPE_SPENT:
-// 		filter, err2 = dblevel.FetchByBlockHashSpentOutpointsFilter(headerInv.Hash)
-// 	case pb.FilterType_FILTER_TYPE_NEW_UTXOS:
-// 		filter, err2 = dblevel.FetchByBlockHashNewUTXOsFilter(headerInv.Hash)
-// 	default:
-// 		return nil, status.Errorf(codes.InvalidArgument, "invalid filter type")
-// 	}
-//
-// 	if err2 != nil {
-// 		logging.L.Err(err2).Msg("error fetching filter")
-// 		return nil, status.Errorf(codes.Internal, "could not retrieve filter data")
-// 	}
-//
-// 	return &pb.FilterRepsonse{
-// 		BlockIdentifier: &pb.BlockIdentifier{
-// 			BlockHash:   headerInv.Hash[:],
-// 			BlockHeight: uint64(headerInv.Height),
-// 		},
-// 		FilterData: &pb.FilterData{
-// 			FilterType: req.FilterType,
-// 			Data:       filter.Data,
-// 		},
-// 	}, nil
-// }
-
-// GetSpentOutpointsIndex returns spent outpoints index for a specific block height
-// func (s *OracleService) GetSpentOutpointsIndex(
-// 	ctx context.Context, req *pb.BlockHeightRequest,
-// ) (*pb.SpentOutpointsIndexResponse, error) {
-// 	headerInv, err := dblevel.FetchByBlockHeightBlockHeaderInv(uint32(req.BlockHeight))
-// 	if err != nil {
-// 		logging.L.Err(err).Msg("error fetching block header inv")
-// 		return nil, status.Errorf(codes.Internal, "could not retrieve block data")
-// 	}
-//
-// 	spentOutpoints, err := dblevel.FetchByBlockHashSpentOutpointIndex(headerInv.Hash)
-// 	if err != nil {
-// 		logging.L.Err(err).Msg("error fetching spent outpoints index")
-// 		return nil, status.Errorf(codes.Internal, "could not retrieve spent outpoints data")
-// 	}
-//
-// 	spentOutpointsSliced := make([][]byte, len(spentOutpoints.Data))
-// 	for i := range spentOutpointsSliced {
-// 		spentOutpointsSliced[i] = spentOutpoints.Data[i][:]
-// 	}
-//
-// 	return &pb.SpentOutpointsIndexResponse{
-// 		BlockIdentifier: &pb.BlockIdentifier{
-// 			BlockHash:   headerInv.Hash[:],
-// 			BlockHeight: uint64(headerInv.Height),
-// 		},
-// 		Data: spentOutpointsSliced,
-// 	}, nil
-// }
-
-// StreamBlockBatchSlim streams lightweight block batches for efficient processing
-func (s *OracleService) StreamBlockBatchSlim(
-	req *pb.RangedBlockHeightRequest,
-	stream pb.OracleService_StreamBlockBatchSlimServer,
+func (s *OracleService) StreamComputeIndexServer(
+	req *pb.RangedBlockHeightRequestFiltered,
+	stream pb.OracleService_StreamComputeIndexServer,
 ) error {
-	logging.L.Info().Msgf("streaming slim batches from %d to %d", req.Start, req.End)
-
 	for height := req.Start; height <= req.End; height++ {
 		blockhash, err := s.db.GetBlockHashByHeight(uint32(height))
-		if err != nil {
-			logging.L.Err(err).Uint64("height", height).Msg("failed to blockash by height")
-			return err
-		}
-
-		// Fetch all data for this block
-		// todo: make dependant on which index is supported
-		// for now it's always full basic
-
-		tweakIndex, err := s.db.TweaksForBlockAll(blockhash)
 		if err != nil {
 			logging.L.Err(err).
 				Uint64("height", height).
-				Hex("blockhash", utils.ReverseBytesCopy(blockhash)).
-				Msg("failed to pull tweaks")
-			return status.Errorf(codes.Internal, "failed to pull tweak index for height %d", height)
-		}
-
-		// Convert tweaks to bytes
-		tweakBytes := make([][]byte, len(tweakIndex))
-		for i, tweak := range tweakIndex {
-			tweakBytes[i] = tweak.Tweak[:]
-		}
-
-		batch := &pb.BlockBatchSlim{
-			BlockIdentifier: &pb.BlockIdentifier{
-				BlockHash:   utils.ReverseBytesCopy(blockhash),
-				BlockHeight: height,
-			},
-			Tweaks:           tweakBytes,
-			NewUtxosFilter:   nil,
-			SpentUtxosFilter: nil,
-		}
-
-		if err := stream.Send(batch); err != nil {
-			logging.L.Err(err).Msg("error sending block batch")
-			return status.Errorf(codes.Internal, "failed to send block batch for height %d", height)
-		}
-	}
-
-	return nil
-}
-
-// StreamBlockBatchFull streams complete block batches with all data
-func (s *OracleService) StreamBlockBatchFull(
-	req *pb.RangedBlockHeightRequest, stream pb.OracleService_StreamBlockBatchFullServer,
-) error {
-	// todo: should we move this into the actual call
-	// at least make a wrapper which covers this
-	_, syncTip, err := s.db.GetChainTip()
-	if err != nil {
-		logging.L.Err(err).
-			Msg("failed to get chain tip")
-		return err
-	}
-	logging.L.Debug().
-		Uint64("start", req.Start).
-		Uint64("end", req.End).
-		Uint32("sync_tip", syncTip).
-		Msg("streaming block batch full")
-
-	if req.Start > uint64(syncTip) {
-		logging.L.Err(err).
-			Uint64("start", req.Start).
-			Uint32("sync_tip", syncTip).
-			Msg("start height is greater than sync tip")
-		return status.Errorf(codes.Internal, "start height is greater than sync tip")
-	}
-
-	if req.Start > req.End {
-		logging.L.Err(err).
-			Uint64("start", req.Start).
-			Uint64("end", req.End).
-			Msg("start height is greater than end height")
-		return status.Errorf(codes.Internal, "end height is greater than start height")
-	}
-
-	for height := req.Start; height <= req.End; height++ {
-		select {
-		case <-stream.Context().Done():
-			logging.L.Debug().Msg("stream context cancelled")
-			return nil
-		default:
-		}
-
-		blockhash, err := s.db.GetBlockHashByHeight(uint32(height))
-		if err != nil {
-			logging.L.Warn().
-				Err(err).
-				Uint64("height", height).
-				Msg("failed to get blockash by height")
-			return err
-		}
-
-		// Fetch all data for this block
-		// todo: make dependant on which index is supported
-		// for now it's always full basic
-
-		var wg sync.WaitGroup
-		var pbUtxos []*pb.UTXO
-		errChan := make(chan error, 2)
-
-		select {
-		case <-stream.Context().Done():
-			logging.L.Debug().Msg("stream context cancelled")
-			return nil
-		default:
-		}
-
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			// utxos
-			// todo: change to dustlimit request
-			var outputs []*database.Output
-			logging.L.Trace().Msg("pulling utxos")
-			outputs, err = s.db.FetchOutputsAll(blockhash, syncTip)
-			if err != nil {
-				logging.L.Err(err).Msg("failed pulling utxos")
-				errChan <- err
-			}
-
-			// Convert internal UTXO types to protobuf types
-			pbUtxos = make([]*pb.UTXO, len(outputs))
-			for i, utxo := range outputs {
-				// todo: g in and change scriptpubKey to at least Byte slice if not even array
-				pbUtxos[i] = &pb.UTXO{
-					Txid:         utils.ReverseBytesCopy(utxo.Txid[:]),
-					Vout:         utxo.Vout,
-					Value:        utxo.Amount,
-					ScriptPubKey: utxo.Pubkey,
-					// BlockHeight:  height,
-					// BlockHash:    blockhash,
-				}
-			}
-		}()
-
-		var tweakBytes [][]byte
-
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			// tweaks
-			tweakIndex, err := s.db.TweaksForBlockAll(blockhash)
-			if err != nil {
-				logging.L.Err(err).
-					Uint64("height", height).
-					Hex("blockhash", utils.ReverseBytesCopy(blockhash)).
-					Msg("failed to pull tweaks")
-				errChan <- err
-			}
-
-			// Convert tweaks to bytes
-			tweakBytes = make([][]byte, len(tweakIndex))
-			for i, tweak := range tweakIndex {
-				tweakBytes[i] = tweak.Tweak[:]
-			}
-		}()
-
-		wg.Wait()
-
-		select {
-		case err := <-errChan:
-			logging.L.Err(err).Msg("ended with err")
-			return err
-		default:
-			// No errors
-		}
-
-		batch := &pb.BlockBatchFull{
-			BlockIdentifier: &pb.BlockIdentifier{
-				BlockHash:   utils.ReverseBytesCopy(blockhash),
-				BlockHeight: height,
-			},
-			Tweaks:           tweakBytes,
-			Utxos:            pbUtxos,
-			NewUtxosFilter:   nil,
-			SpentUtxosFilter: nil,
-			SpentUtxos:       make([][]byte, 0),
-		}
-
-		if err := stream.Send(batch); err != nil {
-			logging.L.Err(err).Msg("error sending block batch")
-			return status.Errorf(codes.Internal, "failed to send block batch for height %d", height)
-		}
-	}
-
-	return nil
-}
-
-func (s *OracleService) StreamBlockBatchSlimStatic(
-	req *pb.RangedBlockHeightRequest, stream pb.OracleService_StreamBlockBatchSlimStaticServer,
-) error {
-	for height := req.Start; height <= req.End; height++ {
-		blockhash, err := s.db.GetBlockHashByHeight(uint32(height))
-		if err != nil {
-			logging.L.Err(err).Uint64("height", height).Msg("failed to blockash by height")
-			return err
-		}
-
-		tweakIndex, err := s.db.FetchTweaksStatic(blockhash)
-		if err != nil {
-			logging.L.Err(err).Uint64("height", height).Msg("failed to pull tweaks")
-			return err
-		}
-
-		unspentFilter, err := s.db.FetchTaprootUnspentFilter(blockhash)
-		if err != nil {
-			logging.L.Err(err).Uint64("height", height).Msg("failed to pull unspent filter")
-			return err
-		}
-
-		batch := &pb.BlockBatchSlim{
-			BlockIdentifier: &pb.BlockIdentifier{
-				BlockHash:   utils.ReverseBytesCopy(blockhash),
-				BlockHeight: height,
-			},
-			Tweaks: tweakIndex,
-			NewUtxosFilter: &pb.FilterData{
-				Blockhash:  utils.ReverseBytesCopy(blockhash),
-				FilterType: pb.FilterType_FILTER_TYPE_NEW_UTXOS,
-				Data:       unspentFilter,
-			},
-			SpentUtxosFilter: nil,
-		}
-
-		if err := stream.Send(batch); err != nil {
-			logging.L.Err(err).Msg("error sending block batch")
-			return status.Errorf(codes.Internal, "failed to send block batch for height %d", height)
-		}
-	}
-
-	return nil
-}
-
-func (s *OracleService) StreamIndexShortOuts(
-	req *pb.RangedBlockHeightRequestFiltered, stream pb.OracleService_StreamIndexShortOutsServer,
-) error {
-	for height := req.Start; height <= req.End; height++ {
-		blockhash, err := s.db.GetBlockHashByHeight(uint32(height))
-		if err != nil {
-			logging.L.Err(err).Uint64("height", height).Msg("failed to blockash by height")
+				Msg("failed to blockash by height")
 			return err
 		}
 
 		shortOuts, err := s.db.FetchComputeIndex(uint32(height))
 		if err != nil {
-			logging.L.Err(err).Uint64("height", height).Msg("failed to pull short outs")
+			logging.L.Err(err).
+				Uint64("height", height).
+				Msg("failed to pull short outs")
 			return err
 		}
 
@@ -552,7 +113,7 @@ func (s *OracleService) StreamIndexShortOuts(
 		// 	}
 		// }
 
-		batch := &pb.IndexShortOuts{
+		batch := &pb.ComputeIndexResponse{
 			BlockIdentifier: &pb.BlockIdentifier{
 				BlockHash:   utils.ReverseBytesCopy(blockhash),
 				BlockHeight: height,
@@ -564,100 +125,129 @@ func (s *OracleService) StreamIndexShortOuts(
 
 		if err := stream.Send(batch); err != nil {
 			logging.L.Err(err).Msg("error sending block batch")
-			return status.Errorf(codes.Internal, "failed to send block batch for height %d", height)
+			return status.Errorf(
+				codes.Internal,
+				"failed to send block batch for height %d", height,
+			)
 		}
 	}
 
 	return nil
 }
 
-func (s *OracleService) StreamBlockBatchFullStatic(
-	req *pb.RangedBlockHeightRequest, stream pb.OracleService_StreamBlockBatchFullStaticServer,
-) error {
-	timeFullGRPCCall := time.Now()
-	for height := req.Start; height <= req.End; height++ {
-		blockhash, err := s.db.GetBlockHashByHeight(uint32(height))
-		if err != nil {
-			logging.L.Err(err).Uint64("height", height).Msg("failed to blockash by height")
-			return err
-		}
-
-		var wg sync.WaitGroup
-		var pbUtxos []pb.UTXO
-		var pbUtxosOut []*pb.UTXO
-		var tweakIndex [][]byte
-		errChan := make(chan error, 2)
-
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			tweakIndex, err = s.db.FetchTweaksStatic(blockhash)
-			if err != nil {
-				logging.L.Err(err).Uint64("height", height).Msg("failed to pull tweaks")
-				errChan <- err
-			}
-		}()
-
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
-			// outputs, err := s.db.FetchOutputsStatic(blockhash)
-			pbUtxos, err = s.db.FetchOutputsStaticProto(blockhash)
-			if err != nil {
-				logging.L.Err(err).Uint64("height", height).Msg("failed to pull outputs")
-				errChan <- err
-			}
-			pbUtxosOut = make([]*pb.UTXO, len(pbUtxos))
-			for i := range pbUtxos {
-				pbUtxosOut[i] = &pbUtxos[i]
-			}
-
-			// pbUtxosOut = make([]*pb.UTXO, len(outputs))
-			// for i, utxo := range outputs {
-			// 	pbUtxosOut[i] = &pb.UTXO{
-			// 		Txid:         utils.ReverseBytesCopy(utxo.Txid),
-			// 		Vout:         utxo.Vout,
-			// 		Value:        utxo.Amount,
-			// 		ScriptPubKey: utxo.Pubkey,
-			// 	}
-			// }
-		}()
-
-		wg.Wait()
-
-		select {
-		case err := <-errChan:
-			logging.L.Err(err).Msg("ended with err")
-			return err
-		default:
-			// No errors
-		}
-		batch := &pb.BlockBatchFull{
-			BlockIdentifier: &pb.BlockIdentifier{
-				BlockHash:   utils.ReverseBytesCopy(blockhash),
-				BlockHeight: height,
-			},
-			Tweaks:           tweakIndex,
-			Utxos:            pbUtxosOut,
-			NewUtxosFilter:   nil,
-			SpentUtxosFilter: nil,
-			SpentUtxos:       make([][]byte, 0),
-		}
-
-		sendTime := time.Now()
-		if err := stream.Send(batch); err != nil {
-			logging.L.Err(err).Msg("error sending block batch")
-			return status.Errorf(codes.Internal, "failed to send block batch for height %d", height)
-		}
-		logging.L.Debug().
-			Uint64("height", height).
-			Dur("duration", time.Since(sendTime)).
-			Msg("block_batch_full_static_send_timing")
-
+// GetFullBlock returns complete block data with all transaction details
+func (s *OracleService) GetFullBlock(
+	ctx context.Context, req *pb.BlockHeightRequest,
+) (*pb.FullBlockResponse, error) {
+	blockhash, err := s.db.GetBlockHashByHeight(uint32(req.BlockHeight))
+	if err != nil {
+		logging.L.Err(err).
+			Uint64("height", req.BlockHeight).
+			Msg("could not fetch block hash")
+		return nil, status.Errorf(codes.Internal, "could not fetch block hash: %v", err)
 	}
-	logging.L.Debug().
-		Dur("duration", time.Since(timeFullGRPCCall)).
-		Msg("block_batch_full_static_full_timing")
-	return nil
+
+	// Get chain tip for FetchOutputsAll
+	_, syncTip, err := s.db.GetChainTip()
+	if err != nil {
+		logging.L.Err(err).Msg("could not fetch chain tip")
+		return nil, status.Errorf(codes.Internal, "could not fetch chain tip: %v", err)
+	}
+
+	// Fetch all the data we need for the full block
+	outputs, err := s.db.FetchOutputsAll(blockhash, syncTip)
+	if err != nil {
+		logging.L.Err(err).Msg("error fetching outputs")
+		return nil, status.Errorf(codes.Internal, "could not retrieve outputs from database: %v", err)
+	}
+
+	// Fetch tweaks with transaction IDs
+	tweakRows, err := s.db.TweaksForBlockAll(blockhash)
+	if err != nil {
+		logging.L.Err(err).Msg("error fetching tweak rows")
+		return nil, status.Errorf(codes.Internal, "could not retrieve tweaks from database: %v", err)
+	}
+
+	// Group outputs by transaction ID
+	txOutputs := make(map[string][]*database.Output)
+	for _, output := range outputs {
+		if output != nil {
+			txid := hex.EncodeToString(output.Txid)
+			txOutputs[txid] = append(txOutputs[txid], output)
+		}
+	}
+
+	// Create a map of txid to tweak for quick lookup
+	txidToTweak := make(map[string][33]byte)
+	for _, tweakRow := range tweakRows {
+		if tweakRow != nil {
+			txid := hex.EncodeToString(tweakRow.Txid[:])
+			txidToTweak[txid] = tweakRow.Tweak
+		}
+	}
+
+	// Fetch all txid-outpoints mappings for this block
+	txidOutpointsMap, err := s.db.FetchAllTxidOutpointsForBlock(blockhash)
+	if err != nil {
+		logging.L.Err(err).Msg("error fetching txid-outpoints mappings")
+		return nil, status.Errorf(codes.Internal, "could not retrieve txid-outpoints from database: %v", err)
+	}
+
+	// Build the full transaction items
+	var fullTxItems []*pb.FullTxItem
+	for txid, outputs := range txOutputs {
+		txidBytes, err := hex.DecodeString(txid)
+		if err != nil {
+			logging.L.Err(err).Msg("error decoding txid")
+			continue
+		}
+
+		var txidArray [32]byte
+		copy(txidArray[:], txidBytes)
+
+		// Get tweak for this transaction
+		var tweak [33]byte
+		if tweakBytes, exists := txidToTweak[txid]; exists {
+			tweak = tweakBytes
+		}
+
+		// Get inputs (spent outpoints) for this transaction
+		var inputs []byte
+		if outpoints, exists := txidOutpointsMap[txidArray]; exists {
+			for i := range outpoints {
+				utils.ReverseBytes(outpoints[i][:32])
+				inputs = append(inputs, outpoints[i][:]...)
+			}
+		}
+
+		// Convert outputs to UTXO items
+		var utxoItems []*pb.UTXOItemLight
+		for _, output := range outputs {
+			var pubkey [32]byte
+			copy(pubkey[:], output.Pubkey)
+
+			utxoItems = append(utxoItems, &pb.UTXOItemLight{
+				Vout:   output.Vout,
+				Amount: output.Amount,
+				Pubkey: pubkey[:],
+			})
+		}
+
+		fullTxItems = append(fullTxItems, &pb.FullTxItem{
+			Txid:   utils.ReverseBytesCopy(txidArray[:]),
+			Tweak:  tweak[:],
+			Inputs: inputs,
+			Utxos:  utxoItems,
+		})
+	}
+
+	response := &pb.FullBlockResponse{
+		BlockIdentifier: &pb.BlockIdentifier{
+			BlockHash:   utils.ReverseBytesCopy(blockhash),
+			BlockHeight: req.BlockHeight,
+		},
+		Index: fullTxItems,
+	}
+
+	return response, nil
 }

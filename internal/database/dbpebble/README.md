@@ -14,47 +14,49 @@ SizePubKey = 32  // X-only public key
 
 ## Database Schema
 
-### Chain Index
+### Base Data
+Essential blockchain data that cannot be computed from other sources.
+
+#### Chain Index
 | Prefix | Key Structure | Value | Description |
 |--------|---------------|-------|-------------|
 | `0x05` | `[0x05][height:4]` | `[blockhash:32]` | Height → Block Hash |
 | `0x06` | `[0x06][blockhash:32]` | `[height:4]` | Block Hash → Height |
 
-### Transactions
+#### Transactions
 | Prefix | Key Structure | Value | Description |
 |--------|---------------|-------|-------------|
 | `0x01` | `[0x01][blockhash:32][position:4]` | `[txid:32]` | Block + Position → Transaction ID |
 | `0x02` | `[0x02][txid:32]` | `[tweak:33]` or `nil` | Transaction → Tweak |
 | `0x07` | `[0x07][txid:32][blockhash:32]` | `nil` (keys-only) | Transaction → Block Occurrence |
 
-### Outputs
+#### Outputs
 | Prefix | Key Structure | Value | Description |
 |--------|---------------|-------|-------------|
 | `0x03` | `[0x03][txid:32][vout:4]` | `[amount:8][pubkey:32]` | Transaction Output |
 
-### Spending
+#### Spending
 | Prefix | Key Structure | Value | Description |
 |--------|---------------|-------|-------------|
 | `0x04` | `[0x04][prev_txid:32][prev_vout:4][blockhash:32]` | `[spend_pubkey:32]` or `nil` | Spent Output |
 
-### Static Indexes
-| Prefix | Key Structure | Value | Description |
-|--------|---------------|-------|-------------|
-| `0x08` | `[0x08][blockhash:32]` | `[tweak1:33][tweak2:33]...[tweakN:33]` | Static Tweaks |
-| `0x09` | `[0x09][blockhash:32]` | `[serialized_outputs...]` | Static UTXOs |
+### Compute Indexes
+Data that can be computed on-the-fly with limited overhead but is pre-computed for performance.
 
-### Filters
 | Prefix | Key Structure | Value | Description |
 |--------|---------------|-------|-------------|
-| `0x0A` | `[0x0A][blockhash:32]` | `[gcs_filter_bytes]` | Taproot Pubkey Filter |
-| `0x0B` | `[0x0B][blockhash:32]` | `[gcs_filter_bytes]` | Taproot Unspent Filter |
-| `0x0C` | `[0x0C][blockhash:32]` | `[gcs_filter_bytes]` | Taproot Spent Filter |
+| `0x0D` | `[0x0D][height:4][txid:32]` | `[tweak:33][output1:8][output2:8]...[outputN:8]` | Compute Index |
 
-### Accelerators
+### Accelerator Indexes
+Performance indexes that avoid scanning entire key ranges by providing optimized lookup paths.
+
 | Prefix | Key Structure | Value | Description |
 |--------|---------------|-------|-------------|
-| `0x0D` | `[0x0D][height:4][txid:32]` | `[serialized_compute_data]` | Compute Index |
 | `0x0E` | `[0x0E][blockhash:32]` | `[pubkey_prefix1:8][pubkey_prefix2:8]...[pubkey_prefixN:8]` | Spent Outputs Short |
+
+### Others
+| Prefix | Key Structure | Value | Description |
+|--------|---------------|-------|-------------|
 | `0x0F` | `[0x0F][blockhash:32][txid:32]` | `[outpoint1:36][outpoint2:36]...[outpointN:36]` | Txid → Outpoints |
 
 ## Value Encoding Details
@@ -82,23 +84,6 @@ SizePubKey = 32  // X-only public key
 **Note**: Endianness observations may not always be correct. Bitcoin Core typically provides txids/blockhashes in little-endian format, which are stored as-is without conversion. The actual endianness depends on how data is received from Bitcoin Core and whether any conversion is performed during storage.
 
 ## Serialization Specifications
-
-### Static Tweaks (`0x08`)
-```
-Value: [tweak1:33][tweak2:33]...[tweakN:33]
-```
-- Concatenated 33-byte tweaks
-- No length prefix or count
-- Fixed 33-byte per tweak
-
-### Static UTXOs (`0x09`)
-```
-Value: [output1:76][output2:76]...[outputN:76]
-```
-- Each output is exactly 76 bytes:
-  - `[txid:32][vout:4][amount:8][pubkey:32]`
-- All fields little-endian except txid/pubkey (raw bytes)
-- No length prefix or count
 
 ### Compute Index (`0x0D`)
 ```

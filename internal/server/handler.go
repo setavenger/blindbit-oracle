@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -397,7 +398,16 @@ func (h *Handler) GetFullBlock(c *gin.Context) {
 
 	// Build the full transaction items
 	var fullTxItems []FullTxItem
-	for txid, outputs := range txOutputs {
+
+	// Sort transaction IDs to ensure consistent ordering
+	var sortedTxids []string
+	for txid := range txOutputs {
+		sortedTxids = append(sortedTxids, txid)
+	}
+	sort.Strings(sortedTxids)
+
+	for _, txid := range sortedTxids {
+		outputs := txOutputs[txid]
 		txidBytes, err := hex.DecodeString(txid)
 		if err != nil {
 			logging.L.Err(err).Msg("error decoding txid")

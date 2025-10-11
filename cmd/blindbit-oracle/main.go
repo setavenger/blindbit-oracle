@@ -348,7 +348,7 @@ Flags:
 
 			// Build static indexes if requested
 			// Static indexes removed - using base data functions instead
-			logging.L.Info().Msg("Static indexes removed - using base data functions instead")
+			// logging.L.Info().Msg("Static indexes removed - using base data functions instead")
 
 			// Start continuous sync
 			err = builder.ContinuousSync(ctx)

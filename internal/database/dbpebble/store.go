@@ -18,6 +18,9 @@ type Store struct {
 	batchCounter int
 	batchSync    *sync.Mutex
 	batchSize    int
+	// maximum number of batches to keep in memory
+	maxPendingCommits int64
+
 	// Guard fields for safe closing
 	pendingCommits int64          // atomic counter for pending background commits
 	closed         int32          // atomic flag to indicate if store is closed
@@ -26,11 +29,12 @@ type Store struct {
 
 func NewStore(db *pebble.DB) *Store {
 	return &Store{
-		DB:           db,
-		dbBatch:      db.NewBatch(),
-		batchCounter: 0,
-		batchSync:    new(sync.Mutex),
-		batchSize:    200,
+		DB:                db,
+		dbBatch:           db.NewBatch(),
+		batchCounter:      0,
+		maxPendingCommits: 10,
+		batchSync:         new(sync.Mutex),
+		batchSize:         200,
 	}
 }
 
@@ -116,6 +120,15 @@ func (s *Store) commitBatch(sync bool) error {
 	// Check if store is already closed
 	if atomic.LoadInt32(&s.closed) == 1 {
 		return nil // Store is closed, don't commit
+	}
+
+	if atomic.LoadInt64(&s.pendingCommits) >= int64(s.maxPendingCommits) {
+		// wait for pending commits to complete
+		logging.L.Info().
+			Int64("pending_commits", atomic.LoadInt64(&s.pendingCommits)).
+			Int64("max_pending_commits", int64(s.maxPendingCommits)).
+			Msg("waiting for pending commits")
+		s.WaitForPendingCommits()
 	}
 
 	s.batchSync.Lock()

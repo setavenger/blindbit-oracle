@@ -9,9 +9,7 @@ import (
 	"path"
 	"runtime"
 	"strings"
-	"time"
 
-	"github.com/rs/zerolog"
 	"github.com/setavenger/blindbit-lib/logging"
 	"github.com/setavenger/blindbit-oracle/internal/config"
 	"github.com/setavenger/blindbit-oracle/internal/database/dbpebble"
@@ -25,13 +23,10 @@ var (
 	Version = "0.0.0" //todo LD flags etc. to setup correctly and add git hash
 
 	// Global flags
-	datadir       string
-	configFile    string
-	reindexStatic bool
-	skipPrecheck  bool
-	// Note: forceRebuildStaticIndexesDuringSync removed - static indexes should only be rebuilt with explicit user intention
+	datadir      string
+	configFile   string
+	skipPrecheck bool
 
-	// Wallet compute flags
 	startHeight uint32
 	endHeight   uint32
 )
@@ -49,12 +44,6 @@ func init() {
 		"config",
 		"",
 		"Path to config file (default: datadir/blindbit.toml)",
-	)
-	rootCmd.PersistentFlags().BoolVar(
-		&reindexStatic,
-		"reindex-static",
-		false,
-		"Force rebuild of static indexes (default: false)",
 	)
 	rootCmd.PersistentFlags().BoolVar(
 		&skipPrecheck,
@@ -76,35 +65,6 @@ func init() {
 		0,
 		"End height",
 	)
-
-	// static indexes flags
-	staticIndexesCmd.Flags().Uint32Var(
-		&startHeight,
-		"start-height",
-		0,
-		"Start height",
-	)
-	staticIndexesCmd.Flags().Uint32Var(
-		&endHeight,
-		"end-height",
-		0,
-		"End height",
-	)
-
-	// Wallet compute flags
-	walletComputeCmd.Flags().Uint32Var(
-		&startHeight,
-		"start-height",
-		0,
-		"Start height",
-	)
-	walletComputeCmd.Flags().Uint32Var(
-		&endHeight,
-		"end-height",
-		0,
-		"End height",
-	)
-
 }
 
 // performDBIntegrityCheck performs database integrity check unless skipped by flag
@@ -159,86 +119,15 @@ efficient blockchain data processing and API access for Bitcoin applications.`,
 	},
 }
 
-var staticIndexesCmd = &cobra.Command{
-	Use:   "static-indexes",
-	Short: "Build static indexes for all blocks",
-	Long: `Build static indexes for all blocks in the database. This command will:
-- Process all blocks from the first block to the current tip
-- Create static indexes for tweaks, outputs, and filters
-- Not start continuous scanning or servers
-
-Flags:
---reindex-static flag to force rebuild of existing indexes`,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		interrupt := make(chan os.Signal, 1)
-		signal.Notify(interrupt, os.Interrupt)
-
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-
-		logging.L.Info().Msg("Starting static index rebuild...")
-
-		errChan := make(chan error)
-		doneChan := make(chan struct{})
-
-		go func() {
-			defer close(doneChan)
-
-			db, err := dbpebble.OpenDB()
-			if err != nil {
-				errChan <- fmt.Errorf("failed opening db: %w", err)
-				return
-			}
-
-			store := dbpebble.NewStore(db)
-			defer store.Close()
-
-			_, syncTipHeight, err := store.GetChainTip()
-			if err != nil {
-				errChan <- fmt.Errorf("failed getting chain tip: %w", err)
-				return
-			}
-
-			_, firstBlockHeight, err := store.FirstBlock()
-			if err != nil {
-				errChan <- fmt.Errorf("failed getting first block data: %w", err)
-			}
-
-			endHeight = min(endHeight, syncTipHeight)
-
-			// index starts where data is available
-			startHeight = max(startHeight, firstBlockHeight)
-
-			// Static indexes removed - using base data functions instead
-		}()
-
-		select {
-		case <-interrupt:
-			cancel()
-			logging.L.Info().Msg("Static index rebuild interrupted")
-			return nil
-		case <-ctx.Done():
-			return ctx.Err()
-		case err := <-errChan:
-			return err
-		case <-doneChan:
-			logging.L.Info().Msg("Static index rebuild completed successfully")
-			return nil
-		}
-	},
-}
-
 var syncCmd = &cobra.Command{
 	Use:   "sync",
 	Short: "Sync blockchain data (initial sync only)",
 	Long: `Perform initial blockchain sync to the current tip. This command will:
 - Sync all blocks from the first block to the current tip
-- Builds static indexes only if missing (unless --force-rebuild-static-indexes-during-sync is set)
 - Not start continuous scanning or servers
 
 Flags:
---skip-precheck flag to skip database integrity checks
---force-rebuild-static-indexes-during-sync flag to force rebuild static indexes during sync`,
+--skip-precheck flag to skip database integrity checks`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		logging.L.Info().Msg("Starting initial blockchain sync...")
 
@@ -250,7 +139,7 @@ Flags:
 		store := dbpebble.NewStore(db)
 		defer store.Close()
 
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(cmd.Context())
 		defer cancel()
 
 		builder := indexer.NewBuilder(ctx, store)
@@ -295,12 +184,13 @@ var runCmd = &cobra.Command{
 - gRPC server (if configured)
 
 Flags:
---reindex-static flag to force rebuild of static indexes (optional, default: false)
 --skip-precheck flag to skip database integrity checks (optional, default: false)
---force-rebuild-static-indexes-during-sync flag to force rebuild static indexes during sync (optional, default: false)
 --start-height flag to start height (optional, default: 0)
 --end-height flag to end height (optional, default: 0)`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		interrupt := make(chan os.Signal, 1)
+		signal.Notify(interrupt, os.Interrupt)
+
 		logging.L.Info().Msg("Starting BlindBit Oracle service...")
 
 		db, err := dbpebble.OpenDB()
@@ -319,11 +209,8 @@ Flags:
 		}
 
 		// Setup context and error handling
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(cmd.Context())
 		defer cancel()
-
-		interrupt := make(chan os.Signal, 1)
-		signal.Notify(interrupt, os.Interrupt)
 
 		errChan := make(chan error, 1)
 
@@ -346,10 +233,6 @@ Flags:
 			}
 			logging.L.Info().Msg("initial sync done")
 
-			// Build static indexes if requested
-			// Static indexes removed - using base data functions instead
-			// logging.L.Info().Msg("Static indexes removed - using base data functions instead")
-
 			// Start continuous sync
 			err = builder.ContinuousSync(ctx)
 			if err != nil {
@@ -370,56 +253,6 @@ Flags:
 				return err
 			}
 		}
-	},
-}
-
-var walletComputeCmd = &cobra.Command{
-	Use:   "wallet-compute",
-	Short: "Compute wallet for all blocks",
-	Long: `Compute wallet for all blocks in the database. This command will:
-- Compute wallet for all blocks in the database
-- Not start continuous scanning or servers`,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		logging.L.Info().Msg("Starting wallet compute...")
-
-		db, err := dbpebble.OpenDB()
-		if err != nil {
-			return fmt.Errorf("failed opening db: %w", err)
-		}
-
-		store := dbpebble.NewStore(db)
-		defer store.Close()
-
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
-		defer cancel()
-
-		_, syncTipHeight, err := store.GetChainTip()
-		if err != nil {
-			return fmt.Errorf("failed getting chain tip: %w", err)
-		}
-
-		endHeight = min(endHeight, syncTipHeight)
-
-		// foundOutputs, err := store.DBComputeComputeIndex(ctx, startHeight, endHeight)
-		// if err != nil {
-		// 	return fmt.Errorf("failed computing wallet: %w", err)
-		// }
-		// this is to prewarm cache
-		logging.SetLogLevel(zerolog.WarnLevel)
-		_, _ = store.DBComputeComputeIndexParallel(
-			ctx, startHeight, endHeight, config.MaxParallelTweakComputations, 256,
-		)
-		logging.SetLogLevel(zerolog.InfoLevel)
-		foundOutputs, err := store.DBComputeComputeIndexParallel(
-			ctx, startHeight, endHeight, config.MaxParallelTweakComputations, 256,
-		)
-
-		if err != nil {
-			return fmt.Errorf("failed computing wallet: %w", err)
-		}
-
-		logging.L.Info().Msgf("Found %d outputs", len(foundOutputs))
-		return nil
 	},
 }
 
@@ -473,7 +306,7 @@ Flags:
 		interrupt := make(chan os.Signal, 1)
 		signal.Notify(interrupt, os.Interrupt)
 
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(cmd.Context())
 		defer cancel()
 
 		logging.L.Info().Msg("Starting accelerator index rebuild...")
@@ -510,7 +343,7 @@ Flags:
 			// index starts where data is available
 			startHeight = max(startHeight, firstBlockHeight)
 
-			// Build accelerator indexes (compute index)
+			// Build Compute Index
 			err = store.BuildComputeIndexByRange(startHeight, endHeight)
 			if err != nil {
 				errChan <- fmt.Errorf("accelerator indexing failed: %w", err)
@@ -552,11 +385,9 @@ func init() {
 
 func main() {
 	// Add subcommands
-	rootCmd.AddCommand(staticIndexesCmd)
 	rootCmd.AddCommand(acceleratorIndexesCmd)
 	rootCmd.AddCommand(syncCmd)
 	rootCmd.AddCommand(runCmd)
-	rootCmd.AddCommand(walletComputeCmd)
 	rootCmd.AddCommand(serverCmd)
 
 	// Execute the root command

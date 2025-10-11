@@ -50,6 +50,13 @@ func (b *Builder) ContinuousSync(ctx context.Context) error {
 	tickerBlockCheck := time.Tick(3 * time.Second)
 	tickerInfo := time.Tick(15 * time.Second)
 
+	if b.newBlockChan == nil {
+		b.newBlockChan = make(chan *Block, config.MaxParallelRequests*20)
+	}
+	if b.writerChan == nil {
+		b.writerChan = make(chan *database.DBBlock, config.MaxParallelTweakComputations*20)
+	}
+
 	for {
 		select {
 		case <-ctx.Done():

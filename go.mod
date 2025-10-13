@@ -22,7 +22,7 @@ require (
 	google.golang.org/protobuf v1.36.6
 )
 
-// replace github.com/setavenger/blindbit-lib => ../blindbit-lib/
+replace github.com/setavenger/blindbit-lib => ../blindbit-lib/
 
 // replace github.com/setavenger/go-libsecp256k1 => ../go-libsecp256k1/
 

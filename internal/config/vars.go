@@ -17,7 +17,6 @@ var (
 )
 
 const (
-	TaprootActivation    uint32 = 709632
 	ConfigFileName       string = "blindbit.toml"
 	DefaultBaseDirectory string = "~/.blindbit-oracle"
 )
@@ -37,8 +36,6 @@ var (
 	RpcPass      = ""
 
 	BaseDirectory = ""
-	DBPath        = ""
-	LogsPath      = ""
 
 	HTTPHost = "127.0.0.1:8000"
 	GRPCHost = "" // default value is empty (deactivated)
@@ -96,19 +93,6 @@ var NumsH = []byte{80, 146, 155, 116, 193, 160, 73, 84, 183, 139, 75, 96, 53, 23
 
 func SetDirectories() {
 	BaseDirectory = utils.ResolvePath(BaseDirectory)
-
-	DBPath = BaseDirectory + "/data"
-	LogsPath = BaseDirectory + "/logs"
-
-	DBPathHeaders = DBPath + "/headers"
-	DBPathHeadersInv = DBPath + "/headers-inv"
-	DBPathFilters = DBPath + "/filters"
-	DBPathTweaks = DBPath + "/tweaks"
-	DBPathTweakIndex = DBPath + "/tweak-index"
-	DBPathTweakIndexDust = DBPath + "/tweak-index-dust"
-	DBPathUTXOs = DBPath + "/utxos"
-	DBPathSpentOutpointsIndex = DBPath + "/spent-index"
-	DBPathSpentOutpointsFilter = DBPath + "/spent-filter"
 }
 
 func HeaderMustSyncHeight() uint32 {

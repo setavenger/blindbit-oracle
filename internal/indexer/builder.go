@@ -48,7 +48,7 @@ func NewBuilder(ctx context.Context, db database.DB) *Builder {
 func (b *Builder) ContinuousSync(ctx context.Context) error {
 	logging.L.Info().Msg("running continuous sync")
 	tickerBlockCheck := time.Tick(3 * time.Second)
-	tickerInfo := time.Tick(15 * time.Second)
+	tickerInfo := time.Tick(60 * time.Second)
 
 	if b.newBlockChan == nil {
 		b.newBlockChan = make(chan *Block, config.MaxParallelRequests*20)

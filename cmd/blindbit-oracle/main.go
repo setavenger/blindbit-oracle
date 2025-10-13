@@ -8,7 +8,6 @@ import (
 	"os/signal"
 	"path"
 	"runtime"
-	"strings"
 
 	"github.com/setavenger/blindbit-lib/logging"
 	"github.com/setavenger/blindbit-oracle/internal/config"
@@ -100,6 +99,11 @@ efficient blockchain data processing and API access for Bitcoin applications.`,
 			logging.L.Fatal().Err(err).Msg("error creating base directory")
 		}
 
+		if err = logging.EnableFileLogging(config.BaseDirectory, "debug.log"); err != nil {
+			fmt.Println("base_dir:", config.BaseDirectory)
+			logging.L.Fatal().Err(err).Msg("error setting log file")
+		}
+
 		logging.L.Info().Msgf("base directory %s", config.BaseDirectory)
 
 		// Load config
@@ -110,12 +114,6 @@ efficient blockchain data processing and API access for Bitcoin applications.`,
 
 		// Set CPU cores
 		runtime.GOMAXPROCS(config.MaxCPUCores)
-
-		// Create DB path
-		err = os.Mkdir(config.DBPath, 0750)
-		if err != nil && !strings.Contains(err.Error(), "file exists") {
-			logging.L.Fatal().Err(err).Msg("error creating db path")
-		}
 	},
 }
 

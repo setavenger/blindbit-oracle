@@ -9,7 +9,6 @@ import (
 	"os/signal"
 	"path"
 	"runtime"
-	"strings"
 
 	"github.com/setavenger/blindbit-lib/logging"
 	"github.com/setavenger/blindbit-oracle/internal/config"
@@ -54,12 +53,6 @@ func init() {
 
 	// load after loggers are instantiated
 	config.LoadConfigs(path.Join(config.BaseDirectory, config.ConfigFileName))
-
-	// create DB path
-	err = os.Mkdir(config.DBPath, 0750)
-	if err != nil && !strings.Contains(err.Error(), "file exists") {
-		logging.L.Fatal().Err(err).Msg("error creating db path")
-	}
 }
 
 func main() {

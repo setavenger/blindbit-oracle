@@ -263,11 +263,14 @@ func (s *Store) BlockhashInDB(blockhash []byte) (bool, error) {
 // heightIfOnBestChain returns (height,true) if blockHash is on best chain; otherwise (0,false).
 func (s *Store) heightIfOnBestChain(blockHash []byte) (uint32, bool, error) {
 	val, closer, err := s.DB.Get(KeyCIBlock(blockHash)) // ci:b:<blockHash> -> [4]heightBE
-	if err != nil && !errors.Is(err, pebble.ErrNotFound) {
-		return 0, false, err
-	} else if errors.Is(err, pebble.ErrNotFound) {
-		return 0, false, nil
+	if err != nil {
+		if errors.Is(err, pebble.ErrNotFound) {
+			return 0, false, nil
+		} else {
+			return 0, false, err
+		}
 	}
+
 	defer closer.Close()
 	if len(val) != SizeHeight {
 		return 0, false, errors.New("bad ci:b value length")
@@ -524,7 +527,7 @@ func (s *Store) FetchSpentOutputsShort(blockhash []byte) ([]byte, error) {
 	val, closer, err := s.DB.Get(KeySpentOutputsShort(blockhash))
 	if err != nil {
 		if errors.Is(err, pebble.ErrNotFound) {
-			return nil, nil
+			return make([]byte, 0), nil
 		}
 		return nil, err
 	}

@@ -4,7 +4,6 @@ package v2
 import (
 	"context"
 	"encoding/hex"
-	"fmt"
 	"sort"
 
 	"google.golang.org/grpc/codes"
@@ -37,6 +36,7 @@ func (s *OracleService) GetInfo(
 ) (
 	*pb.InfoResponse, error,
 ) {
+	logging.L.Info().Msg("GetInfo")
 	blockhash, height, err := s.db.GetChainTip()
 	if err != nil {
 		logging.L.Err(err).Msg("failed pulling chain tip")
@@ -59,6 +59,7 @@ func (s *OracleService) GetInfo(
 func (s *OracleService) GetBestBlockHeight(
 	ctx context.Context, _ *emptypb.Empty,
 ) (*pb.BlockHeightResponse, error) {
+	logging.L.Info().Msg("GetBestBlockHeight")
 	_, height, err := s.db.GetChainTip()
 	if err != nil {
 		logging.L.Err(err).Msg("failed pulling chain tip")
@@ -74,6 +75,7 @@ func (s *OracleService) GetBestBlockHeight(
 func (s *OracleService) GetBlockHashByHeight(
 	ctx context.Context, req *pb.BlockHeightRequest,
 ) (*pb.BlockHashResponse, error) {
+	logging.L.Info().Any("req", req).Msg("GetBlockHashByHeight")
 	blockhash, err := s.db.GetBlockHashByHeight(uint32(req.BlockHeight))
 	if err != nil {
 		logging.L.Err(err).
@@ -87,10 +89,58 @@ func (s *OracleService) GetBlockHashByHeight(
 	}, nil
 }
 
-func (s *OracleService) StreamComputeIndexServer(
+func (s *OracleService) StreamComputeIndex(
 	req *pb.RangedBlockHeightRequestFiltered,
 	stream pb.OracleService_StreamComputeIndexServer,
 ) error {
+	logging.L.Info().Any("req", req).Msg("StreamComputeIndexServer")
+	for height := req.Start; height <= req.End; height++ {
+		logging.L.Trace().Uint64("height", height).Msg("processing height")
+		blockhash, err := s.db.GetBlockHashByHeight(uint32(height))
+		if err != nil {
+			logging.L.Err(err).
+				Uint64("height", height).
+				Msg("failed to blockash by height")
+			return err
+		}
+
+		computeIndex, err := s.db.FetchComputeIndex(uint32(height))
+		if err != nil {
+			logging.L.Err(err).
+				Uint64("height", height).
+				Msg("failed to pull short outs")
+			return err
+		}
+
+		batch := &pb.ComputeIndexResponse{
+			BlockIdentifier: &pb.BlockIdentifier{
+				BlockHash:   utils.ReverseBytesCopy(blockhash),
+				BlockHeight: height,
+			},
+			Index: computeIndex,
+		}
+
+		logging.L.Debug().
+			Int("height", int(height)).
+			Int("count", len(computeIndex)).
+			Msg("sending block batch")
+		if err := stream.Send(batch); err != nil {
+			logging.L.Err(err).Msg("error sending block batch")
+			return status.Errorf(
+				codes.Internal,
+				"failed to send block batch for height %d", height,
+			)
+		}
+	}
+
+	return nil
+}
+
+func (s *OracleService) StreamBlockScanDataShort(
+	req *pb.RangedBlockHeightRequestFiltered,
+	stream pb.OracleService_StreamBlockScanDataShortServer,
+) error {
+	logging.L.Info().Any("req", req).Msg("StreamBlockScanDataShort")
 	for height := req.Start; height <= req.End; height++ {
 		blockhash, err := s.db.GetBlockHashByHeight(uint32(height))
 		if err != nil {
@@ -100,7 +150,7 @@ func (s *OracleService) StreamComputeIndexServer(
 			return err
 		}
 
-		shortOuts, err := s.db.FetchComputeIndex(uint32(height))
+		computeIndex, err := s.db.FetchComputeIndex(uint32(height))
 		if err != nil {
 			logging.L.Err(err).
 				Uint64("height", height).
@@ -108,22 +158,28 @@ func (s *OracleService) StreamComputeIndexServer(
 			return err
 		}
 
-		// for i := range shortOuts {
-		// 	for j := range shortOuts[i].OutputsShort {
-		// 		shortOuts[i].OutputsShort = shortOuts[i].OutputsShort[:4]
-		// 	}
-		// }
+		var spentOuts []byte
+		spentOuts, err = s.db.FetchSpentOutputsShort(blockhash)
+		if err != nil {
+			logging.L.Err(err).
+				Uint64("height", height).
+				Msg("failed to pull spent outputs")
+			return err
+		}
 
-		batch := &pb.ComputeIndexResponse{
+		batch := &pb.BlockScanDataShortResponse{
 			BlockIdentifier: &pb.BlockIdentifier{
 				BlockHash:   utils.ReverseBytesCopy(blockhash),
 				BlockHeight: height,
 			},
-			Index: shortOuts,
+			CompIndex:    computeIndex,
+			SpentOutputs: spentOuts,
 		}
 
-		fmt.Printf("return height: %d - %d\n", height, len(shortOuts))
-
+		logging.L.Trace().
+			Int("height", int(height)).
+			Int("count", len(computeIndex)).
+			Msg("sending block batch")
 		if err := stream.Send(batch); err != nil {
 			logging.L.Err(err).Msg("error sending block batch")
 			return status.Errorf(
@@ -140,6 +196,7 @@ func (s *OracleService) StreamComputeIndexServer(
 func (s *OracleService) GetFullBlock(
 	ctx context.Context, req *pb.BlockHeightRequest,
 ) (*pb.FullBlockResponse, error) {
+	logging.L.Info().Any("req", req).Msg("GetFullBlock")
 	blockhash, err := s.db.GetBlockHashByHeight(uint32(req.BlockHeight))
 	if err != nil {
 		logging.L.Err(err).

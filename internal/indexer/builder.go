@@ -50,17 +50,60 @@ func (b *Builder) ContinuousSync(ctx context.Context) error {
 	tickerBlockCheck := time.Tick(3 * time.Second)
 	tickerInfo := time.Tick(60 * time.Second)
 
-	if b.newBlockChan == nil {
-		b.newBlockChan = make(chan *Block, config.MaxParallelRequests*20)
-	}
-	if b.writerChan == nil {
-		b.writerChan = make(chan *database.DBBlock, config.MaxParallelTweakComputations*20)
-	}
+	// recreate the channels, as they might have been closed by previous SyncBlocks
+	b.newBlockChan = make(chan *Block, config.MaxParallelRequests*20)
+	b.writerChan = make(chan *database.DBBlock, config.MaxParallelTweakComputations*20)
+
+	// Start writer goroutine to process blocks from writerChan
+	errChan := make(chan error)
+	doneChan := make(chan struct{})
+
+	go func() {
+		defer close(doneChan)
+		for {
+			select {
+			case <-ctx.Done():
+				logging.L.Trace().Msg("Writer goroutine received context cancellation")
+				return
+			case dbBlock, ok := <-b.writerChan:
+				if !ok {
+					// channel drained and closed: all done
+					return
+				}
+
+				err := b.store.ApplyBlock(dbBlock)
+				if err != nil {
+					logging.L.Err(err).
+						Str("blockhash", dbBlock.Hash.String()).
+						Uint32("height", dbBlock.Height).
+						Msg("failed storing block")
+					errChan <- err
+					return
+				}
+
+				// need to flush as batch sizes won't get big here
+				// only reorgs but even those are small usually
+				err = b.store.FlushBatch(true)
+				if err != nil {
+					logging.L.Err(err).Msg("failed flushing batch")
+					errChan <- err
+					return
+				}
+
+				logging.L.Info().
+					Uint32("height", dbBlock.Height).
+					Msg("block processing completed")
+			}
+		}
+	}()
 
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
+		case err := <-errChan:
+			logging.L.Err(err).Msg("there was an error processing blocks")
+			return err
 		case <-tickerInfo:
 			blockhash, syncTip, err := b.store.GetChainTip()
 			if err != nil {
@@ -431,13 +474,14 @@ func (b *Builder) handleBlock(ctx context.Context, block *Block) error {
 	// Send the block to the writer channel instead of applying directly
 	// This ensures proper chain tip updates and batch processing
 	select {
-	case b.writerChan <- dbBlock:
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+		b.writerChan <- dbBlock
 		logging.L.Trace().
 			Str("blockhash", block.Hash.String()).
 			Int64("height", block.Height).
 			Msg("sent block to writer channel")
-	case <-ctx.Done():
-		return ctx.Err()
 	}
 
 	// Note: Static index computation is now handled by the writer goroutine

@@ -98,7 +98,7 @@ func mergeBlockAndSpentTxOuts(b *btcutil.Block, spentTxOuts [][]*wire.TxOut) (*B
 	return &block, nil
 }
 
-// singleProcessBlock pulls a block and processes it.
+// SingleBlockPullAndHandle pulls a block and processes it.
 // If the previous blockhash is not in the db it will recursively pull the previous block.
 // Intended to handle reorgs not full chain syncs.
 func (b *Builder) SingleBlockPullAndHandle(

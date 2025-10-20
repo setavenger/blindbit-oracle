@@ -12,7 +12,7 @@ require (
 	github.com/gin-contrib/gzip v1.2.2
 	github.com/gin-gonic/gin v1.10.0
 	github.com/rs/zerolog v1.34.0
-	github.com/setavenger/blindbit-lib v0.0.2-0.20251011073856-20cb2cc3d727
+	github.com/setavenger/blindbit-lib v0.0.2-0.20251019163107-1a34ab63339d
 	github.com/setavenger/go-bip352 v0.1.9-0.20250919170152-7683068d2f35
 	github.com/setavenger/go-libsecp256k1 v0.0.1-0.20250915182350-c8aa8e7d10b3
 	github.com/spf13/cobra v1.9.1
@@ -22,7 +22,7 @@ require (
 	google.golang.org/protobuf v1.36.6
 )
 
-replace github.com/setavenger/blindbit-lib => ../blindbit-lib/
+// replace github.com/setavenger/blindbit-lib => ../blindbit-lib/
 
 // replace github.com/setavenger/go-libsecp256k1 => ../go-libsecp256k1/
 

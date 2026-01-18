@@ -38,10 +38,7 @@ const (
 
 // control vars
 var (
-	SyncStartHeight uint32 = 833_000 // random block where BIP352 was not active yet. todo change to actual number
-	// MinHeightToProcess No block below this number will be processed
-	// todo is this actually needed
-	//MinHeightToProcess uint32 = 833_000
+	SyncStartHeight uint32 = 842_579 // May 8, 2024, when BIP-352 was merged
 
 	Chain = Unknown
 

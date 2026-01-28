@@ -93,6 +93,73 @@ GET("/filter/new-utxos/:blockheight") // returns a custom taproot only filter of
 GET("/utxos/:blockheight")  // UTXO data for that block (cut down to the essentials needed to spend)
 ```
 
+## Feature Modes
+
+The server supports different storage strategies configured via `blindbit.toml`.
+
+### Storage Flags
+
+These flags control **how tweaks are stored**:
+
+| Flag | `/tweak-index` | `/tweaks` | Storage |
+|------|----------------|-----------|---------|
+| `tweaks_full_basic=1` | works (no dust) | empty | ~1.7GB |
+| `tweaks_full_with_dust_filter=1` | works (with dust) | empty | ~1.7GB + dust data |
+| `tweaks_cut_through_with_dust_filter=1` | empty | works (with dust) | ~2.8GB (prunable) |
+
+**At least one storage flag must be enabled**, otherwise tweaks are computed but discarded (the server will log a warning).
+
+### The `tweaks_only` Flag
+
+The `tweaks_only` flag controls whether to **skip UTXO processing** (filters, spent index, etc.), NOT whether to store tweaks.
+
+| Config | Behavior |
+|--------|----------|
+| `tweaks_only=0` | Full processing: tweaks + UTXOs + filters |
+| `tweaks_only=1` | Skip UTXO processing, only handle tweaks |
+
+**Important:** `tweaks_only=1` must be combined with a storage flag (`tweaks_full_basic` or `tweaks_full_with_dust_filter`) to be useful. On its own, tweaks are computed and discarded.
+
+**Note:** `tweaks_only=1` cannot be combined with `tweaks_cut_through_with_dust_filter=1` (cut-through requires UTXO tracking to prune spent outputs).
+
+### Example Configurations
+
+```toml
+# Full server with block-level index (default)
+tweaks_only = 0
+tweaks_full_basic = 1
+
+# Tweak-only server (no UTXO tracking, saves storage/processing)
+tweaks_only = 1
+tweaks_full_basic = 1
+
+# Full server with dust filtering on block index
+tweaks_only = 0
+tweaks_full_with_dust_filter = 1
+
+# Full server with cut-through (requires UTXO tracking)
+tweaks_only = 0
+tweaks_cut_through_with_dust_filter = 1
+```
+
+### Client Discovery
+
+Clients should call `/info` to discover which features are enabled and use the appropriate endpoint:
+
+```json
+{
+  "network": "signet",
+  "height": 834761,
+  "tweaks_only": false,
+  "tweaks_full_basic": true,
+  "tweaks_full_with_dust_filter": false,
+  "tweaks_cut_through_with_dust_filter": false
+}
+```
+
+- If `tweaks_full_basic` or `tweaks_full_with_dust_filter`: use `/tweak-index`
+- If `tweaks_cut_through_with_dust_filter`: use `/tweaks`
+
 ## DiskUsage
 
 This is roughly the space needed. Some changes were made to the indexing server but overall it should still be in this

@@ -1,0 +1,92 @@
+syntax = "proto3";
+
+package blindbit.oracle.v1;
+
+option go_package = "./pb";
+
+// InfoResponse returns oracle information
+message InfoResponse {
+  string network = 1;
+  uint64 height = 2;
+  bool tweaks_only = 3;
+  bool tweaks_full_basic = 4;
+  bool tweaks_full_with_dust_filter = 5;
+  bool tweaks_cut_through_with_dust_filter = 6;
+}
+
+// BlockIdentifier contains block hash and height information
+message BlockIdentifier {
+  bytes block_hash = 1;  // 32 bytes
+  uint64 block_height = 2;
+}
+
+// BlockHeightRequest requests data for a specific block height
+message BlockHeightRequest {
+  uint64 block_height = 1;
+}
+
+// BlockHeightResponse returns block height information
+message BlockHeightResponse {
+  uint64 block_height = 1;
+}
+
+// BlockHashResponse returns block hash information
+message BlockHashResponse {
+  bytes block_hash = 1;     // 32 bytes
+}
+
+// IndexResponse is a generic response for any array of bytes with block identifier
+message IndexResponse {
+  BlockIdentifier block_identifier = 1;
+  repeated bytes index = 2; // Array of bytes (size depends on endpoint: 33-byte tweaks, 8-byte pubkeys, etc.)
+}
+
+// UTXOItem represents a UTXO item as used in HTTP responses
+message UTXOItem {
+  bytes txid = 1;           // 32 bytes
+  uint32 vout = 2;
+  uint64 amount = 3;
+  bytes pubkey = 4;         // 32 bytes (x-only pubkey)
+}
+
+// UTXOItemLight represents a lightweight UTXO item (without txid)
+message UTXOItemLight {
+  uint32 vout = 1;
+  uint64 amount = 2;
+  bytes pubkey = 3;         // 32 bytes (x-only pubkey)
+}
+
+// ComputeIndexTxItem contains compact information to probe if a txid could have an interesting new output
+message ComputeIndexTxItem {
+  bytes txid = 1;           // 32 bytes
+  bytes tweak = 2;          // 33 bytes
+  repeated bytes outputs_short = 3; // Array of 8-byte shortened pubkeys
+}
+
+// ComputeIndexResponse returns a compact transaction index with tweak mappings
+message ComputeIndexResponse {
+  BlockIdentifier block_identifier = 1;
+  repeated ComputeIndexTxItem index = 2;
+}
+
+// FullTxItem contains complete transaction information for Full Block endpoint
+message FullTxItem {
+  bytes txid = 1;                    // 32 bytes
+  bytes tweak = 2;                   // 33 bytes
+  repeated bytes inputs = 3;         // Array of 36-byte outpoints
+  repeated UTXOItemLight utxos = 4;  // Array of lightweight UTXO items
+}
+
+// FullBlockResponse returns complete block data with all transaction details
+message FullBlockResponse {
+  BlockIdentifier block_identifier = 1;
+  repeated FullTxItem index = 2;
+}
+
+// RangedBlockHeightRequestFiltered requests filtered data for a range of block heights
+message RangedBlockHeightRequestFiltered {
+  uint64 start = 1;
+  uint64 end = 2;
+  uint64 dustlimit = 3;
+  bool cut_through = 4;
+}

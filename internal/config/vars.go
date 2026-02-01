@@ -1,29 +1,44 @@
-package common
+package config
+
+import (
+	"runtime"
+
+	"github.com/setavenger/blindbit-lib/logging"
+	"github.com/setavenger/blindbit-lib/utils"
+)
 
 // TaprootActivation
 // todo might be inapplicable due to transactions that have taproot prevouts from before the activation
 //
 //	is relevant for the height-to-hash lookup in the db
-const TaprootActivation uint32 = 709632
-const ConfigFileName string = "blindbit.toml"
-const DefaultBaseDirectory = "~/.blindbit-oracle"
-
-var TweaksOnly bool
-var TweakIndexFullNoDust bool
-var TweakIndexFullIncludingDust bool
-var TweaksCutThroughWithDust bool
 
 var (
-	RpcEndpoint = "http://127.0.0.1:8332" // default local node
-	CookiePath  = ""
-	RpcUser     = ""
-	RpcPass     = ""
+	LogLevel = "info"
+)
+
+const (
+	ConfigFileName       string = "blindbit.toml"
+	DefaultBaseDirectory string = "~/.blindbit-oracle"
+)
+
+var (
+	TweaksOnly                  bool
+	TweakIndexFullNoDust        bool
+	TweakIndexFullIncludingDust bool
+	TweaksCutThroughWithDust    bool
+)
+
+var (
+	RpcEndpoint  = "http://127.0.0.1:8332" // default local node
+	RestEndpoint = ""                      // default local node
+	CookiePath   = ""
+	RpcUser      = ""
+	RpcPass      = ""
 
 	BaseDirectory = ""
-	DBPath        = ""
-	LogsPath      = ""
 
-	Host = "127.0.0.1:8000"
+	HTTPHost = "127.0.0.1:8000"
+	GRPCHost = "" // default value is empty (deactivated)
 )
 
 type chain int
@@ -48,12 +63,16 @@ var (
 	MaxParallelRequests uint16 = 2
 	// MaxParallelTweakComputations number of parallel processes which will be spawned in order to compute the tweaks for a given block
 	MaxParallelTweakComputations = 2
+
+	// We default to max num cores - 2
+	MaxCPUCores = max(1, runtime.NumCPU()-2)
+
 	// PruneFrequency every x blocks the data will be checked and pruned
 	// possible routines: -remove utxos for 100% spent transaction
 	PruneFrequency = 72
 )
 
-// one has to call SetDirectories otherwise common.DBPath will be empty
+// one has to call SetDirectories otherwise config.DBPath will be empty
 var (
 	DBPathHeaders              string
 	DBPathHeadersInv           string // for height to blockHash mapping
@@ -70,25 +89,13 @@ var (
 var NumsH = []byte{80, 146, 155, 116, 193, 160, 73, 84, 183, 139, 75, 96, 53, 233, 122, 94, 7, 138, 90, 15, 40, 236, 150, 213, 71, 191, 238, 154, 206, 128, 58, 192}
 
 func SetDirectories() {
-	BaseDirectory = ResolvePath(BaseDirectory)
-
-	DBPath = BaseDirectory + "/data"
-	LogsPath = BaseDirectory + "/logs"
-
-	DBPathHeaders = DBPath + "/headers"
-	DBPathHeadersInv = DBPath + "/headers-inv"
-	DBPathFilters = DBPath + "/filters"
-	DBPathTweaks = DBPath + "/tweaks"
-	DBPathTweakIndex = DBPath + "/tweak-index"
-	DBPathTweakIndexDust = DBPath + "/tweak-index-dust"
-	DBPathUTXOs = DBPath + "/utxos"
-	DBPathSpentOutpointsIndex = DBPath + "/spent-index"
-	DBPathSpentOutpointsFilter = DBPath + "/spent-filter"
+	BaseDirectory = utils.ResolvePath(BaseDirectory)
 }
 
 func HeaderMustSyncHeight() uint32 {
 	switch Chain {
 	case Mainnet:
+		// height based on heuristic checks to see where no old taproot style coins were locked
 		return 500_000
 	case Signet:
 		return 1
@@ -97,14 +104,15 @@ func HeaderMustSyncHeight() uint32 {
 	case Testnet3:
 		return 1
 	case Unknown:
-		panic("chain not defined")
+		logging.L.Panic().Msg("chain not defined")
+		return 0
 	default:
 		return 1
 	}
 }
 
 func ChainToString(c chain) string {
-	switch Chain {
+	switch c {
 	case Mainnet:
 		return "main"
 	case Signet:
@@ -114,7 +122,8 @@ func ChainToString(c chain) string {
 	case Testnet3:
 		return "testnet"
 	default:
-		panic("chain not defined")
+		logging.L.Panic().Msg("chain not defined")
+		return ""
 	}
 
 }

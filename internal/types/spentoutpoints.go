@@ -1,17 +1,15 @@
 package types
 
 import (
-	"bytes"
-	"encoding/hex"
 	"errors"
 
-	"SilentPaymentAppBackend/src/common"
+	"github.com/setavenger/blindbit-lib/logging"
 )
 
 const LenOutpointHashShort = 8
 
 type SpentOutpointsIndex struct {
-	BlockHash   string                       `json:"block_hash"`
+	BlockHash   [32]byte                     `json:"block_hash"`
 	BlockHeight uint32                       `json:"block_height"`
 	Data        [][LenOutpointHashShort]byte `json:"data"`
 }
@@ -22,7 +20,7 @@ func PairFactorySpentOutpointsIndex() Pair {
 }
 
 func (v *SpentOutpointsIndex) SerialiseKey() ([]byte, error) {
-	return GetDBKeyTweakIndex(v.BlockHash)
+	return GetDBKeySpentOutpointsIndex(v.BlockHash)
 }
 
 func (v *SpentOutpointsIndex) SerialiseData() ([]byte, error) {
@@ -40,19 +38,21 @@ func (v *SpentOutpointsIndex) SerialiseData() ([]byte, error) {
 
 func (v *SpentOutpointsIndex) DeSerialiseKey(key []byte) error {
 	if len(key) != 32 {
-		common.ErrorLogger.Printf("wrong key length: %+v", key)
-		return errors.New("key is wrong length. should not happen")
+		err := errors.New("key is wrong length. should not happen")
+		logging.L.Err(err).Hex("key", key).Msg("wrong key length")
+		return err
 	}
 
-	v.BlockHash = hex.EncodeToString(key)
+	copy(v.BlockHash[:], key)
 
 	return nil
 }
 
 func (v *SpentOutpointsIndex) DeSerialiseData(data []byte) error {
 	if len(data)%LenOutpointHashShort != 0 {
-		common.ErrorLogger.Printf("wrong data length: %+v", data)
-		return errors.New("data is wrong length. should not happen")
+		err := errors.New("data is wrong length. should not happen")
+		logging.L.Err(err).Hex("data", data).Msg("wrong data length")
+		return err
 	}
 
 	numArrays := len(data) / LenOutpointHashShort
@@ -64,14 +64,6 @@ func (v *SpentOutpointsIndex) DeSerialiseData(data []byte) error {
 	return nil
 }
 
-func GetDBKeySpentSpentOutpointsIndex(blockHash string) ([]byte, error) {
-	var buf bytes.Buffer
-	blockHashBytes, err := hex.DecodeString(blockHash)
-	if err != nil {
-		common.ErrorLogger.Println(err)
-		return nil, err
-	}
-	buf.Write(blockHashBytes)
-
-	return buf.Bytes(), nil
+func GetDBKeySpentOutpointsIndex(blockHash [32]byte) ([]byte, error) {
+	return blockHash[:], nil
 }

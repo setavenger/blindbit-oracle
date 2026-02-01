@@ -61,10 +61,10 @@ type ScriptSig struct {
 // RPC Types
 
 type RPCRequest struct {
-	JSONRPC string        `json:"jsonrpc"`
-	ID      string        `json:"id"`
-	Method  string        `json:"method"`
-	Params  []interface{} `json:"params"`
+	JSONRPC string `json:"jsonrpc"`
+	ID      string `json:"id"`
+	Method  string `json:"method"`
+	Params  []any  `json:"params"`
 }
 
 type ErrorRPC string
@@ -96,10 +96,16 @@ type BlockHeaderRPC struct {
 	NextBlockHash     string `json:"nextblockhash"`
 }
 
+type RPCResponseHighestHash struct {
+	ID     string   `json:"id"`
+	Result string   `json:"result,omitempty"`
+	Error  ErrorRPC `json:"error,omitempty"`
+}
+
 type RPCResponseBlockchainInfo struct {
 	ID     string         `json:"id"`
 	Result BlockchainInfo `json:"result,omitempty"`
-	Error  interface{}    `json:"error,omitempty"`
+	Error  any            `json:"error,omitempty"`
 }
 
 // BlockchainInfo represents the structure of the blockchain information
@@ -108,4 +114,10 @@ type BlockchainInfo struct {
 	Blocks        uint32 `json:"blocks"` // The current number of blocks processed in the server
 	Headers       uint32 `json:"headers"`
 	BestBlockHash string `json:"bestblockhash"`
+}
+
+type RPCResponseGetRawTransaction struct {
+	ID     string      `json:"id"`
+	Result Transaction `json:"result"`
+	Error  any         `json:"error"`
 }

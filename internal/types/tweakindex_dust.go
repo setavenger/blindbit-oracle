@@ -1,11 +1,11 @@
 package types
 
 import (
-	"SilentPaymentAppBackend/src/common"
 	"bytes"
 	"encoding/binary"
-	"encoding/hex"
 	"errors"
+
+	"github.com/setavenger/blindbit-lib/logging"
 )
 
 // TweakIndexDust stores a full index per blockHash and not separate entries like Tweak
@@ -13,7 +13,7 @@ import (
 // The tweaks will most likely not be sorted in any meaningful way and have no metadata attached.
 // TweakIndexDust differs from TweakIndex as it has the highest value per tx stored as well
 type TweakIndexDust struct {
-	BlockHash   string        `json:"block_hash"`
+	BlockHash   [32]byte      `json:"block_hash"`
 	BlockHeight uint32        `json:"block_height"`
 	Data        []TweakDusted `json:"data"`
 }
@@ -60,7 +60,7 @@ func (v *TweakIndexDust) SerialiseData() ([]byte, error) {
 		buffer.Write(data[:])
 		err := binary.Write(&buffer, binary.BigEndian, tweakDusted.HighestValue())
 		if err != nil {
-			common.ErrorLogger.Println(err)
+			logging.L.Err(err).Msg("error serialising tweak index dust")
 			return nil, err
 		}
 		flattened = append(flattened, buffer.Bytes()...)
@@ -71,19 +71,21 @@ func (v *TweakIndexDust) SerialiseData() ([]byte, error) {
 
 func (v *TweakIndexDust) DeSerialiseKey(key []byte) error {
 	if len(key) != 32 {
-		common.ErrorLogger.Printf("wrong key length: %+v", key)
-		return errors.New("key is wrong length. should not happen")
+		err := errors.New("key is wrong length. should not happen")
+		logging.L.Err(err).Hex("key", key).Msg("wrong key length")
+		return err
 	}
 
-	v.BlockHash = hex.EncodeToString(key)
+	copy(v.BlockHash[:], key)
 
 	return nil
 }
 
 func (v *TweakIndexDust) DeSerialiseData(data []byte) error {
 	if len(data)%lengthDataTweakIndexDust != 0 {
-		common.ErrorLogger.Printf("wrong data length: %+v", data)
-		return errors.New("data is wrong length. should not happen")
+		err := errors.New("data is wrong length. should not happen")
+		logging.L.Err(err).Hex("data", data).Msg("wrong data length")
+		return err
 	}
 
 	numArrays := len(data) / lengthDataTweakIndexDust
@@ -98,7 +100,7 @@ func (v *TweakIndexDust) DeSerialiseData(data []byte) error {
 		copy(tweakDusted.Data[:], data[idx:idx+TweakDataLength])
 		err := binary.Read(bytes.NewReader(data[idx+TweakDataLength:idx+TweakDataLength+8]), binary.BigEndian, &tweakDusted.Value)
 		if err != nil {
-			common.ErrorLogger.Println(err)
+			logging.L.Err(err).Msg("error deserialising tweak index dust")
 			return err
 		}
 		v.Data[i] = tweakDusted
@@ -131,7 +133,7 @@ func (v *TweakIndexDust) ToTweakArray() []Tweak {
 		tweaks = append(tweaks, Tweak{
 			BlockHash:    v.BlockHash,
 			BlockHeight:  v.BlockHeight,
-			Txid:         "", // cannot be determined as it's not stored in the index
+			Txid:         [32]byte{}, // cannot be determined as it's not stored in the index
 			TweakData:    data.Tweak(),
 			HighestValue: data.HighestValue(),
 		})
@@ -139,14 +141,6 @@ func (v *TweakIndexDust) ToTweakArray() []Tweak {
 	return tweaks
 }
 
-func GetDBKeyTweakIndexDust(blockHash string) ([]byte, error) {
-	var buf bytes.Buffer
-	blockHashBytes, err := hex.DecodeString(blockHash)
-	if err != nil {
-		common.ErrorLogger.Println(err)
-		return nil, err
-	}
-	buf.Write(blockHashBytes)
-
-	return buf.Bytes(), nil
+func GetDBKeyTweakIndexDust(blockHash [32]byte) ([]byte, error) {
+	return blockHash[:], nil
 }

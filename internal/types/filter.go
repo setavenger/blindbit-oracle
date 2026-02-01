@@ -1,18 +1,18 @@
 package types
 
 import (
-	"SilentPaymentAppBackend/src/common"
 	"bytes"
 	"encoding/binary"
-	"encoding/hex"
 	"errors"
+
+	"github.com/setavenger/blindbit-lib/logging"
 )
 
 type Filter struct {
-	FilterType  uint8  `json:"filter_type"`
-	BlockHeight uint32 `json:"block_height"`
-	Data        []byte `json:"data"`
-	BlockHash   string `json:"block_hash"`
+	FilterType  uint8    `json:"filter_type"`
+	BlockHeight uint32   `json:"block_height"`
+	Data        []byte   `json:"data"`
+	BlockHash   [32]byte `json:"block_hash"`
 }
 
 func PairFactoryFilter() Pair {
@@ -30,7 +30,7 @@ func (v *Filter) SerialiseData() ([]byte, error) {
 	// start with filter type as that's fixed length
 	err := binary.Write(&buf, binary.BigEndian, v.FilterType)
 	if err != nil {
-		common.ErrorLogger.Println(err)
+		logging.L.Err(err).Msg("error serialising filter")
 		return nil, err
 	}
 
@@ -40,11 +40,12 @@ func (v *Filter) SerialiseData() ([]byte, error) {
 
 func (v *Filter) DeSerialiseKey(key []byte) error {
 	if len(key) != 32 {
-		common.ErrorLogger.Printf("wrong key length: %+v", key)
-		return errors.New("key is wrong length. should not happen")
+		err := errors.New("key is wrong length. should not happen")
+		logging.L.Err(err).Hex("key", key).Msg("wrong key length")
+		return err
 	}
 	// The block hash is fixed length, decode the block hash part
-	v.BlockHash = hex.EncodeToString(key)
+	copy(v.BlockHash[:], key)
 
 	return nil
 }
@@ -55,13 +56,6 @@ func (v *Filter) DeSerialiseData(data []byte) error {
 	return nil
 }
 
-func GetDBKeyFilter(blockHash string) ([]byte, error) {
-	var buf bytes.Buffer
-	blockHashBytes, err := hex.DecodeString(blockHash)
-	if err != nil {
-		common.ErrorLogger.Println(err)
-		return nil, err
-	}
-	buf.Write(blockHashBytes)
-	return buf.Bytes(), nil
+func GetDBKeyFilter(blockHash [32]byte) ([]byte, error) {
+	return blockHash[:], nil
 }

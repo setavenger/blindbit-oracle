@@ -1,17 +1,16 @@
 package types
 
 import (
-	"SilentPaymentAppBackend/src/common"
-	"bytes"
-	"encoding/hex"
 	"errors"
+
+	"github.com/setavenger/blindbit-lib/logging"
 )
 
 // TweakIndex stores a full index per blockHash and not separate entries like Tweak
 // there is no transaction cut-through, so it will keep a full history.
 // The tweaks will most likely not be sorted in any meaningful way and have no metadata attached.
 type TweakIndex struct {
-	BlockHash   string                  `json:"block_hash"`
+	BlockHash   [32]byte                `json:"block_hash"`
 	BlockHeight uint32                  `json:"block_height"`
 	Data        [][TweakDataLength]byte `json:"data"`
 }
@@ -27,7 +26,6 @@ func (v *TweakIndex) SerialiseKey() ([]byte, error) {
 }
 
 func (v *TweakIndex) SerialiseData() ([]byte, error) {
-
 	// todo can this be made more efficiently?
 	totalLength := len(v.Data) * TweakDataLength
 	flattened := make([]byte, 0, totalLength)
@@ -41,19 +39,21 @@ func (v *TweakIndex) SerialiseData() ([]byte, error) {
 
 func (v *TweakIndex) DeSerialiseKey(key []byte) error {
 	if len(key) != 32 {
-		common.ErrorLogger.Printf("wrong key length: %+v", key)
-		return errors.New("key is wrong length. should not happen")
+		err := errors.New("key is wrong length. should not happen")
+		logging.L.Err(err).Hex("key", key).Msg("wrong key length")
+		return err
 	}
 
-	v.BlockHash = hex.EncodeToString(key)
+	copy(v.BlockHash[:], key)
 
 	return nil
 }
 
 func (v *TweakIndex) DeSerialiseData(data []byte) error {
 	if len(data)%TweakDataLength != 0 {
-		common.ErrorLogger.Printf("wrong data length: %+v", data)
-		return errors.New("data is wrong length. should not happen")
+		err := errors.New("data is wrong length. should not happen")
+		logging.L.Err(err).Hex("data", data).Msg("wrong data length")
+		return err
 	}
 
 	numArrays := len(data) / TweakDataLength
@@ -87,21 +87,13 @@ func (v *TweakIndex) ToTweakArray() (tweaks []Tweak) {
 		tweaks = append(tweaks, Tweak{
 			BlockHash:   v.BlockHash,
 			BlockHeight: v.BlockHeight,
-			Txid:        "",
+			Txid:        [32]byte{},
 			TweakData:   data,
 		})
 	}
 	return
 }
 
-func GetDBKeyTweakIndex(blockHash string) ([]byte, error) {
-	var buf bytes.Buffer
-	blockHashBytes, err := hex.DecodeString(blockHash)
-	if err != nil {
-		common.ErrorLogger.Println(err)
-		return nil, err
-	}
-	buf.Write(blockHashBytes)
-
-	return buf.Bytes(), nil
+func GetDBKeyTweakIndex(blockHash [32]byte) ([]byte, error) {
+	return blockHash[:], nil
 }

@@ -1,14 +1,15 @@
 package testhelpers
 
 import (
-	"SilentPaymentAppBackend/src/common"
-	"SilentPaymentAppBackend/src/common/types"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"testing"
+
+	"github.com/setavenger/blindbit-lib/logging"
+	"github.com/setavenger/blindbit-oracle/internal/types"
 )
 
 type TestCase struct {
@@ -61,7 +62,7 @@ func TransformTestCaseDetailToTransaction(detail TestCaseDetail) (types.Transact
 	for _, vinDetail := range detail.Given.Vin {
 		witnessScript, err := parseWitnessScript(vinDetail.Txinwitness)
 		if err != nil {
-			common.ErrorLogger.Println(err)
+			logging.L.Err(err).Msg("could not parse witness script")
 			return types.Transaction{}, err
 		}
 		vin := types.Vin{
@@ -88,7 +89,7 @@ func TransformTestCaseDetailToTransaction(detail TestCaseDetail) (types.Transact
 }
 
 func LoadCaseData(t *testing.T) ([]TestCase, error) {
-	filePath := "../test_data/send_and_receive_test_vectors_with_type.json"
+	filePath := "../../test_data/send_and_receive_test_vectors_with_type.json"
 
 	// Read the JSON file
 	data, err := os.ReadFile(filePath)
@@ -145,7 +146,7 @@ func parseWitnessScript(script string) ([]string, error) {
 	// Decode the hex-encoded script
 	data, err := hex.DecodeString(script)
 	if err != nil {
-		common.ErrorLogger.Println(err)
+		logging.L.Err(err).Msg("could not decode hex-encoded script")
 		return nil, err
 	}
 

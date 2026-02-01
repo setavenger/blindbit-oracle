@@ -2,18 +2,18 @@
 package types
 
 import (
-	"SilentPaymentAppBackend/src/common"
 	"bytes"
 	"encoding/binary"
-	"encoding/hex"
 	"errors"
+
+	"github.com/setavenger/blindbit-lib/logging"
 )
 
 // BlockHeaderInv struct to hold the inverse BlockHeader data.
 // Required because we need different Serialisation for Pair interface
 // todo change naming to be consistent?
 type BlockHeaderInv struct {
-	Hash   string
+	Hash   [32]byte
 	Height uint32
 	Flag   bool // indicates whether this Block has been processed
 }
@@ -29,31 +29,28 @@ func (v *BlockHeaderInv) SerialiseKey() ([]byte, error) {
 }
 
 func (v *BlockHeaderInv) SerialiseData() ([]byte, error) {
+	// todo: this should be optimisable by using a fixed size byte arrays
 	var buf bytes.Buffer
 	err := binary.Write(&buf, binary.BigEndian, v.Flag)
 	if err != nil {
-		common.ErrorLogger.Println(err)
+		logging.L.Err(err).Msg("error serialising block header inv")
 		return nil, err
 	}
-	blockHashBytes, err := hex.DecodeString(v.Hash)
-	if err != nil {
-		common.ErrorLogger.Println(err)
-		return nil, err
-	}
-	buf.Write(blockHashBytes)
+	buf.Write(v.Hash[:])
 
 	return buf.Bytes(), nil
 }
 
 func (v *BlockHeaderInv) DeSerialiseKey(key []byte) error {
 	if len(key) != 4 {
-		common.ErrorLogger.Printf("wrong key length: %+v\n", key)
-		return errors.New("key is wrong length. should not happen")
+		err := errors.New("key is wrong length. should not happen")
+		logging.L.Err(err).Hex("key", key).Msg("wrong key length")
+		return err
 	}
 
 	err := binary.Read(bytes.NewReader(key[:4]), binary.BigEndian, &v.Height)
 	if err != nil {
-		common.ErrorLogger.Println(err)
+		logging.L.Err(err).Msg("error deserialising block header inv")
 		return err
 	}
 
@@ -62,25 +59,21 @@ func (v *BlockHeaderInv) DeSerialiseKey(key []byte) error {
 
 func (v *BlockHeaderInv) DeSerialiseData(data []byte) error {
 	if len(data) != 1+32 {
-		common.ErrorLogger.Printf("wrong data length: %+v", data)
-		return errors.New("data is wrong length. should not happen")
+		err := errors.New("data is wrong length. should not happen")
+		logging.L.Err(err).Hex("data", data).Msg("wrong data length")
+		return err
 	}
 	err := binary.Read(bytes.NewReader(data[:1]), binary.BigEndian, &v.Flag)
 	if err != nil {
-		common.ErrorLogger.Println(err)
+		logging.L.Err(err).Msg("error deserialising block header inv")
 		return err
 	}
-	v.Hash = hex.EncodeToString(data[1:])
+	copy(v.Hash[:], data[1:])
 	return nil
 }
 
 func GetKeyBlockHeaderInv(height uint32) ([]byte, error) {
-	var buf bytes.Buffer
-
-	err := binary.Write(&buf, binary.BigEndian, height)
-	if err != nil {
-		common.ErrorLogger.Println(err)
-		return nil, err
-	}
-	return buf.Bytes(), nil
+	var key [4]byte
+	binary.BigEndian.PutUint32(key[:], height)
+	return key[:], nil
 }

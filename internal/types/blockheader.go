@@ -1,11 +1,12 @@
 package types
 
 import (
-	"SilentPaymentAppBackend/src/common"
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
+
+	"github.com/setavenger/blindbit-lib/logging"
 )
 
 // BlockHeader struct to hold relevant BlockHeader data
@@ -32,17 +33,17 @@ func (v *BlockHeader) SerialiseData() ([]byte, error) {
 
 	err := binary.Write(&buf, binary.BigEndian, v.Timestamp)
 	if err != nil {
-		common.ErrorLogger.Println(err)
+		logging.L.Err(err).Msg("error serialising block header")
 		return nil, err
 	}
 	err = binary.Write(&buf, binary.BigEndian, v.Height)
 	if err != nil {
-		common.ErrorLogger.Println(err)
+		logging.L.Err(err).Msg("error serialising block header")
 		return nil, err
 	}
 	blockHashBytes, err := hex.DecodeString(v.PrevBlockHash)
 	if err != nil {
-		common.ErrorLogger.Println(err)
+		logging.L.Err(err).Msg("error serialising block header")
 		return nil, err
 	}
 	buf.Write(blockHashBytes)
@@ -52,8 +53,9 @@ func (v *BlockHeader) SerialiseData() ([]byte, error) {
 
 func (v *BlockHeader) DeSerialiseKey(key []byte) error {
 	if len(key) != 32 {
-		common.ErrorLogger.Printf("wrong key length: %+v", key)
-		return errors.New("key is wrong length. should not happen")
+		err := errors.New("key is wrong length. should not happen")
+		logging.L.Err(err).Hex("key", key).Msg("wrong key length")
+		return err
 	}
 
 	v.Hash = hex.EncodeToString(key)
@@ -64,12 +66,12 @@ func (v *BlockHeader) DeSerialiseKey(key []byte) error {
 func (v *BlockHeader) DeSerialiseData(data []byte) error {
 	err := binary.Read(bytes.NewReader(data[:8]), binary.BigEndian, &v.Timestamp)
 	if err != nil {
-		common.ErrorLogger.Println(err)
+		logging.L.Err(err).Msg("error deserialising block header")
 		return err
 	}
 	err = binary.Read(bytes.NewReader(data[8:12]), binary.BigEndian, &v.Height)
 	if err != nil {
-		common.ErrorLogger.Println(err)
+		logging.L.Err(err).Msg("error deserialising block header")
 		return err
 	}
 	v.Hash = hex.EncodeToString(data[12:])

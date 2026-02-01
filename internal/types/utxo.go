@@ -1,11 +1,12 @@
 package types
 
 import (
-	"SilentPaymentAppBackend/src/common"
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
+
+	"github.com/setavenger/blindbit-lib/logging"
 )
 
 // UTXO
@@ -13,14 +14,14 @@ import (
 //
 //	unused fields could just be omitted from serialisation and de-serialisation
 type UTXO struct {
-	Txid         string `json:"txid"`
-	Vout         uint32 `json:"vout"`
-	Value        uint64 `json:"value"`
-	ScriptPubKey string `json:"scriptpubkey"`
-	BlockHeight  uint32 `json:"block_height"` // not used
-	BlockHash    string `json:"block_hash"`
-	Timestamp    uint64 `json:"timestamp"` // not used
-	Spent        bool   `json:"spent"`
+	Txid         [32]byte `json:"txid"`
+	Vout         uint32   `json:"vout"`
+	Value        uint64   `json:"value"`
+	ScriptPubKey string   `json:"scriptpubkey"`
+	BlockHeight  uint32   `json:"block_height"` // not used
+	BlockHash    [32]byte `json:"block_hash"`
+	Timestamp    uint64   `json:"timestamp"` // not used
+	Spent        bool     `json:"spent"`
 }
 
 const SerialisedKeyLengthUtxo = 32 + 32 + 4
@@ -39,7 +40,7 @@ func (v *UTXO) SerialiseData() ([]byte, error) {
 	var buf bytes.Buffer
 	scriptPubKeyBytes, err := hex.DecodeString(v.ScriptPubKey)
 	if err != nil {
-		common.ErrorLogger.Println(err)
+		logging.L.Err(err).Str("scriptPubKey", v.ScriptPubKey).Msg("error decoding script pubkey")
 		return nil, err
 	}
 
@@ -47,22 +48,23 @@ func (v *UTXO) SerialiseData() ([]byte, error) {
 
 	err = binary.Write(&buf, binary.BigEndian, v.Value)
 	if err != nil {
-		common.ErrorLogger.Println(err)
+		logging.L.Err(err).Msg("error serialising utxo")
 		return nil, err
 	}
 	err = binary.Write(&buf, binary.BigEndian, v.Timestamp)
 	if err != nil {
-		common.ErrorLogger.Println(err)
+		logging.L.Err(err).Msg("error serialising utxo")
 		return nil, err
 	}
 	err = binary.Write(&buf, binary.BigEndian, v.Spent)
 	if err != nil {
-		common.ErrorLogger.Println(err)
+		logging.L.Err(err).Msg("error serialising utxo")
 		return nil, err
 	}
 	data := buf.Bytes()
 	if len(data) != SerialisedDataLengthUtxo {
-		common.ErrorLogger.Printf("wrong data length: %d %+v", len(data), data)
+		err := errors.New("data is wrong length. should not happen")
+		logging.L.Err(err).Int("length", len(data)).Msg("wrong data length")
 		return nil, err
 	}
 
@@ -71,15 +73,16 @@ func (v *UTXO) SerialiseData() ([]byte, error) {
 
 func (v *UTXO) DeSerialiseKey(key []byte) error {
 	if len(key) != SerialisedKeyLengthUtxo {
-		common.ErrorLogger.Printf("wrong key length: %d %+v", len(key), key)
-		return errors.New("key is wrong length. should not happen")
+		err := errors.New("key is wrong length. should not happen")
+		logging.L.Err(err).Int("length", len(key)).Msg("wrong key length")
+		return err
 	}
 
-	v.BlockHash = hex.EncodeToString(key[:32])
-	v.Txid = hex.EncodeToString(key[32:64])
+	copy(v.BlockHash[:], key[:32])
+	copy(v.Txid[:], key[32:64])
 	err := binary.Read(bytes.NewReader(key[64:]), binary.BigEndian, &v.Vout)
 	if err != nil {
-		common.ErrorLogger.Println(err)
+		logging.L.Err(err).Msg("error deserialising utxo")
 		return err
 	}
 	return nil
@@ -87,50 +90,42 @@ func (v *UTXO) DeSerialiseKey(key []byte) error {
 
 func (v *UTXO) DeSerialiseData(data []byte) error {
 	if len(data) != SerialisedDataLengthUtxo {
-		common.ErrorLogger.Printf("wrong data length: %d %+v", len(data), data)
-		return errors.New("data is wrong length. should not happen")
+		err := errors.New("data is wrong length. should not happen")
+		logging.L.Err(err).Int("length", len(data)).Msg("wrong data length")
+		return err
 	}
 	v.ScriptPubKey = hex.EncodeToString(data[:34])
 	err := binary.Read(bytes.NewReader(data[34:34+8]), binary.BigEndian, &v.Value)
 	if err != nil {
-		common.ErrorLogger.Println(err)
+		logging.L.Err(err).Msg("error deserialising utxo")
 		return err
 	}
 	err = binary.Read(bytes.NewReader(data[34+8:34+8+8]), binary.BigEndian, &v.Timestamp)
 	if err != nil {
-		common.ErrorLogger.Println(err)
+		logging.L.Err(err).Msg("error deserialising utxo")
 		return err
 	}
 	err = binary.Read(bytes.NewReader(data[34+8+8:]), binary.BigEndian, &v.Spent)
 	if err != nil {
-		common.ErrorLogger.Println(err)
+		logging.L.Err(err).Msg("error deserialising utxo")
 		return err
 	}
 	return nil
 }
 
-func GetDBKeyUTXO(blockHash, txid string, vout uint32) ([]byte, error) {
-	var buf bytes.Buffer
-	blockHashBytes, err := hex.DecodeString(blockHash)
-	if err != nil {
-		common.ErrorLogger.Println(err)
-		return nil, err
-	}
-	txidBytes, err := hex.DecodeString(txid)
-	if err != nil {
-		common.ErrorLogger.Println(err)
-		return nil, err
-	}
-	buf.Write(blockHashBytes)
-	buf.Write(txidBytes)
+func GetDBKeyUTXO(blockHash, txid [32]byte, vout uint32) ([]byte, error) {
+	key := make([]byte, 32+32+4)
 
-	err = binary.Write(&buf, binary.BigEndian, vout)
-	if err != nil {
-		common.ErrorLogger.Println(err)
-		return nil, err
-	}
+	// Copy blockHash (32 bytes)
+	copy(key[:32], blockHash[:])
 
-	return buf.Bytes(), nil
+	// Copy txid (32 bytes)
+	copy(key[32:64], txid[:])
+
+	// Write vout (4 bytes) in big-endian format
+	binary.BigEndian.PutUint32(key[64:], vout)
+
+	return key, nil
 }
 
 // FindBiggestRemainingUTXO returns nil if the spent utxo was not the largest and
@@ -158,11 +153,6 @@ func FindBiggestRemainingUTXO(utxoSpent UTXO, utxos []UTXO) (*uint64, error) {
 	}
 
 	if spentIsMax {
-		// if valueMax == 0 {
-		// 	common.ErrorLogger.Printf("%+v", utxoSpent)
-		// 	common.ErrorLogger.Printf("%+v", utxos)
-		// 	return nil, errors.New("valueMax was 0. this should not happen")
-		// }
 		// If the spent UTXO was the largest, return the max value among the remaining UTXOs.
 		return &valueMax, nil
 	} else {

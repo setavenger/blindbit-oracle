@@ -1,96 +1,60 @@
 # BlindBit Oracle
 
 A GO implementation for a BIP0352 Silent Payments Indexing Server.
-This backend was focused on serving the BlindBit light client suite with tweak data and other simplified data to spend
-and receive. The produced index
-matches [other implementations](https://github.com/bitcoin/bitcoin/pull/28241#issuecomment-2079270744).
+This backend was focused on serving the BlindBit light client suite with tweak data and other simplified data to spend and receive.
+The produced index matches [other implementations](https://github.com/bitcoin/bitcoin/pull/28241#issuecomment-2079270744).
 
-## Setup
+> **Note:** This is version 2.0 - a major rewrite and refactoring of BlindBit Oracle. The database logic has been completely rewritten, it uses a different Bitcoin Core backend version, and all API endpoints have changed. If you need the previous version, please use the [`v1` branch](../../tree/v1).
 
-The installation process is still very manual. Will be improved based on feedback and new findings. It is advised to look at the example [blindbit.toml](blindbit.example.toml). As new config options appear they will be listed and explained there.
+## What's New in v2
 
-## Breaking changes
+This version represents a complete rewrite and refactoring of BlindBit Oracle with significant improvements:
 
-- Endpoints were expanded and have a slightly different syntax now [see endpoints](#endpoints)
+- **Database Backend Migration**: Migrated from LevelDB to PebbleDB for improved performance and reliability
+- **Bitcoin Core Integration**: Switched from RPC to REST API for Bitcoin Core communication (requires Core v30+)
+- **API Updates**: HTTP and gRPC endpoints have been updated and restructured
+- **Performance Optimizations**: Enhanced indexing algorithms and database operations
+- **CLI Improvements**: Better command structure with granular control over sync, indexing, and server operations
 
-## Requirements
+**Breaking Changes**: All API endpoints from v1 are incompatible with v2. For detailed API documentation, see [`internal/server/README.md`](internal/server/README.md).
 
-- RPC access to a bitcoin full node
-    - unpruned because we need the prevouts for every transaction in the block with a taproot output
-    - Note: Indexing will take longer if the rpc calls take longer;
-      You might also want to allow more rpc workers on your node to speed things up.
-- Processing a block takes ~100ms-300ms
-- Disk space (~10Gb)
-- go 1.21 installed
+## Prerequisites
 
-### Build
+- Go 1.24.1 or later
+- Bitcoin Core full node with REST API access
+- **Required:** Bitcoin Core v30 or later (must include [PR #32540](https://github.com/bitcoin/bitcoin/pull/32540) for `/rest/spenttxouts/:blockhash.bin` endpoint support)
+- Unpruned Bitcoin Core node (required for accessing spent transaction outputs)
+- Sufficient disk space for index storage (varies by chain and sync height)
 
-1. Clone this repo
-2. Navigate into the repo and build `go build -o <path/to/new/binary/file> ./src`
+## Build
 
-### Run
+1. Clone this repository
+2. Build the binary (dependencies will be downloaded automatically):
 
-Create a config file `blindbit.toml` in your data directory to run.
-An example [blindbit.toml](./blindbit.example.toml) is provided here.
-The settings in regard to parallelization have to be made in accordance to the cores on the Full node and host machine.
+   ```bash
+   go build -o blindbit-oracle ./cmd/blindbit-oracle
+   ```
 
-Once the data directory is set up you can run it as following.
+## Run
 
-```console
-$ <path/to/new/binary/file> --datadir <path/to/datadir/with/blindbit.toml>
+The BlindBit Oracle uses a Cobra-based CLI with granular control over different features.
+
+### Available Commands
+
+#### `static-indexes` - Build Static Indexes
+
+Builds static indexes for all blocks in the database without starting continuous scanning or servers.
+
+```bash
+./blindbit-oracle static-indexes
 ```
 
-Note that the program will automatically default `--datadir` to `~/.blindbit-oracle` if not set.
-You still have to set up a config file in any case as the rpc users can't and **should** not be defaulted.
+#### `sync` - Initial Blockchain Sync
 
-You can now also decide which index you want to run. This setting can be set in the config file (blindbit.toml).
+Performs initial blockchain sync to the current tip without starting continuous scanning or servers.
 
-## Todos
-
-- [ ] Add flags to control setup
-    - [ ] reindex
-    - [ ] headers only
-    - [x] tweaks only
-    - [x] move most env controls to config file or cli flags/args
-- [ ] Include [gobip352 module](https://github.com/setavenger/gobip352)
-- [ ] Refactor a bunch of stuff to use byte arrays or slices instead of strings for internal uses
-    - Could potentially reduce the serialisation overhead
-    - In combination with proto buffs we might not even have to convert for serving the API
-- [ ] Introduce Proto buffs
-- [ ] Clean up code (bytes.Equal, parity on big.int with .Bit(), etc.)
-- [ ] Update to new test vectors
-- [ ] Write operation tests to ensure data integrity
-- [ ] Periodically recompute filters
-    - One could implement a periodic re-computation every 144 blocks of filters with the current UTXO set
-- [ ] Document EVERYTHING: especially serialization patterns to easily look them up later.
-    - Serialisation
-    - tweak computation methods
-- [ ] Include redundancy for when RPC calls are failing (probably due to networking issues in a testing home
-  environment).
-- [ ] Review all duplicate key error exemptions and raise to error/warn from debug.
-- [ ] Remove unnecessary panics.
-- [ ] Convert hardcoded serialisation assertions into constants (?)
-- [x] Use x-only 32 byte public keys instead of scriptPubKey
-- [ ] Don't create all DBs by default, only those which are needed and activated
-- [ ] Check import paths (SilentPaymentBackend/.../...)
-
-### Low Priority
-
-- [ ] Index the next couple blocks in mempool
-    - Every 1-3 minute or so?
-
-## Endpoints
-
-```text
-GET("/info")  // returns basic information about the oracle instance
-GET("/block-height")  // returns the height of the indexing server
-GET("/block-hash/:blockheight")  // returns the block-hash for a certain block-height
-GET("/tweaks/:blockheight?dustLimit=<sat_amount>")  // returns tweak data (cut-through); optional parameter dustLimit can be omitted; filtering happens per request, so virtually any amount can be specified
-GET("/tweak-index/:blockheight?dustLimit=<sat_amount>")  // returns the full tweak index (no cut-through); optional parameter dustLimit can be omitted; filtering happens per request, so virtually any amount can be specified
-GET("/spent-index/:blockheight")  // returns the spent outpoints index (see https://github.com/setavenger/BIP0352-light-client-specification?tab=readme-ov-file#spent-utxos)
-GET("/filter/spent/:blockheight") // returns a filter for shortened spent outpoint hashes (see https://github.com/setavenger/BIP0352-light-client-specification?tab=readme-ov-file#filters)
-GET("/filter/new-utxos/:blockheight") // returns a custom taproot only filter of x-only pubkey which received funds
-GET("/utxos/:blockheight")  // UTXO data for that block (cut down to the essentials needed to spend)
+```bash
+./blindbit-oracle sync
 ```
 
 ## Feature Modes
@@ -162,16 +126,75 @@ Clients should call `/info` to discover which features are enabled and use the a
 
 ## DiskUsage
 
-This is roughly the space needed. Some changes were made to the indexing server but overall it should still be in this
-range.
+```bash
+./blindbit-oracle run
+```
 
-```text
-  709632 -> 834761
-  217M	./filters
-  2.7G	./utxos
-  16M	./headers-inv
-  12M	./headers
-  2.8G	./tweaks        33,679,543 tweaks
-  1.7G	./tweak-index   54,737,510 tweaks
-  7.4G	.
+### Global Flags
+
+All commands support these global flags:
+
+- `--datadir <path>`: Set the base directory for blindbit oracle (default: `~/.blindbit-oracle`)
+- `--config <path>`: Path to config file (default: `datadir/blindbit.toml`)
+
+### Configuration
+
+Create a config file `blindbit.toml` in your data directory. An example [blindbit.example.toml](blindbit.example.toml) is provided.
+
+**v2 Configuration Changes:**
+
+- **Backend change**: Switched from Bitcoin Core RPC to REST API (`core_rest_endpoint` instead of `rpc_endpoint`, `rpc_user`, `rpc_pass`)
+- **Server configuration**: Separate `http_host` and `grpc_host` instead of single `host` parameter
+- **New options**: Added `log_level` and `max_cpu_cores` configuration parameters
+- **Database backend**: Migrated from LevelDB to PebbleDB for improved performance
+- **Legacy flags**: Existing indexing options now marked as legacy with minimal impact
+
+### Examples
+
+```bash
+# Sync blockchain once
+# Only syncs the indexer from start height to chain tip.
+# Builds the necessary indexes and exits. 
+./blindbit-oracle sync
+
+# Only run serve data without syncing
+# Open the HTTP and optionally the gRPC server (if grpc host is defined in blindbit.toml).
+./blindbit-oracle server-only --help
+
+# Run full service
+# Combination of sync and server-only. 
+# Syncs to chain tip, opens the servers, and after initial sync automatiaclly indexes new blocks.
+./blindbit-oracle run
+
+# Use custom data directory
+./blindbit-oracle --datadir /custom/path run
+
+# Use custom config file
+./blindbit-oracle --config /path/to/config.toml run
+```
+
+## API Documentation
+
+The BlindBit Oracle provides HTTP and gRPC APIs for accessing silent payment data. For detailed API documentation including endpoint specifications, request/response formats, and examples, see:
+
+- **HTTP API**: [`internal/server/README.md`](internal/server/README.md)
+- **gRPC API**: See the protobuf definitions and generated service endpoints
+
+### Available HTTP Endpoints
+
+- `GET /tweaks/:blockheight` - Simple list of tweaks (33-byte public keys)
+- `GET /utxos/:blockheight` - UTXO information for blocks  
+- `GET /spent-outputs/:blockheight` - Shortened spent output information
+- `GET /compute-index/:blockheight` - Compact transaction index with tweak mappings
+- `GET /full-block/:blockheight` - Complete block data with all transaction details
+
+### Help
+
+Get help for any command:
+
+```bash
+./blindbit-oracle --help
+./blindbit-oracle sync --help
+./blindbit-oracle server-only --help
+./blindbit-oracle run --help
  ```

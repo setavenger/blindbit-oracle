@@ -1,0 +1,8 @@
+linters:
+  enable:
+    - unused
+
+linters:
+  settings:
+    unused:
+      exported-fields-are-used: false

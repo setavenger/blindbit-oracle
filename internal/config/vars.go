@@ -29,8 +29,8 @@ var (
 )
 
 var (
-	RpcEndpoint  = "http://127.0.0.1:8332" // default local node
-	RestEndpoint = ""                      // default local node
+	RpcEndpoint  = "" // v2 uses REST; set core_rpc_endpoint only for legacy RPC-only configs
+	RestEndpoint = ""
 	CookiePath   = ""
 	RpcUser      = ""
 	RpcPass      = ""

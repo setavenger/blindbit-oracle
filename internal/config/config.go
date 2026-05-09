@@ -130,7 +130,8 @@ func LoadConfigs(pathToConfig string) {
 		return
 	}
 
-	if RpcEndpoint != "" {
+	// Bitcoin Core REST needs no RPC credentials; only enforce auth when RPC is used without REST.
+	if RpcEndpoint != "" && RestEndpoint == "" {
 		if CookiePath != "" {
 			data, err := os.ReadFile(CookiePath)
 			if err != nil {

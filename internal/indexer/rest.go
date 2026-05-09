@@ -38,22 +38,22 @@ var httpClient = &http.Client{
 }
 
 type ChainInfo struct {
-	Chain                string   `json:"chain"`
-	Blocks               int64    `json:"blocks"`
-	Headers              int64    `json:"headers"`
-	BestBlockHash        string   `json:"bestblockhash"`
-	Bits                 string   `json:"bits"`
-	Target               string   `json:"target"`
-	Difficulty           float64  `json:"difficulty"`
-	Time                 int64    `json:"time"`
-	MedianTime           int64    `json:"mediantime"`
-	VerificationProgress float64  `json:"verificationprogress"`
-	InitialBlockDownload bool     `json:"initialblockdownload"`
-	ChainWork            string   `json:"chainwork"`
-	SizeOnDisk           int64    `json:"size_on_disk"`
-	Pruned               bool     `json:"pruned"`
-	SignetChallenge      string   `json:"signet_challenge"`
-	Warnings             []string `json:"warnings"`
+	Chain                string  `json:"chain"`
+	Blocks               int64   `json:"blocks"`
+	Headers              int64   `json:"headers"`
+	BestBlockHash        string  `json:"bestblockhash"`
+	Bits                 string  `json:"bits"`
+	Target               string  `json:"target"`
+	Difficulty           float64 `json:"difficulty"`
+	Time                 int64   `json:"time"`
+	MedianTime           int64   `json:"mediantime"`
+	VerificationProgress float64 `json:"verificationprogress"`
+	InitialBlockDownload bool    `json:"initialblockdownload"`
+	ChainWork            string  `json:"chainwork"`
+	SizeOnDisk           int64   `json:"size_on_disk"`
+	Pruned               bool    `json:"pruned"`
+	SignetChallenge      string  `json:"signet_challenge"`
+	Warnings             string  `json:"warnings"`
 }
 
 func GetChainInfo() (*ChainInfo, error) {
@@ -86,7 +86,7 @@ func GetChainInfo() (*ChainInfo, error) {
 	var chainInfo ChainInfo
 	err = json.NewDecoder(resp.Body).Decode(&chainInfo)
 	if err != nil {
-		logging.L.Err(err).Msg("unabel to decode body")
+		logging.L.Err(err).Msg("unable to decode body")
 		return nil, err
 	}
 

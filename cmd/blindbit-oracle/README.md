@@ -41,7 +41,7 @@ Runs the complete BlindBit Oracle service including all features.
 - Initial blockchain sync
 - Static index building
 - Continuous scanning for new blocks
-- HTTP API server
+- HTTP server (JSON routes other than `GET /info` are **deprecated**; `GET /info` stays supported for discovery)
 - gRPC server (if configured)
 
 **Use case:** Production deployment or when you want the full service running.

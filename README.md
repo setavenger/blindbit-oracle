@@ -57,11 +57,11 @@ The server supports different storage strategies configured via `blindbit.toml`.
 
 These flags control **how tweaks are stored**:
 
-| Flag | `/tweak-index` | `/tweaks` | Storage |
-|------|----------------|-----------|---------|
-| `tweaks_full_basic=1` | works (no dust) | empty | ~1.7GB |
-| `tweaks_full_with_dust_filter=1` | works (with dust) | empty | ~1.7GB + dust data |
-| `tweaks_cut_through_with_dust_filter=1` | empty | works (with dust) | ~2.8GB (prunable) |
+| Flag | Full-index tweak data | Cut-through tweak data | Storage |
+|------|----------------------|-------------------------|---------|
+| `tweaks_full_basic=1` | yes (no dust) | no | ~1.7GB |
+| `tweaks_full_with_dust_filter=1` | yes (with dust) | no | ~1.7GB + dust data |
+| `tweaks_cut_through_with_dust_filter=1` | no | yes (with dust) | ~2.8GB (prunable) |
 
 **At least one storage flag must be enabled**, otherwise tweaks are computed but discarded (the server will log a warning).
 
@@ -100,7 +100,7 @@ tweaks_cut_through_with_dust_filter = 1
 
 ### Client Discovery
 
-Clients should call `/info` to discover which features are enabled and use the appropriate endpoint:
+Clients should call **`GET /info`** (lightweight HTTP JSON) or, preferably when already using gRPC, **`OracleService.GetInfo`**, to discover which features are enabled. The payload has the same fields in both cases, for example:
 
 ```json
 {
@@ -113,8 +113,7 @@ Clients should call `/info` to discover which features are enabled and use the a
 }
 ```
 
-- If `tweaks_full_basic` or `tweaks_full_with_dust_filter`: use `/tweak-index`
-- If `tweaks_cut_through_with_dust_filter`: use `/tweaks`
+For block data and indexes, prefer the **gRPC** API (for example `StreamComputeIndex`, `StreamBlockScanDataShort`, and `GetFullBlock`). If `tweaks_full_basic` or `tweaks_full_with_dust_filter` is true, the server maintains full-index tweak data; if `tweaks_cut_through_with_dust_filter` is true, it maintains cut-through tweak data (see [Storage Flags](#storage-flags)). The legacy JSON routes under **`/tweaks/:blockheight`**, **`/utxos/:blockheight`**, and the other HTTP paths are deprecated but may still be enabled; see [Available HTTP Endpoints](#available-http-endpoints) below.
 
 ## DiskUsage
 
@@ -174,11 +173,15 @@ The BlindBit Oracle provides HTTP and gRPC APIs for accessing silent payment dat
 
 ### Available HTTP Endpoints
 
-- `GET /tweaks/:blockheight` - Simple list of tweaks (33-byte public keys)
-- `GET /utxos/:blockheight` - UTXO information for blocks  
-- `GET /spent-outputs/:blockheight` - Shortened spent output information
-- `GET /compute-index/:blockheight` - Compact transaction index with tweak mappings
-- `GET /full-block/:blockheight` - Complete block data with all transaction details
+- `GET /info` — Oracle metadata and feature flags (**supported** for discovery)
+
+**Deprecated** (JSON convenience only; use gRPC for new integrations):
+
+- `GET /tweaks/:blockheight` — Simple list of tweaks (33-byte public keys)
+- `GET /utxos/:blockheight` — UTXO information for blocks
+- `GET /spent-outputs/:blockheight` — Shortened spent output information
+- `GET /compute-index/:blockheight` — Compact transaction index with tweak mappings
+- `GET /full-block/:blockheight` — Complete block data with all transaction details
 
 ### Help
 

@@ -33,6 +33,7 @@ func RunServer(handler *Handler) {
 	}))
 
 	// New API endpoints following README specification
+	router.GET("/info", handler.GetInfo)
 	router.GET("/tweaks/:blockheight", handler.GetTweaks)
 	router.GET("/utxos/:blockheight", handler.GetUtxos)
 	router.GET("/spent-outputs/:blockheight", handler.GetSpentOutputs) // todo: do we really need this?

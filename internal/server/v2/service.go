@@ -192,6 +192,34 @@ func (s *OracleService) StreamBlockScanDataShort(
 	return nil
 }
 
+// GetSpentOutputsShort returns a contiguous byte array of 8-byte shortened
+// x-only pubkeys for every output spent in the given block. Returns an empty
+// index when no spent outputs are recorded (e.g. height below index start).
+func (s *OracleService) GetSpentOutputsShort(
+	ctx context.Context, req *pb.BlockHeightRequest,
+) (*pb.IndexResponse, error) {
+	logging.L.Info().Any("req", req).Msg("GetSpentOutputsShort")
+	blockhash, err := s.db.GetBlockHashByHeight(uint32(req.BlockHeight))
+	if err != nil {
+		logging.L.Err(err).Uint64("height", req.BlockHeight).Msg("could not fetch block hash")
+		return nil, status.Errorf(codes.Internal, "could not fetch block hash: %v", err)
+	}
+
+	spentOuts, err := s.db.FetchSpentOutputsShort(blockhash)
+	if err != nil {
+		logging.L.Err(err).Uint64("height", req.BlockHeight).Msg("failed to fetch spent outputs")
+		return nil, status.Errorf(codes.Internal, "could not fetch spent outputs: %v", err)
+	}
+
+	return &pb.IndexResponse{
+		BlockIdentifier: &pb.BlockIdentifier{
+			BlockHash:   utils.ReverseBytesCopy(blockhash),
+			BlockHeight: req.BlockHeight,
+		},
+		Index: spentOuts,
+	}, nil
+}
+
 // GetFullBlock returns complete block data with all transaction details
 func (s *OracleService) GetFullBlock(
 	ctx context.Context, req *pb.BlockHeightRequest,

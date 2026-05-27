@@ -1,9 +1,9 @@
 # gRPC API Specification — BlindBit Oracle
 
 The BlindBit Oracle exposes a single gRPC service, `OracleService`, defined in
-[`blindbit-lib/proto/oracle_service.proto`](../../../../blindbit-rs/blindbit-lib/proto/oracle_service.proto)
+[`blindbit-lib/proto/oracle_service.proto`](https://github.com/setavenger/blindbit-rs/blob/master/blindbit-lib/proto/oracle_service.proto)
 with all message types in
-[`blindbit-lib/proto/indexing_server.proto`](../../../../blindbit-rs/blindbit-lib/proto/indexing_server.proto).
+[`blindbit-lib/proto/indexing_server.proto`](https://github.com/setavenger/blindbit-rs/blob/master/blindbit-lib/proto/indexing_server.proto).
 
 The server is configured via `grpc_host` in `blindbit.toml`.  If `grpc_host`
 is not set the gRPC server is not started.
@@ -242,5 +242,5 @@ while let Some(block) = stream.message().await? {
 }
 ```
 
-See [`blindbit-lib/examples/stream_oracle.rs`](../../../../blindbit-rs/blindbit-lib/examples/stream_oracle.rs)
+See [`blindbit-lib/examples/stream_oracle.rs`](https://github.com/setavenger/blindbit-rs/blob/master/blindbit-lib/examples/stream_oracle.rs)
 for a runnable example.

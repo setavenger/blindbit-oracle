@@ -169,7 +169,7 @@ Create a config file `blindbit.toml` in your data directory. An example [blindbi
 The BlindBit Oracle provides HTTP and gRPC APIs for accessing silent payment data. For detailed API documentation including endpoint specifications, request/response formats, and examples, see:
 
 - **HTTP API**: [`internal/server/README.md`](internal/server/README.md)
-- **gRPC API**: See the protobuf definitions and generated service endpoints
+- **gRPC API**: [`internal/server/GRPC.md`](internal/server/GRPC.md)
 
 ### Available HTTP Endpoints
 

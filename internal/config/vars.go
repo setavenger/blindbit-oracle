@@ -28,6 +28,11 @@ var (
 	TweaksCutThroughWithDust    bool
 )
 
+// FilterDuplicateTaprootOutputs, when enabled, excludes taproot outputs whose
+// x-only pubkey has been funded more than once across chain history from the
+// data served on StreamBlockScanDataShort. Opt-in; default off.
+var FilterDuplicateTaprootOutputs bool
+
 var (
 	RpcEndpoint  = "" // v2 uses REST; set core_rpc_endpoint only for legacy RPC-only configs
 	RestEndpoint = ""

@@ -33,6 +33,7 @@ func LoadConfigs(pathToConfig string) {
 	viper.SetDefault("tweaks_full_basic", true)
 	viper.SetDefault("tweaks_full_with_dust_filter", false)
 	viper.SetDefault("tweaks_cut_through_with_dust_filter", false)
+	viper.SetDefault("filter_duplicate_taproot_outputs", false)
 	viper.SetDefault("log_level", "info")
 
 	// Bind viper keys to environment variables (optional, for backup)
@@ -53,6 +54,7 @@ func LoadConfigs(pathToConfig string) {
 	viper.BindEnv("tweaks_full_basic", "TWEAKS_FULL_BASIC")
 	viper.BindEnv("tweaks_full_with_dust_filter", "TWEAKS_FULL_WITH_DUST_FILTER")
 	viper.BindEnv("tweaks_cut_through_with_dust_filter", "TWEAKS_CUT_THROUGH_WITH_DUST_FILTER")
+	viper.BindEnv("filter_duplicate_taproot_outputs", "FILTER_DUPLICATE_TAPROOT_OUTPUTS")
 	viper.BindEnv("log_level", "LOG_LEVEL")
 
 	/* read and set config variables */
@@ -79,6 +81,9 @@ func LoadConfigs(pathToConfig string) {
 	TweakIndexFullNoDust = viper.GetBool("tweaks_full_basic")
 	TweakIndexFullIncludingDust = viper.GetBool("tweaks_full_with_dust_filter")
 	TweaksCutThroughWithDust = viper.GetBool("tweaks_cut_through_with_dust_filter")
+
+	// Serving-time filters
+	FilterDuplicateTaprootOutputs = viper.GetBool("filter_duplicate_taproot_outputs")
 
 	chainInput := viper.GetString("chain")
 
@@ -115,6 +120,7 @@ func LoadConfigs(pathToConfig string) {
 		Bool("tweaks_full_basic", TweakIndexFullNoDust).
 		Bool("tweaks_full_with_dust_filter", TweakIndexFullIncludingDust).
 		Bool("tweaks_cut_through_with_dust_filter", TweaksCutThroughWithDust).
+		Bool("filter_duplicate_taproot_outputs", FilterDuplicateTaprootOutputs).
 		Str("chain", chainInput).
 		Str("log_level", LogLevel).
 		Msg("Configuration loaded")

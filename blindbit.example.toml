@@ -54,3 +54,12 @@ tweaks_full_with_dust_filter = 1
 # Currently still requires tweaks_only=0.
 # default: 0
 tweaks_cut_through_with_dust_filter = 1
+
+# opt-in serving-time filter (StreamBlockScanDataShort only).
+# When enabled, a taproot output whose x-only pubkey has been funded more than
+# once across chain history is treated as ineligible and is not served to
+# clients; transactions left with no eligible outputs are dropped from the
+# stream. Requires the KOutByPubkey accelerator index to be populated
+# (see the `build-out-by-pubkey-index` command for backfilling existing data).
+# default: 0
+filter_duplicate_taproot_outputs = 0

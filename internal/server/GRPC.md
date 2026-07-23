@@ -110,6 +110,20 @@ rpc StreamBlockScanDataShort(RangedBlockHeightRequestFiltered)
 | `comp_index` | repeated ComputeIndexTxItem | See [ComputeIndexTxItem](#computeindextxitem) below |
 | `spent_outputs` | bytes | Flat array of 8-byte shortened pubkeys for every spent output; `len / 8` = count |
 
+> **Optional duplicate-funded output filter.** When the oracle is configured
+> with `filter_duplicate_taproot_outputs = 1`, this endpoint omits any taproot
+> output whose x-only pubkey was funded more than once across the indexed chain
+> history (looked up via the `KOutByPubkey` accelerator index), and drops
+> transactions that have no eligible outputs left. The filter is off by default,
+> in which case the response is byte-for-byte identical to before. Per served
+> block the oracle emits a structured log line (`event=dedup_filter_block`) with
+> `total_outputs` / `omitted_outputs` / `sent_outputs` / `txs_total` /
+> `txs_dropped` for benchmarking.
+>
+> Note: the flag's state is currently surfaced only via the `GetInfo` server log,
+> not yet as a field on `InfoResponse` (that requires a `blindbit-lib` proto
+> change, deferred).
+
 ---
 
 ### `StreamComputeIndex`

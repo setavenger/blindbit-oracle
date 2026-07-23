@@ -36,7 +36,9 @@ func (s *OracleService) GetInfo(
 ) (
 	*pb.InfoResponse, error,
 ) {
-	logging.L.Info().Msg("GetInfo")
+	logging.L.Info().
+		Bool("filter_duplicate_taproot_outputs", config.FilterDuplicateTaprootOutputs).
+		Msg("GetInfo")
 	blockhash, height, err := s.db.GetChainTip()
 	if err != nil {
 		logging.L.Err(err).Msg("failed pulling chain tip")
@@ -150,12 +152,33 @@ func (s *OracleService) StreamBlockScanDataShort(
 			return err
 		}
 
-		computeIndex, err := s.db.FetchComputeIndex(uint32(height))
-		if err != nil {
-			logging.L.Err(err).
+		var computeIndex []*pb.ComputeIndexTxItem
+		if config.FilterDuplicateTaprootOutputs {
+			var stats database.DedupFilterStats
+			computeIndex, stats, err = s.db.FetchComputeIndexDedupTaproot(uint32(height))
+			if err != nil {
+				logging.L.Err(err).
+					Uint64("height", height).
+					Msg("failed to pull filtered short outs")
+				return err
+			}
+			logging.L.Info().
+				Str("event", "dedup_filter_block").
 				Uint64("height", height).
-				Msg("failed to pull short outs")
-			return err
+				Int("txs_total", stats.TxsTotal).
+				Int("txs_dropped", stats.TxsDropped).
+				Int("total_outputs", stats.TotalOutputs).
+				Int("omitted_outputs", stats.OmittedOutputs).
+				Int("sent_outputs", stats.SentOutputs).
+				Msg("duplicate-funded taproot output filter applied")
+		} else {
+			computeIndex, err = s.db.FetchComputeIndex(uint32(height))
+			if err != nil {
+				logging.L.Err(err).
+					Uint64("height", height).
+					Msg("failed to pull short outs")
+				return err
+			}
 		}
 
 		var spentOuts []byte

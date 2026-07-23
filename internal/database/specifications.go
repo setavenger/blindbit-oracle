@@ -17,6 +17,7 @@ type DB interface {
 	FetchSpentOutputsShort(blockhash []byte) ([]byte, error)
 	ChainIterator(asc bool) (<-chan []byte, error) // todo: add context
 	FetchComputeIndex(height uint32) ([]*pb.ComputeIndexTxItem, error)
+	FetchComputeIndexDedupTaproot(height uint32) ([]*pb.ComputeIndexTxItem, DedupFilterStats, error)
 	BlockhashInDB(blockhash []byte) (bool, error)
 	BatchSize() int
 	KeyExistsComputeIndex(blockhash []byte) (bool, error)
@@ -29,6 +30,16 @@ type DB interface {
 type TweakRow struct {
 	Txid  [32]byte
 	Tweak [33]byte
+}
+
+// DedupFilterStats reports, per block, how the duplicate-funded taproot output
+// filter affected what was served. Used for benchmark logging.
+type DedupFilterStats struct {
+	TxsTotal       int
+	TxsDropped     int
+	TotalOutputs   int
+	OmittedOutputs int
+	SentOutputs    int
 }
 
 type DBBlock struct {

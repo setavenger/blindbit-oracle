@@ -53,6 +53,7 @@ Performance indexes that avoid scanning entire key ranges by providing optimized
 | Prefix | Key Structure | Value | Description |
 |--------|---------------|-------|-------------|
 | `0x0E` | `[0x0E][blockhash:32]` | `[pubkey_prefix1:8][pubkey_prefix2:8]...[pubkey_prefixN:8]` | Spent Outputs Short |
+| `0x10` | `[0x10][pubkey:32][txid:32][vout:4]` | `[amount:8]` | Output by pubkey accelerator (duplicate-funded output detection) |
 
 ### Others
 | Prefix | Key Structure | Value | Description |

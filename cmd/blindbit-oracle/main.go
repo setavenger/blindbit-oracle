@@ -28,6 +28,8 @@ var (
 
 	startHeight uint32
 	endHeight   uint32
+
+	outByPubkeyChunkSize int
 )
 
 func init() {
@@ -63,6 +65,13 @@ func init() {
 		"end-height",
 		0,
 		"End height",
+	)
+
+	buildOutByPubkeyIndexCmd.Flags().IntVar(
+		&outByPubkeyChunkSize,
+		"chunk-size",
+		1_000_000,
+		"Number of KOut rows to sort and write per batch",
 	)
 }
 
@@ -290,11 +299,42 @@ var serverCmd = &cobra.Command{
 	},
 }
 
+var buildOutByPubkeyIndexCmd = &cobra.Command{
+	Use:   "build-out-by-pubkey-index",
+	Short: "Build the output-by-pubkey accelerator index",
+	Long: `Build the output-by-pubkey accelerator index (KOutByPubkey) from existing output data.
+
+The command scans KOut once, reformats rows into KOutByPubkey entries, sorts
+bounded chunks in memory, and writes the new accelerator index in batches.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		logging.L.Info().
+			Int("chunk_size", outByPubkeyChunkSize).
+			Msg("building output-by-pubkey accelerator index")
+
+		db, err := dbpebble.OpenDB()
+		if err != nil {
+			return fmt.Errorf("failed opening db: %w", err)
+		}
+
+		store := dbpebble.NewStore(db)
+		defer store.Close()
+
+		rows, err := store.BuildOutByPubkeyIndex(cmd.Context(), outByPubkeyChunkSize)
+		if err != nil {
+			return fmt.Errorf("failed building output-by-pubkey index: %w", err)
+		}
+
+		logging.L.Info().Uint64("rows", rows).Msg("output-by-pubkey accelerator index built")
+		return nil
+	},
+}
+
 func main() {
 	// Add subcommands
 	rootCmd.AddCommand(syncCmd)
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(serverCmd)
+	rootCmd.AddCommand(buildOutByPubkeyIndexCmd)
 
 	// Execute the root command
 	if err := rootCmd.Execute(); err != nil {

@@ -267,3 +267,38 @@ func ParseTxidOutpointsValue(v []byte) ([][36]byte, error) {
 	}
 	return outpoints, nil
 }
+
+// ---------------- Out By Pubkey Accelerator ----------------
+
+func KeyOutByPubkey(pubkey, txid []byte, vout uint32) []byte {
+	k := make([]byte, 1+SizePubKey+SizeTxid+SizeVout)
+	k[0] = KOutByPubkey
+	copy(k[1:1+SizePubKey], pubkey)
+	copy(k[1+SizePubKey:1+SizePubKey+SizeTxid], txid)
+	be32(vout, k[1+SizePubKey+SizeTxid:])
+	return k
+}
+
+// BoundsOutByPubkey returns [lb, ub) covering every KOutByPubkey row for one pubkey.
+func BoundsOutByPubkey(pubkey []byte) (lb, ub []byte) {
+	lb = make([]byte, 1+SizePubKey)
+	lb[0] = KOutByPubkey
+	copy(lb[1:], pubkey)
+
+	ub = make([]byte, 1+SizePubKey)
+	copy(ub, lb)
+	for i := len(ub) - 1; i >= 0; i-- {
+		if ub[i] != 0xFF {
+			ub[i]++
+			return lb, ub
+		}
+		ub[i] = 0x00
+	}
+	return lb, []byte{KOutByPubkey + 1}
+}
+
+func ValOutByPubkey(amount uint64) []byte {
+	v := make([]byte, SizeAmt)
+	le64(amount, v)
+	return v
+}

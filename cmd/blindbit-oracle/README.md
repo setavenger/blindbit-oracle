@@ -46,6 +46,26 @@ Runs the complete BlindBit Oracle service including all features.
 
 **Use case:** Production deployment or when you want the full service running.
 
+### `build-out-by-pubkey-index` - Build Output-by-Pubkey Accelerator Index
+
+Builds the `KOutByPubkey` accelerator index from existing `KOut` output data.
+
+```bash
+./blindbit-oracle build-out-by-pubkey-index [flags]
+```
+
+**What it does:**
+
+- Scans all `KOut` rows once
+- Reformats each row into `KOutByPubkey` entries (`[pubkey][txid][vout]` → `[amount]`)
+- Sorts bounded chunks in memory and writes batches to the database
+
+**Flags:**
+
+- `--chunk-size <n>`: Number of `KOut` rows to sort and write per batch (default: 1000000)
+
+**Use case:** One-shot backfill after upgrading to a version that writes `KOutByPubkey` on new blocks, or to rebuild the index from existing data.
+
 ## Global Flags
 
 All commands support these global flags:

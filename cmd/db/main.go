@@ -79,7 +79,7 @@ func init() {
 		&keyType,
 		"key-type",
 		"compute-index",
-		"Type of keys to count: block-tx, tx, out, spend, ci-height, ci-block, tx-occur, tweaks-static, utxos-static, taproot-pubkey-filter, taproot-unspent-filter, taproot-spent-filter, compute-index",
+		"Type of keys to count: block-tx, tx, out, out-by-pubkey, spend, ci-height, ci-block, tx-occur, tweaks-static, utxos-static, taproot-pubkey-filter, taproot-unspent-filter, taproot-spent-filter, compute-index",
 	)
 
 	// Lookup command flags
@@ -87,7 +87,7 @@ func init() {
 		&lookupKeyType,
 		"key-type",
 		"",
-		"Type of key to lookup: block-tx, tx, out, spend, ci-height, ci-block, tx-occur, tweaks-static, utxos-static, taproot-pubkey-filter, taproot-unspent-filter, taproot-spent-filter, compute-index",
+		"Type of key to lookup: block-tx, tx, out, out-by-pubkey, spend, ci-height, ci-block, tx-occur, tweaks-static, utxos-static, taproot-pubkey-filter, taproot-unspent-filter, taproot-spent-filter, compute-index",
 	)
 	lookupCmd.Flags().StringVar(
 		&lookupKey,
@@ -107,7 +107,7 @@ func init() {
 		&rangeKeyType,
 		"key-type",
 		"",
-		"Type of keys to iterate: block-tx, tx, out, spend, ci-height, ci-block, tx-occur, tweaks-static, utxos-static, taproot-pubkey-filter, taproot-unspent-filter, taproot-spent-filter, compute-index",
+		"Type of keys to iterate: block-tx, tx, out, out-by-pubkey, spend, ci-height, ci-block, tx-occur, tweaks-static, utxos-static, taproot-pubkey-filter, taproot-unspent-filter, taproot-spent-filter, compute-index",
 	)
 	rangeCmd.Flags().StringVar(
 		&rangeStartKey,
@@ -133,7 +133,7 @@ func init() {
 		&prefixScanKeyType,
 		"key-type",
 		"",
-		"Type of keys to scan: block-tx, tx, out, spend, ci-height, ci-block, tx-occur, tweaks-static, utxos-static, taproot-pubkey-filter, taproot-unspent-filter, taproot-spent-filter, compute-index",
+		"Type of keys to scan: block-tx, tx, out, out-by-pubkey, spend, ci-height, ci-block, tx-occur, tweaks-static, utxos-static, taproot-pubkey-filter, taproot-unspent-filter, taproot-spent-filter, compute-index",
 	)
 	prefixScanCmd.Flags().StringVar(
 		&prefixScanKey,

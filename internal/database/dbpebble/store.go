@@ -255,6 +255,10 @@ func attachBlockToBatch(batch *pebble.Batch, block *database.DBBlock) error {
 					logging.L.Err(err).Any("output", o).Msg("insert failed")
 					return err
 				}
+				if err := b.Set(KeyOutByPubkey(o.Pubkey, o.Txid, o.Vout), ValOutByPubkey(o.Amount), nil); err != nil {
+					logging.L.Err(err).Any("output", o).Msg("insert out-by-pubkey index failed")
+					return err
+				}
 				var newOut [8]byte
 				copy(newOut[:], o.Pubkey[:8])
 				newOutsShort = append(newOutsShort, newOut)

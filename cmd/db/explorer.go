@@ -40,7 +40,7 @@ func (de *DatabaseExplorer) CountKeysByType(keyType string, startHeight, endHeig
 		lowerBound, upperBound = dbpebble.BoundsComputeIndex(startHeight, endHeight)
 	case "ci-height":
 		lowerBound, upperBound = de.getCIHeightBounds(startHeight, endHeight)
-	case "block-tx", "tx", "out", "spend", "ci-block", "tx-occur":
+	case "block-tx", "tx", "out", "out-by-pubkey", "spend", "ci-block", "tx-occur":
 		// These key types don't use height ranges, count all keys of this type
 		lowerBound, upperBound = de.getKeyTypeBounds(keyType)
 	default:
@@ -452,6 +452,8 @@ func (de *DatabaseExplorer) getKeyTypeBounds(keyType string) ([]byte, []byte) {
 		prefix = dbpebble.KTx
 	case "out":
 		prefix = dbpebble.KOut
+	case "out-by-pubkey":
+		prefix = dbpebble.KOutByPubkey
 	case "spend":
 		prefix = dbpebble.KSpend
 	case "ci-block":
@@ -477,6 +479,8 @@ func (de *DatabaseExplorer) getKeyTypePrefix(keyType string) (byte, error) {
 		return dbpebble.KTx, nil
 	case "out":
 		return dbpebble.KOut, nil
+	case "out-by-pubkey":
+		return dbpebble.KOutByPubkey, nil
 	case "spend":
 		return dbpebble.KSpend, nil
 	case "ci-height":

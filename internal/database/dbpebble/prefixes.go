@@ -32,4 +32,7 @@ const (
 
 	// Txid to Outpoints mapping (blockhash+txid -> concatenated outpoints)
 	KTxidOutpoints = 0x0F // blockhash+txid -> outpoints
+
+	// Output by pubkey accelerator (pubkey+txid+vout -> amount)
+	KOutByPubkey = 0x10 // pubkey+txid+vout -> amount
 )

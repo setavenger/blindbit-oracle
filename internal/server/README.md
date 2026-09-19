@@ -221,6 +221,7 @@ Returns complete block data with all transaction details and spent outpoints acc
 The deprecated Full Block HTTP endpoint includes:
 
 - **index**: Array of transaction items with tweaks and UTXOs
+  - Transactions that spend taproot outputs but have no tweak (e.g. input-only transactions) are included with `"tweak": ""` and `"utxos": []`; check the tweak length before parsing it as a public key
 - **spent_outpoints**: Array of all outpoints (previous transaction outputs) that were spent in this block
   - Each outpoint is 36 bytes: 32-byte previous transaction ID + 4-byte previous output index
   - Transaction IDs are reversed (little-endian) for consistency with Bitcoin conventions

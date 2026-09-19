@@ -396,10 +396,19 @@ func (h *Handler) GetFullBlock(c *gin.Context) {
 	// Build the full transaction items
 	var fullTxItems []FullTxItem
 
-	// Sort transaction IDs to ensure consistent ordering
+	// Sort transaction IDs to ensure consistent ordering.
+	// Transactions which only spend tracked outputs (or have no tweak) have no
+	// indexed outputs, so they are only known through the txid-outpoints map.
 	var sortedTxids []string
 	for txid := range txOutputs {
 		sortedTxids = append(sortedTxids, txid)
+	}
+	for txidArray := range txidOutpointsMap {
+		// same encoding as the txOutputs keys: hex of the txid as stored
+		txid := hex.EncodeToString(txidArray[:])
+		if _, exists := txOutputs[txid]; !exists {
+			sortedTxids = append(sortedTxids, txid)
+		}
 	}
 	sort.Strings(sortedTxids)
 
@@ -414,10 +423,10 @@ func (h *Handler) GetFullBlock(c *gin.Context) {
 		var txidArray [32]byte
 		copy(txidArray[:], txidBytes)
 
-		// Get tweak for this transaction
-		var tweak [33]byte
+		// Get tweak for this transaction, stays empty if there is none
+		var tweak []byte
 		if tweakBytes, exists := txidToTweak[txid]; exists {
-			tweak = tweakBytes
+			tweak = tweakBytes[:]
 		}
 
 		// Get inputs (spent outpoints) for this transaction
@@ -429,8 +438,8 @@ func (h *Handler) GetFullBlock(c *gin.Context) {
 			inputs = SpentOutpoints(outpoints)
 		}
 
-		// Convert outputs to UTXO items
-		var utxoItems []UTXOItemLight
+		// Convert outputs to UTXO items, an empty list (not null) if there are none
+		utxoItems := []UTXOItemLight{}
 		for _, output := range outputs {
 			var pubkey [32]byte
 			copy(pubkey[:], output.Pubkey)

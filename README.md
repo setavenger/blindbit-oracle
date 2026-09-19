@@ -177,6 +177,8 @@ The BlindBit Oracle provides HTTP and gRPC APIs for accessing silent payment dat
 
 **Deprecated** (JSON convenience only; use gRPC for new integrations):
 
+- `GET /block-height` — Current best block height indexed by the oracle
+- `GET /block-hash/:blockheight` — Block hash at a given height (for client-side reorg detection)
 - `GET /tweaks/:blockheight` — Simple list of tweaks (33-byte public keys)
 - `GET /utxos/:blockheight` — UTXO information for blocks
 - `GET /spent-outputs/:blockheight` — Shortened spent output information

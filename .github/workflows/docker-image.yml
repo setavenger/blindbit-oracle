@@ -2,62 +2,34 @@ name: Build and Push Docker Image
 
 on:
   push:
-    branches:
-      - dev
-    tags: 
-      - 'v*' # Trigger on tags'
+    tags:
+      - 'v*'
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - id: commit
-        uses: prompt/actions-commit-hash@v3
+        uses: actions/checkout@v7
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
+        uses: docker/setup-qemu-action@v4
         with:
           platforms: linux/amd64,linux/arm64
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to Docker Hub
-        uses: docker/login-action@v2
+        uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # Build and push the Docker image (dev)
-      - name: Build and push Docker image (dev)
-        if: github.ref == 'refs/heads/dev'
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          push: true
-          build-args: --progress=plain
-          tags: setavenger/blindbit-oracle:dev-${{ steps.commit.outputs.short }} # Use the short SHA to distinguish dev images
-
-      # Build and push the Docker image (tags)
-      - name: Build and push Docker image (tags)
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          push: true
-          build-args: --progress=plain
-          tags: setavenger/blindbit-oracle:${{ github.ref_name }}
-
       - name: Build and push Docker image
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v7
         with:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          build-args: --progress=plain
           tags: setavenger/blindbit-oracle:${{ github.ref_name }}

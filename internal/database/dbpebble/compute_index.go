@@ -8,6 +8,7 @@ import (
 	"github.com/setavenger/blindbit-lib/proto/pb"
 	"github.com/setavenger/blindbit-lib/utils"
 	"github.com/setavenger/blindbit-oracle/internal/config"
+	"github.com/setavenger/blindbit-oracle/internal/database"
 )
 
 // should we encode the count of outputs?
@@ -80,6 +81,63 @@ func (s *Store) FetchComputeIndex(height uint32) ([]*pb.ComputeIndexTxItem, erro
 		computeIndexes = append(computeIndexes, idx)
 	}
 	return computeIndexes, nil
+}
+
+// FetchComputeIndexFiltered returns the compute index for a height with the
+// request filters applied. cutThrough drops outputs already spent at tipHeight,
+// dustLimit is read per dustMode, and a tx item with no surviving output is
+// dropped. Returns the stored index unchanged for dustLimit 0, cutThrough false.
+func (s *Store) FetchComputeIndexFiltered(
+	height, tipHeight uint32, dustLimit uint64,
+	dustMode database.DustMode, cutThrough bool,
+) ([]*pb.ComputeIndexTxItem, error) {
+	computeIndexes, err := s.FetchComputeIndex(height)
+	if err != nil {
+		return nil, err
+	}
+	if dustLimit == 0 && !cutThrough {
+		return computeIndexes, nil
+	}
+
+	filtered := make([]*pb.ComputeIndexTxItem, 0, len(computeIndexes))
+	for _, idx := range computeIndexes {
+		// the index carries the txid reversed, the db keys it unreversed
+		txid := utils.ReverseBytesCopy(idx.Txid)
+		outs, err := s.OutputsForTx(txid)
+		if err != nil {
+			return nil, err
+		}
+
+		outputsShort := make([]byte, 0, len(idx.OutputsShort))
+		var maxAmount uint64
+		for _, o := range outs {
+			if dustMode == database.DustPerOutput && o.Amount < dustLimit {
+				continue
+			}
+			if cutThrough {
+				spent, err := s.spentAtHeightTip(txid, o.Vout, tipHeight)
+				if err != nil {
+					return nil, err
+				}
+				if spent {
+					continue
+				}
+			}
+			if o.Amount > maxAmount {
+				maxAmount = o.Amount
+			}
+			outputsShort = append(outputsShort, o.Pubkey[:8]...)
+		}
+		// per tx dust test, over the outputs that survived cut-through
+		if len(outputsShort) == 0 || maxAmount < dustLimit {
+			continue
+		}
+
+		idx.OutputsShort = outputsShort
+		filtered = append(filtered, idx)
+	}
+
+	return filtered, nil
 }
 
 func (s *Store) BuildComputeIndexByRange(startHeight, endHeight uint32) error {

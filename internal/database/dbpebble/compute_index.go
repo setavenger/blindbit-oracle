@@ -8,7 +8,6 @@ import (
 	"github.com/setavenger/blindbit-lib/proto/pb"
 	"github.com/setavenger/blindbit-lib/utils"
 	"github.com/setavenger/blindbit-oracle/internal/config"
-	"github.com/setavenger/blindbit-oracle/internal/database"
 )
 
 // should we encode the count of outputs?
@@ -84,12 +83,11 @@ func (s *Store) FetchComputeIndex(height uint32) ([]*pb.ComputeIndexTxItem, erro
 }
 
 // FetchComputeIndexFiltered returns the compute index for a height with the
-// request filters applied. cutThrough drops outputs already spent at tipHeight,
-// dustLimit is read per dustMode, and a tx item with no surviving output is
-// dropped. Returns the stored index unchanged for dustLimit 0, cutThrough false.
+// request filters applied. A tx item is dropped when none of its outputs
+// survives cutThrough and dustLimit; a surviving item is returned whole.
+// Returns the stored index unchanged for dustLimit 0, cutThrough false.
 func (s *Store) FetchComputeIndexFiltered(
-	height, tipHeight uint32, dustLimit uint64,
-	dustMode database.DustMode, cutThrough bool,
+	height, tipHeight uint32, dustLimit uint64, cutThrough bool,
 ) ([]*pb.ComputeIndexTxItem, error) {
 	computeIndexes, err := s.FetchComputeIndex(height)
 	if err != nil {
@@ -108,10 +106,10 @@ func (s *Store) FetchComputeIndexFiltered(
 			return nil, err
 		}
 
-		outputsShort := make([]byte, 0, len(idx.OutputsShort))
-		var maxAmount uint64
+		// all or nothing per tx: a missing k stops the scanner and hides later outputs
+		keep := false
 		for _, o := range outs {
-			if dustMode == database.DustPerOutput && o.Amount < dustLimit {
+			if o.Amount < dustLimit {
 				continue
 			}
 			if cutThrough {
@@ -123,18 +121,12 @@ func (s *Store) FetchComputeIndexFiltered(
 					continue
 				}
 			}
-			if o.Amount > maxAmount {
-				maxAmount = o.Amount
-			}
-			outputsShort = append(outputsShort, o.Pubkey[:8]...)
+			keep = true
+			break
 		}
-		// per tx dust test, over the outputs that survived cut-through
-		if len(outputsShort) == 0 || maxAmount < dustLimit {
-			continue
+		if keep {
+			filtered = append(filtered, idx)
 		}
-
-		idx.OutputsShort = outputsShort
-		filtered = append(filtered, idx)
 	}
 
 	return filtered, nil

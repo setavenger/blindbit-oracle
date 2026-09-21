@@ -14,7 +14,6 @@ type filterCall struct {
 	height     uint32
 	tipHeight  uint32
 	dustLimit  uint64
-	dustMode   database.DustMode
 	cutThrough bool
 }
 
@@ -32,12 +31,11 @@ func (d *stubDB) GetChainTip() ([]byte, uint32, error) {
 }
 
 func (d *stubDB) FetchComputeIndexFiltered(
-	height, tipHeight uint32, dustLimit uint64,
-	dustMode database.DustMode, cutThrough bool,
+	height, tipHeight uint32, dustLimit uint64, cutThrough bool,
 ) ([]*pb.ComputeIndexTxItem, error) {
 	d.callsMade = append(d.callsMade, filterCall{
 		height: height, tipHeight: tipHeight, dustLimit: dustLimit,
-		dustMode: dustMode, cutThrough: cutThrough,
+		cutThrough: cutThrough,
 	})
 	return nil, nil
 }
@@ -151,9 +149,6 @@ func TestStreamComputeIndexForwardsFilters(t *testing.T) {
 				}
 				if call.tipHeight != c.wantTip {
 					t.Errorf("call %d tipHeight = %d, want %d", i, call.tipHeight, c.wantTip)
-				}
-				if call.dustMode != dustModeComputeIndex {
-					t.Errorf("call %d dustMode = %d, want %d", i, call.dustMode, dustModeComputeIndex)
 				}
 			}
 		})

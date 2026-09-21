@@ -89,9 +89,6 @@ func (s *OracleService) GetBlockHashByHeight(
 	}, nil
 }
 
-// dustModeComputeIndex is how StreamComputeIndex reads the request's dustlimit
-const dustModeComputeIndex = database.DustPerTx
-
 func (s *OracleService) StreamComputeIndex(
 	req *pb.RangedBlockHeightRequestFiltered,
 	stream pb.OracleService_StreamComputeIndexServer,
@@ -120,8 +117,7 @@ func (s *OracleService) StreamComputeIndex(
 		}
 
 		computeIndex, err := s.db.FetchComputeIndexFiltered(
-			uint32(height), tipHeight, req.Dustlimit,
-			dustModeComputeIndex, req.CutThrough,
+			uint32(height), tipHeight, req.Dustlimit, req.CutThrough,
 		)
 		if err != nil {
 			logging.L.Err(err).

@@ -96,7 +96,7 @@ func TestFetchComputeIndexFiltered(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// one 8 byte prefix per surviving output, in vout order
+	// one 8 byte prefix per output, in vout order
 	short := func(bs ...byte) []byte {
 		var out []byte
 		for _, b := range bs {
@@ -108,46 +108,41 @@ func TestFetchComputeIndexFiltered(t *testing.T) {
 	cases := []struct {
 		name       string
 		dustLimit  uint64
-		dustMode   database.DustMode
 		cutThrough bool
 		want       [][]byte // outputs_short per surviving entry, txA before txB
 	}{
 		{
-			"unfiltered", 0, database.DustPerTx, false,
+			"unfiltered", 0, false,
 			[][]byte{short(0xa0, 0xa1, 0xa2), short(0xb0)},
 		},
 		{
-			// txA has an output at 2500, so it keeps all three
-			"dust per tx", 1000, database.DustPerTx, false,
+			// txB's only output is 100, so txB goes and txA stays whole
+			"dust", 1000, false,
 			[][]byte{short(0xa0, 0xa1, 0xa2)},
 		},
 		{
-			"dust per output", 1000, database.DustPerOutput, false,
-			[][]byte{short(0xa1, 0xa2)},
+			// txA vout 1 is spent but vout 0 and 2 are not, so txA stays whole
+			"cut through", 0, true,
+			[][]byte{short(0xa0, 0xa1, 0xa2)},
 		},
 		{
-			"cut through only", 0, database.DustPerTx, true,
-			[][]byte{short(0xa0, 0xa2)},
+			// vout 2 is unspent and clears the limit, so txA stays whole
+			"dust and cut through", 1000, true,
+			[][]byte{short(0xa0, 0xa1, 0xa2)},
 		},
 		{
-			// only the unspent 500 and 2500 remain, 2500 clears the limit
-			"dust per tx and cut through", 1000, database.DustPerTx, true,
-			[][]byte{short(0xa0, 0xa2)},
+			"dust above every output", 3000, false,
+			nil,
 		},
 		{
-			"dust per output and cut through", 1000, database.DustPerOutput, true,
-			[][]byte{short(0xa2)},
-		},
-		{
-			// no unspent output of txA reaches 3000, so txA goes too
-			"dust per tx above every output", 3000, database.DustPerTx, true,
+			"dust above every unspent output", 3000, true,
 			nil,
 		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got, err := s.FetchComputeIndexFiltered(100, tip, c.dustLimit, c.dustMode, c.cutThrough)
+			got, err := s.FetchComputeIndexFiltered(100, tip, c.dustLimit, c.cutThrough)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -176,20 +171,50 @@ func TestFetchComputeIndexFilteredPassthrough(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, mode := range []database.DustMode{database.DustPerTx, database.DustPerOutput} {
-		got, err := s.FetchComputeIndexFiltered(100, tip, 0, mode, false)
-		if err != nil {
-			t.Fatal(err)
+	got, err := s.FetchComputeIndexFiltered(100, tip, 0, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != len(stored) {
+		t.Fatalf("got %d entries, want %d", len(got), len(stored))
+	}
+	for i := range got {
+		if !bytes.Equal(got[i].Txid, stored[i].Txid) ||
+			!bytes.Equal(got[i].Tweak, stored[i].Tweak) ||
+			!bytes.Equal(got[i].OutputsShort, stored[i].OutputsShort) {
+			t.Fatalf("entry %d differs from the stored index", i)
 		}
-		if len(got) != len(stored) {
-			t.Fatalf("mode %d: got %d entries, want %d", mode, len(got), len(stored))
-		}
-		for i := range got {
-			if !bytes.Equal(got[i].Txid, stored[i].Txid) ||
-				!bytes.Equal(got[i].Tweak, stored[i].Tweak) ||
-				!bytes.Equal(got[i].OutputsShort, stored[i].OutputsShort) {
-				t.Errorf("mode %d: entry %d differs from the stored index", mode, i)
+	}
+}
+
+// A kept tx must carry all of its outputs: a missing k stops the scanner.
+func TestFetchComputeIndexFilteredKeepsTxWhole(t *testing.T) {
+	s := newTestStore(t)
+	_, tip, err := s.GetChainTip()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, c := range []struct {
+		name       string
+		dustLimit  uint64
+		cutThrough bool
+	}{
+		{"cut through", 0, true},
+		{"dust and cut through", 1000, true},
+		{"dust", 1000, false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			got, err := s.FetchComputeIndexFiltered(100, tip, c.dustLimit, c.cutThrough)
+			if err != nil {
+				t.Fatal(err)
 			}
-		}
+			if len(got) == 0 {
+				t.Fatal("txA was dropped entirely")
+			}
+			if n := len(got[0].OutputsShort) / 8; n != 3 {
+				t.Fatalf("txA came back with %d of 3 outputs; a scanner would stop at the first gap", n)
+			}
+		})
 	}
 }

@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 
@@ -21,6 +22,10 @@ func LoadConfigs(pathToConfig string) {
 
 	/* set defaults */
 	viper.SetDefault("max_parallel_requests", MaxParallelRequests)
+	// Without this default the key resolves to 0, which starts zero block-handler
+	// goroutines in SyncBlocks. The sync then drains nothing and returns success
+	// having indexed no blocks at all.
+	viper.SetDefault("max_parallel_tweak_computations", MaxParallelTweakComputations)
 	viper.SetDefault("max_cpu_cores", MaxCPUCores)
 	viper.SetDefault("http_host", HTTPHost)
 	viper.SetDefault("grpc_host", GRPCHost)
@@ -118,6 +123,28 @@ func LoadConfigs(pathToConfig string) {
 		Str("chain", chainInput).
 		Str("log_level", LogLevel).
 		Msg("Configuration loaded")
+
+	// A zero here is not a harmless setting: SyncBlocks starts this many block
+	// handler goroutines, so zero workers means nothing ever drains the block
+	// channel and the sync reports success having indexed nothing. Fail loudly
+	// rather than silently doing no work.
+	if MaxParallelTweakComputations < 1 {
+		err := fmt.Errorf(
+			"max_parallel_tweak_computations must be at least 1, got %d",
+			MaxParallelTweakComputations,
+		)
+		logging.L.Fatal().Err(err).Msg("invalid max_parallel_tweak_computations")
+		return
+	}
+
+	if MaxParallelRequests < 1 {
+		err := fmt.Errorf(
+			"max_parallel_requests must be at least 1, got %d",
+			MaxParallelRequests,
+		)
+		logging.L.Fatal().Err(err).Msg("invalid max_parallel_requests")
+		return
+	}
 
 	if !TweakIndexFullNoDust && !TweakIndexFullIncludingDust && !TweaksCutThroughWithDust {
 		logging.L.Warn().Msg("no tweaks are being collected, all tweak settings were set to 0")

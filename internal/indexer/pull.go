@@ -3,6 +3,7 @@ package indexer
 import (
 	"context"
 	"fmt"
+	"github.com/setavenger/blindbit-oracle/internal/config"
 	"sync"
 
 	"github.com/btcsuite/btcd/btcutil"
@@ -121,7 +122,12 @@ func (b *Builder) SingleBlockPullAndHandle(
 			Msg("error hen trying to look up previous block hash")
 		return err
 	}
-	if !blockhashInDB {
+	// Stop at genesis and at the operator's configured start height. `height` is
+	// unsigned: without the height > 0 guard, height-1 at genesis wraps to
+	// 4294967295 and the node answers 400 for that blockhash, which rest.go
+	// treats as fatal. On a fresh database the previous hash is never in the DB,
+	// so this recursion walks the whole chain down and would always underflow.
+	if !blockhashInDB && height > 0 && height > config.SyncStartHeight {
 		// do previous block as well
 		err = b.SingleBlockPullAndHandle(ctx, height-1)
 		if err != nil {

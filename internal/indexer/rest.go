@@ -53,7 +53,7 @@ type ChainInfo struct {
 	SizeOnDisk           int64   `json:"size_on_disk"`
 	Pruned               bool    `json:"pruned"`
 	SignetChallenge      string  `json:"signet_challenge"`
-	Warnings             string  `json:"warnings"`
+	Warnings             json.RawMessage `json:"warnings"`
 }
 
 func GetChainInfo() (*ChainInfo, error) {

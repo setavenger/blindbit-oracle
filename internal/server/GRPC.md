@@ -86,8 +86,16 @@ ends after the last requested height has been sent.
 |---|---|---|
 | `start` | uint64 | First block height to include (inclusive) |
 | `end` | uint64 | Last block height to include (inclusive) |
-| `dustlimit` | uint64 | *Reserved — not yet applied by the server* |
-| `cut_through` | bool | *Reserved — not yet applied by the server* |
+| `dustlimit` | uint64 | Sats. Drop transactions with no surviving output at or above this. `StreamComputeIndex` only, *reserved* on `StreamBlockScanDataShort` |
+| `cut_through` | bool | Drop transactions whose outputs are all spent at the index tip. `StreamComputeIndex` only, *reserved* on `StreamBlockScanDataShort` |
+
+Both filters apply per transaction, never per output. A transaction is kept
+when at least one of its outputs is unspent at the pinned tip and at or above
+`dustlimit`, and a kept transaction carries all of its output prefixes.
+Removing single outputs would stop a scanner at the first `k` it cannot match
+and hide every later output of that transaction. The tip is read once at the
+start of the stream. `dustlimit: 0` with `cut_through: false` returns the
+unfiltered index byte for byte.
 
 ---
 

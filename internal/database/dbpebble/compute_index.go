@@ -82,6 +82,56 @@ func (s *Store) FetchComputeIndex(height uint32) ([]*pb.ComputeIndexTxItem, erro
 	return computeIndexes, nil
 }
 
+// FetchComputeIndexFiltered returns the compute index for a height with the
+// request filters applied. A tx item is dropped when none of its outputs
+// survives cutThrough and dustLimit; a surviving item is returned whole.
+// Returns the stored index unchanged for dustLimit 0, cutThrough false.
+func (s *Store) FetchComputeIndexFiltered(
+	height, tipHeight uint32, dustLimit uint64, cutThrough bool,
+) ([]*pb.ComputeIndexTxItem, error) {
+	computeIndexes, err := s.FetchComputeIndex(height)
+	if err != nil {
+		return nil, err
+	}
+	if dustLimit == 0 && !cutThrough {
+		return computeIndexes, nil
+	}
+
+	filtered := make([]*pb.ComputeIndexTxItem, 0, len(computeIndexes))
+	for _, idx := range computeIndexes {
+		// the index carries the txid reversed, the db keys it unreversed
+		txid := utils.ReverseBytesCopy(idx.Txid)
+		outs, err := s.OutputsForTx(txid)
+		if err != nil {
+			return nil, err
+		}
+
+		// all or nothing per tx: a missing k stops the scanner and hides later outputs
+		keep := false
+		for _, o := range outs {
+			if o.Amount < dustLimit {
+				continue
+			}
+			if cutThrough {
+				spent, err := s.spentAtHeightTip(txid, o.Vout, tipHeight)
+				if err != nil {
+					return nil, err
+				}
+				if spent {
+					continue
+				}
+			}
+			keep = true
+			break
+		}
+		if keep {
+			filtered = append(filtered, idx)
+		}
+	}
+
+	return filtered, nil
+}
+
 func (s *Store) BuildComputeIndexByRange(startHeight, endHeight uint32) error {
 	logging.L.Info().Msgf("Building static indexes from %d -> %d", startHeight, endHeight)
 

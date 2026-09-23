@@ -94,6 +94,18 @@ func (s *OracleService) StreamComputeIndex(
 	stream pb.OracleService_StreamComputeIndexServer,
 ) error {
 	logging.L.Info().Any("req", req).Msg("StreamComputeIndexServer")
+
+	// Pin the tip so a whole range is filtered against one snapshot
+	var tipHeight uint32
+	if req.CutThrough {
+		var err error
+		_, tipHeight, err = s.db.GetChainTip()
+		if err != nil {
+			logging.L.Err(err).Msg("failed pulling chain tip")
+			return err
+		}
+	}
+
 	for height := req.Start; height <= req.End; height++ {
 		logging.L.Trace().Uint64("height", height).Msg("processing height")
 		blockhash, err := s.db.GetBlockHashByHeight(uint32(height))
@@ -104,7 +116,9 @@ func (s *OracleService) StreamComputeIndex(
 			return err
 		}
 
-		computeIndex, err := s.db.FetchComputeIndex(uint32(height))
+		computeIndex, err := s.db.FetchComputeIndexFiltered(
+			uint32(height), tipHeight, req.Dustlimit, req.CutThrough,
+		)
 		if err != nil {
 			logging.L.Err(err).
 				Uint64("height", height).

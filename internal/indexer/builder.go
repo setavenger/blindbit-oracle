@@ -1,6 +1,7 @@
 package indexer
 
 import (
+	"bytes"
 	"context"
 	"sync"
 	"time"
@@ -116,7 +117,7 @@ func (b *Builder) ContinuousSync(ctx context.Context) error {
 				Msg("state_update")
 
 		case <-tickerBlockCheck:
-			_, syncTip, err := b.store.GetChainTip()
+			tipHash, syncTip, err := b.store.GetChainTip()
 			if err != nil {
 				logging.L.Err(err).Msg("failed to pull chain tip from db")
 				return err
@@ -128,10 +129,11 @@ func (b *Builder) ContinuousSync(ctx context.Context) error {
 				return err
 			}
 
-			// todo: change to single block pull
-			// we also check previous blockhash basically going backwards and overwriting if exists
-			if uint32(chainInfo.Blocks) > syncTip {
-				// +1 because we already processed the tip
+			// Pull when the node is ahead, or when it is at our height on a
+			// different block (a reorg that did not lengthen the chain).
+			// SingleBlockPullAndHandle finds the fork point and replaces
+			// everything above it.
+			if nodeAheadOrForked(chainInfo, tipHash, syncTip) {
 				err = b.SingleBlockPullAndHandle(ctx, uint32(chainInfo.Blocks))
 				if err != nil {
 					logging.L.Err(err).Msg("failed syncing blocks")
@@ -143,9 +145,38 @@ func (b *Builder) ContinuousSync(ctx context.Context) error {
 	}
 }
 
+// nodeAheadOrForked reports whether the node's chain differs from the index:
+// it is higher, or at the same height with a different best block.
+func nodeAheadOrForked(chainInfo *ChainInfo, tipHash []byte, syncTip uint32) bool {
+	if chainInfo.Blocks > int64(syncTip) {
+		return true
+	}
+	if chainInfo.Blocks < int64(syncTip) || tipHash == nil {
+		return false
+	}
+	best, err := chainhash.NewHashFromStr(chainInfo.BestBlockHash)
+	if err != nil {
+		logging.L.Warn().Err(err).Str("bestblockhash", chainInfo.BestBlockHash).
+			Msg("cannot parse node best block hash")
+		return false
+	}
+	return !bytes.Equal(best[:], tipHash)
+}
+
 func (b *Builder) InitialSyncToTip(
 	ctx context.Context,
 ) error {
+	// Databases indexed before reorg handling existed can still hold the
+	// rows of blocks displaced by past reorgs; remove them before syncing.
+	purged, err := b.store.PurgeOrphanedBlocks()
+	if err != nil {
+		logging.L.Err(err).Msg("failed to purge blocks orphaned by earlier reorgs")
+		return err
+	}
+	if purged > 0 {
+		logging.L.Warn().Int("purged", purged).Msg("purged blocks orphaned by earlier reorgs")
+	}
+
 	tipHash, syncTip, err := b.store.GetChainTip()
 	if err != nil {
 		logging.L.Err(err).Msg("failed to pull chain tip from db")

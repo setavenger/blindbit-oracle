@@ -55,6 +55,19 @@ func KeyTxOccur(txid, blockHash []byte) []byte {
 	return k
 }
 
+// BoundsTxOccur covers every KTxOccur row of txid, one per block containing it.
+func BoundsTxOccur(txid []byte) (lb, ub []byte) {
+	lb = make([]byte, 1+SizeTxid+SizeHash)
+	lb[0] = KTxOccur
+	copy(lb[1:1+SizeTxid], txid)
+	ub = make([]byte, 1+SizeTxid+SizeHash)
+	copy(ub, lb)
+	for i := 1 + SizeTxid; i < len(ub); i++ {
+		ub[i] = 0xFF
+	}
+	return
+}
+
 func KeyOut(txid []byte, vout uint32) []byte {
 	k := make([]byte, 1+SizeTxid+SizeVout)
 	k[0] = KOut

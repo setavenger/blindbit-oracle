@@ -1,6 +1,7 @@
 package indexer
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"github.com/setavenger/blindbit-oracle/internal/config"
@@ -99,45 +100,83 @@ func mergeBlockAndSpentTxOuts(b *btcutil.Block, spentTxOuts [][]*wire.TxOut) (*B
 	return &block, nil
 }
 
-// SingleBlockPullAndHandle pulls a block and processes it.
-// If the previous blockhash is not in the db it will recursively pull the previous block.
-// Intended to handle reorgs not full chain syncs.
+// SingleBlockPullAndHandle brings the index up to the node's block at height.
+//
+// It first finds the fork point: the highest height at or below both the
+// node's height and the index tip where the index holds the same block as the
+// node. Every height above it is then pulled from the node and applied in
+// ascending order, one block at a time. A height that already holds a
+// different block is replaced by the store, which removes everything the
+// displaced block contributed (see dbpebble.Store.ApplyBlock). In the common
+// case the index tip matches the node and only the new blocks are pulled.
 func (b *Builder) SingleBlockPullAndHandle(
 	ctx context.Context, height uint32,
 ) error {
-	block, err := b.pullBlock(int64(height))
+	fork, prevHash, err := b.findForkPoint(height)
 	if err != nil {
 		return err
 	}
-
-	err = b.handleBlock(ctx, block)
-	if err != nil {
-		return err
-	}
-
-	blockhashInDB, err := b.store.BlockhashInDB(block.PrevBlockHash[:])
-	if err != nil {
-		logging.L.Err(err).
-			Str("prev_blockhash", block.Hash.String()).
-			Msg("error hen trying to look up previous block hash")
-		return err
-	}
-	// Stop at genesis and at the operator's configured start height. `height` is
-	// unsigned: without the height > 0 guard, height-1 at genesis wraps to
-	// 4294967295 and the node answers 400 for that blockhash, which rest.go
-	// treats as fatal. On a fresh database the previous hash is never in the DB,
-	// so this recursion walks the whole chain down and would always underflow.
-	if !blockhashInDB && height > 0 && height > config.SyncStartHeight {
-		// do previous block as well
-		err = b.SingleBlockPullAndHandle(ctx, height-1)
+	for h := fork + 1; h <= int64(height); h++ {
+		block, err := b.pullBlock(h)
 		if err != nil {
-			logging.L.Err(err).
-				Str("blockhash", block.Hash.String()).
-				Str("blockhash_prev", block.PrevBlockHash.String()).
-				Msg("failed ot pull previous block")
 			return err
 		}
+		// The node can switch branches while we pull. A block that does not
+		// build on the one applied before it means exactly that: stop here and
+		// let the next check find the new fork point.
+		if prevHash != nil && !bytes.Equal(block.PrevBlockHash[:], prevHash) {
+			logging.L.Warn().
+				Int64("height", h).
+				Str("blockhash", block.Hash.String()).
+				Str("prev_blockhash", block.PrevBlockHash.String()).
+				Msg("node changed branch during catch-up; retrying on next check")
+			return nil
+		}
+		if err := b.handleBlock(ctx, block); err != nil {
+			return err
+		}
+		prevHash = block.Hash[:]
 	}
 
 	return nil
+}
+
+// findForkPoint returns the highest height h <= min(height, index tip), and
+// not below the configured start height, at which the index holds the node's
+// block, together with that block's hash. If there is none it returns
+// SyncStartHeight-1 and a nil hash, so everything from the start height is
+// (re)applied.
+//
+// Heights are compared by hash rather than by looking up the parent hash in
+// the blockhash->height index, so an orphaned block that is still indexed
+// somewhere can never end the walk-back early.
+func (b *Builder) findForkPoint(height uint32) (int64, []byte, error) {
+	_, dbTip, err := b.store.GetChainTip()
+	if err != nil {
+		return 0, nil, err
+	}
+	top := int64(min(height, dbTip))
+	for h := top; h >= int64(config.SyncStartHeight); h-- {
+		indexed, err := b.store.GetBlockHashByHeight(uint32(h))
+		if err != nil {
+			return 0, nil, err
+		}
+		if indexed == nil {
+			continue
+		}
+		nodeHash, err := getBlockHashByHeight(h)
+		if err != nil {
+			return 0, nil, err
+		}
+		if bytes.Equal(indexed, nodeHash[:]) {
+			if h < top {
+				logging.L.Warn().
+					Int64("fork_height", h).
+					Int64("indexed_up_to", top).
+					Msg("reorg: index diverges from the node above the fork height")
+			}
+			return h, indexed, nil
+		}
+	}
+	return int64(config.SyncStartHeight) - 1, nil, nil
 }

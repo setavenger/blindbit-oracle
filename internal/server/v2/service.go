@@ -4,6 +4,7 @@ package v2
 import (
 	"context"
 	"encoding/hex"
+	"math"
 	"sort"
 
 	"google.golang.org/grpc/codes"
@@ -76,17 +77,40 @@ func (s *OracleService) GetBlockHashByHeight(
 	ctx context.Context, req *pb.BlockHeightRequest,
 ) (*pb.BlockHashResponse, error) {
 	logging.L.Info().Any("req", req).Msg("GetBlockHashByHeight")
-	blockhash, err := s.db.GetBlockHashByHeight(uint32(req.BlockHeight))
+	blockhash, err := s.indexedBlockHash(req.BlockHeight)
 	if err != nil {
-		logging.L.Err(err).
-			Uint64("height", req.BlockHeight).
-			Msg("failed pulling blockhash for height")
 		return nil, err
 	}
 
 	return &pb.BlockHashResponse{
 		BlockHash: utils.ReverseBytesCopy(blockhash),
 	}, nil
+}
+
+// indexedBlockHash resolves the stored block hash for a height requested by a
+// unary per-block RPC. A height the oracle has not indexed (above the tip or
+// below the sync start) yields codes.NotFound, as documented in GRPC.md;
+// previously it produced an OK response with an empty block hash and empty
+// data, indistinguishable from an indexed block with nothing in it.
+// A height that does not fit the uint32 key space is also NotFound.
+// Database failures yield codes.Internal.
+//
+// The streaming RPCs deliberately do not use this: live clients (the Rust
+// scanner unwraps every stream message) would abort a whole range scan on a
+// mid-stream error, so their behaviour for unindexed heights is unchanged.
+func (s *OracleService) indexedBlockHash(height uint64) ([]byte, error) {
+	if height > math.MaxUint32 {
+		return nil, status.Errorf(codes.NotFound, "height %d is not indexed", height)
+	}
+	blockhash, err := s.db.GetBlockHashByHeight(uint32(height))
+	if err != nil {
+		logging.L.Err(err).Uint64("height", height).Msg("could not fetch block hash")
+		return nil, status.Errorf(codes.Internal, "could not fetch block hash: %v", err)
+	}
+	if len(blockhash) == 0 {
+		return nil, status.Errorf(codes.NotFound, "height %d is not indexed", height)
+	}
+	return blockhash, nil
 }
 
 func (s *OracleService) StreamComputeIndex(
@@ -199,10 +223,9 @@ func (s *OracleService) GetSpentOutputsShort(
 	ctx context.Context, req *pb.BlockHeightRequest,
 ) (*pb.IndexResponse, error) {
 	logging.L.Info().Any("req", req).Msg("GetSpentOutputsShort")
-	blockhash, err := s.db.GetBlockHashByHeight(uint32(req.BlockHeight))
+	blockhash, err := s.indexedBlockHash(req.BlockHeight)
 	if err != nil {
-		logging.L.Err(err).Uint64("height", req.BlockHeight).Msg("could not fetch block hash")
-		return nil, status.Errorf(codes.Internal, "could not fetch block hash: %v", err)
+		return nil, err
 	}
 
 	spentOuts, err := s.db.FetchSpentOutputsShort(blockhash)
@@ -225,12 +248,9 @@ func (s *OracleService) GetFullBlock(
 	ctx context.Context, req *pb.BlockHeightRequest,
 ) (*pb.FullBlockResponse, error) {
 	logging.L.Info().Any("req", req).Msg("GetFullBlock")
-	blockhash, err := s.db.GetBlockHashByHeight(uint32(req.BlockHeight))
+	blockhash, err := s.indexedBlockHash(req.BlockHeight)
 	if err != nil {
-		logging.L.Err(err).
-			Uint64("height", req.BlockHeight).
-			Msg("could not fetch block hash")
-		return nil, status.Errorf(codes.Internal, "could not fetch block hash: %v", err)
+		return nil, err
 	}
 
 	// Get chain tip for FetchOutputsAll

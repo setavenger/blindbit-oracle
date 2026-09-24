@@ -15,11 +15,11 @@ is not set the gRPC server is not started.
 | Convention | Detail |
 |---|---|
 | Package | `blindbit.oracle.v1` |
-| Block hashes | 32 bytes, **little-endian** (reversed from raw Bitcoin bytes) |
-| Transaction IDs | 32 bytes, **little-endian** (reversed from raw Bitcoin bytes) |
+| Block hashes | 32 bytes, **display order**: byte-reversed from the internal/consensus serialization, i.e. the order block explorers and Bitcoin Core RPC print |
+| Transaction IDs | 32 bytes, **display order** (byte-reversed from the internal/consensus serialization, same as block hashes) |
 | Tweaks | 33-byte compressed public key (BIP-352 summed input tweak) |
 | Shortened pubkeys | First 8 bytes of an x-only taproot output pubkey |
-| Outpoints | 36 bytes = 32-byte txid (little-endian) + 4-byte vout (little-endian uint32) |
+| Outpoints | 36 bytes = 32-byte txid (display order) + 4-byte vout (**big-endian** uint32). This is *not* the consensus `OutPoint` serialization (internal-order txid + little-endian vout); decode it explicitly |
 | Amounts | uint64, satoshis |
 | `bytes` fields | Flat (contiguous) byte arrays; divide by the stated entry size to get the count |
 
@@ -70,7 +70,9 @@ rpc GetBlockHashByHeight(BlockHeightRequest) returns (BlockHashResponse)
 
 **Request:** `block_height: uint64`
 
-**Response:** `block_hash: bytes` — 32 bytes, little-endian.
+**Response:** `block_hash: bytes` — 32 bytes, display order.
+
+Returns `NOT_FOUND` if the height is not indexed.
 
 ---
 
@@ -79,6 +81,12 @@ rpc GetBlockHashByHeight(BlockHeightRequest) returns (BlockHashResponse)
 Both streaming RPCs accept a `RangedBlockHeightRequestFiltered` request and
 emit one response message per block, in ascending height order.  The stream
 ends after the last requested height has been sent.
+
+A height inside the range that the oracle has not indexed (above the tip or
+below the sync start height) is **not** an error: the stream still emits a
+message for it, with an empty `block_hash` and no data. Clients must not treat
+such a message as an indexed block with no payments; bound `end` by the
+`GetInfo` height.
 
 **`RangedBlockHeightRequestFiltered` fields:**
 
@@ -134,7 +142,7 @@ One entry per taproot-eligible transaction in the block.
 
 | Field | Type | Description |
 |---|---|---|
-| `txid` | bytes | 32-byte transaction ID, little-endian |
+| `txid` | bytes | 32-byte transaction ID, display order |
 | `tweak` | bytes | 33-byte BIP-352 input tweak |
 | `outputs_short` | bytes | Flat array of 8-byte shortened x-only pubkeys; `len / 8` = output count |
 
@@ -147,6 +155,7 @@ One entry per taproot-eligible transaction in the block.
 Returns the complete data set for one block.  This endpoint is
 bandwidth-heavy; use it only when the full input outpoint set is required
 (e.g. building a local UTXO index).
+Returns `NOT_FOUND` if the height is not indexed.
 
 ```
 rpc GetFullBlock(BlockHeightRequest) returns (FullBlockResponse)
@@ -165,9 +174,9 @@ rpc GetFullBlock(BlockHeightRequest) returns (FullBlockResponse)
 
 | Field | Type | Description |
 |---|---|---|
-| `txid` | bytes | 32-byte transaction ID, little-endian |
+| `txid` | bytes | 32-byte transaction ID, display order |
 | `tweak` | bytes | 33-byte BIP-352 input tweak |
-| `inputs` | bytes | Flat array of 36-byte outpoints (32-byte txid LE + 4-byte vout LE); `len / 36` = input count |
+| `inputs` | bytes | Flat array of 36-byte previous outpoints, one per input that spends a P2TR output (32-byte txid in display order + 4-byte vout, **big-endian** uint32); `len / 36` = count |
 | `utxos` | repeated UTXOItemLight | All taproot outputs in the transaction |
 
 #### UTXOItemLight
@@ -198,8 +207,9 @@ rpc GetSpentOutputsShort(BlockHeightRequest) returns (IndexResponse)
 | `block_identifier` | BlockIdentifier | Block hash + height |
 | `index` | bytes | Flat array of 8-byte shortened x-only pubkeys for spent outputs; `len / 8` = count |
 
-Returns an empty `index` when no spent outputs are recorded for the block
-(e.g. height below the index start, or `tweaks_only=true`).
+Returns an empty `index` when the block is indexed but no spent outputs are
+recorded for it (e.g. `tweaks_only=true`). Returns `NOT_FOUND` if the height
+is not indexed.
 
 ---
 
@@ -207,7 +217,7 @@ Returns an empty `index` when no spent outputs are recorded for the block
 
 | gRPC status | Meaning |
 |---|---|
-| `NOT_FOUND` | Requested height has not been indexed yet |
+| `NOT_FOUND` | Requested height is not indexed (above the tip or below the sync start height). Returned by `GetBlockHashByHeight`, `GetFullBlock` and `GetSpentOutputsShort`. The streaming RPCs do not use it; see "Block data — streaming" |
 | `INTERNAL` | Database or server error; check oracle logs |
 | `INVALID_ARGUMENT` | Malformed request (e.g. `end < start`) |
 

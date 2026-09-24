@@ -159,16 +159,22 @@ rpc GetFullBlock(BlockHeightRequest) returns (FullBlockResponse)
 | Field | Type | Description |
 |---|---|---|
 | `block_identifier` | BlockIdentifier | Block hash + height |
-| `index` | repeated FullTxItem | One entry per taproot-eligible transaction |
+| `index` | repeated FullTxItem | One entry per transaction in the block that has a tweak (silent-payment eligible, with its taproot outputs) and/or spends at least one taproot output; the latter may be input-only / tweakless, carrying an empty `tweak` and no `utxos` (see below) |
 
 #### FullTxItem
 
 | Field | Type | Description |
 |---|---|---|
 | `txid` | bytes | 32-byte transaction ID, little-endian |
-| `tweak` | bytes | 33-byte BIP-352 input tweak |
+| `tweak` | bytes | 33-byte BIP-352 input tweak; **empty** if the transaction has no tweak |
 | `inputs` | bytes | Flat array of 36-byte outpoints (32-byte txid LE + 4-byte vout LE); `len / 36` = input count |
-| `utxos` | repeated UTXOItemLight | All taproot outputs in the transaction |
+| `utxos` | repeated UTXOItemLight | All taproot outputs in the transaction; empty if the transaction has no tweak |
+
+Transactions that spend taproot outputs but have no tweak (e.g. input-only
+transactions which create no taproot output) are included so that their
+`inputs` are not lost.  They carry an **empty** `tweak` and empty `utxos`.
+Clients must check that `tweak` is 33 bytes long before parsing it as a public
+key.
 
 #### UTXOItemLight
 

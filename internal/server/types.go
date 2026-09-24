@@ -123,7 +123,7 @@ func (s SpentOutpoints) MarshalJSON() ([]byte, error) {
 // should be avoided if possible
 type FullTxItem struct {
 	TxId   [32]byte        `json:"txid"`
-	Tweak  [33]byte        `json:"tweak"`
+	Tweak  []byte          `json:"tweak"` // 33 bytes, empty if the tx has no tweak
 	Inputs SpentOutpoints  `json:"inputs"`
 	UTXOs  []UTXOItemLight `json:"utxos"` // should probably be optional
 }
@@ -142,7 +142,7 @@ func (f FullTxItem) MarshalJSON() ([]byte, error) {
 		UTXOs  []UTXOItemLight `json:"utxos"`
 	}{
 		TxId:   hex.EncodeToString(f.TxId[:]),
-		Tweak:  hex.EncodeToString(f.Tweak[:]),
+		Tweak:  hex.EncodeToString(f.Tweak),
 		Inputs: inputs,
 		UTXOs:  f.UTXOs,
 	})

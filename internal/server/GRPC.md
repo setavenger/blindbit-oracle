@@ -80,6 +80,11 @@ Both streaming RPCs accept a `RangedBlockHeightRequestFiltered` request and
 emit one response message per block, in ascending height order.  The stream
 ends after the last requested height has been sent.
 
+If a height in the range is not indexed (above the tip or below the sync start
+height), the stream ends with `NOT_FOUND` and a message naming that height.
+Every message sent before it was a valid indexed block. Clients should bound
+`end` by the `GetInfo` height.
+
 **`RangedBlockHeightRequestFiltered` fields:**
 
 | Field | Type | Description |
@@ -207,7 +212,7 @@ Returns an empty `index` when no spent outputs are recorded for the block
 
 | gRPC status | Meaning |
 |---|---|
-| `NOT_FOUND` | Requested height has not been indexed yet |
+| `NOT_FOUND` | Requested height is not indexed (above the tip or below the sync start height). The streaming RPCs end with it at the first such height in the range |
 | `INTERNAL` | Database or server error; check oracle logs |
 | `INVALID_ARGUMENT` | Malformed request (e.g. `end < start`) |
 

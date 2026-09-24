@@ -146,7 +146,7 @@ func (b *Builder) ContinuousSync(ctx context.Context) error {
 func (b *Builder) InitialSyncToTip(
 	ctx context.Context,
 ) error {
-	_, syncTip, err := b.store.GetChainTip()
+	tipHash, syncTip, err := b.store.GetChainTip()
 	if err != nil {
 		logging.L.Err(err).Msg("failed to pull chain tip from db")
 		return err
@@ -162,21 +162,38 @@ func (b *Builder) InitialSyncToTip(
 	// otherwise we end up reindexing.
 	// todo: Add a check to see whether all blocks have been indexed
 	// todo: Inegrity check no gaps in index, re-orgs or whatever
-	syncTip = max(syncTip, config.SyncStartHeight)
+	startHeight := initialSyncStartHeight(tipHash, syncTip, config.SyncStartHeight)
 
 	logging.L.Info().
 		Uint32("syncTip", syncTip).
+		Int64("startHeight", startHeight).
 		Int64("chaintip", chainInfo.Blocks).
 		Msg("Starting initial sync")
 
 	// using Blocks which is the actual count of blocks the node has available (assumption)
-	err = b.SyncBlocks(ctx, int64(syncTip)+1, chainInfo.Blocks)
+	err = b.SyncBlocks(ctx, startHeight, chainInfo.Blocks)
 	if err != nil {
 		logging.L.Err(err).Msg("failed syncing blocks")
 		return err
 	}
 
 	return nil
+}
+
+// initialSyncStartHeight returns the first height the initial sync has to
+// index. tipHash and tipHeight are the database's chain tip as returned by
+// GetChainTip; a nil tipHash means the database holds no block at all.
+//
+// On an empty database the configured start height itself has not been
+// indexed yet, so it is the first height to pull. Only once a tip exists is
+// the next height tip+1. Starting at max(tip, configured)+1 unconditionally
+// skipped the configured start height on every fresh database (height 1 on a
+// regtest chain), which left that height answering with an empty hash.
+func initialSyncStartHeight(tipHash []byte, tipHeight, configured uint32) int64 {
+	if tipHash == nil {
+		return int64(configured)
+	}
+	return max(int64(tipHeight)+1, int64(configured))
 }
 
 func (b *Builder) SyncBlocks(

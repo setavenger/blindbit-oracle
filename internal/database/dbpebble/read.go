@@ -1,6 +1,7 @@
 package dbpebble
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -260,23 +261,28 @@ func (s *Store) TweaksForBlock(
 
 }
 
-// BlockhashInDB maybe we can get the same result by simply checking for a height per blockhash reduces reduncancy of functions
+// BlockhashInDB reports whether blockhash is indexed on the best chain, i.e.
+// the height recorded for it still maps back to it.
 func (s *Store) BlockhashInDB(blockhash []byte) (bool, error) {
-	key := KeyCIBlock(blockhash)
-	_, closer, err := s.DB.Get(key)
-	if err != nil && !errors.Is(err, pebble.ErrNotFound) {
+	h, ok, err := s.heightIfOnBestChain(blockhash)
+	if err != nil || !ok {
 		return false, err
-	} else if err != nil && errors.Is(err, pebble.ErrNotFound) {
-		return false, nil
 	}
-	defer closer.Close()
-
-	return true, nil
+	atHeight, err := s.GetBlockHashByHeight(h)
+	if err != nil {
+		return false, err
+	}
+	return bytes.Equal(atHeight, blockhash), nil
 }
 
 // --- new internal helpers ---------------------------------------------------
 
 // heightIfOnBestChain returns (height,true) if blockHash is on best chain; otherwise (0,false).
+//
+// It relies on KCIBlock holding best-chain blocks only: ApplyBlock deletes the
+// row of a block displaced by a reorg, and PurgeOrphanedBlocks removes the
+// rows databases indexed before that fix still hold. This is on the hot path
+// of every spent check, so it does not re-verify the height->hash mapping.
 func (s *Store) heightIfOnBestChain(blockHash []byte) (uint32, bool, error) {
 	val, closer, err := s.DB.Get(KeyCIBlock(blockHash)) // ci:b:<blockHash> -> [4]heightBE
 	if err != nil {

@@ -1,6 +1,7 @@
 package indexer
 
 import (
+	"bytes"
 	"context"
 	"sync"
 	"time"
@@ -116,7 +117,7 @@ func (b *Builder) ContinuousSync(ctx context.Context) error {
 				Msg("state_update")
 
 		case <-tickerBlockCheck:
-			_, syncTip, err := b.store.GetChainTip()
+			tipHash, syncTip, err := b.store.GetChainTip()
 			if err != nil {
 				logging.L.Err(err).Msg("failed to pull chain tip from db")
 				return err
@@ -128,10 +129,11 @@ func (b *Builder) ContinuousSync(ctx context.Context) error {
 				return err
 			}
 
-			// todo: change to single block pull
-			// we also check previous blockhash basically going backwards and overwriting if exists
-			if uint32(chainInfo.Blocks) > syncTip {
-				// +1 because we already processed the tip
+			// Pull when the node is ahead, or when it is at our height on a
+			// different block (a reorg that did not lengthen the chain).
+			// SingleBlockPullAndHandle finds the fork point and replaces
+			// everything above it.
+			if nodeAheadOrForked(chainInfo, tipHash, syncTip) {
 				err = b.SingleBlockPullAndHandle(ctx, uint32(chainInfo.Blocks))
 				if err != nil {
 					logging.L.Err(err).Msg("failed syncing blocks")
@@ -143,10 +145,39 @@ func (b *Builder) ContinuousSync(ctx context.Context) error {
 	}
 }
 
+// nodeAheadOrForked reports whether the node's chain differs from the index:
+// it is higher, or at the same height with a different best block.
+func nodeAheadOrForked(chainInfo *ChainInfo, tipHash []byte, syncTip uint32) bool {
+	if chainInfo.Blocks > int64(syncTip) {
+		return true
+	}
+	if chainInfo.Blocks < int64(syncTip) || tipHash == nil {
+		return false
+	}
+	best, err := chainhash.NewHashFromStr(chainInfo.BestBlockHash)
+	if err != nil {
+		logging.L.Warn().Err(err).Str("bestblockhash", chainInfo.BestBlockHash).
+			Msg("cannot parse node best block hash")
+		return false
+	}
+	return !bytes.Equal(best[:], tipHash)
+}
+
 func (b *Builder) InitialSyncToTip(
 	ctx context.Context,
 ) error {
-	_, syncTip, err := b.store.GetChainTip()
+	// Databases indexed before reorg handling existed can still hold the
+	// rows of blocks displaced by past reorgs; remove them before syncing.
+	purged, err := b.store.PurgeOrphanedBlocks()
+	if err != nil {
+		logging.L.Err(err).Msg("failed to purge blocks orphaned by earlier reorgs")
+		return err
+	}
+	if purged > 0 {
+		logging.L.Warn().Int("purged", purged).Msg("purged blocks orphaned by earlier reorgs")
+	}
+
+	tipHash, syncTip, err := b.store.GetChainTip()
 	if err != nil {
 		logging.L.Err(err).Msg("failed to pull chain tip from db")
 		return err
@@ -162,21 +193,38 @@ func (b *Builder) InitialSyncToTip(
 	// otherwise we end up reindexing.
 	// todo: Add a check to see whether all blocks have been indexed
 	// todo: Inegrity check no gaps in index, re-orgs or whatever
-	syncTip = max(syncTip, config.SyncStartHeight)
+	startHeight := initialSyncStartHeight(tipHash, syncTip, config.SyncStartHeight)
 
 	logging.L.Info().
 		Uint32("syncTip", syncTip).
+		Int64("startHeight", startHeight).
 		Int64("chaintip", chainInfo.Blocks).
 		Msg("Starting initial sync")
 
 	// using Blocks which is the actual count of blocks the node has available (assumption)
-	err = b.SyncBlocks(ctx, int64(syncTip)+1, chainInfo.Blocks)
+	err = b.SyncBlocks(ctx, startHeight, chainInfo.Blocks)
 	if err != nil {
 		logging.L.Err(err).Msg("failed syncing blocks")
 		return err
 	}
 
 	return nil
+}
+
+// initialSyncStartHeight returns the first height the initial sync has to
+// index. tipHash and tipHeight are the database's chain tip as returned by
+// GetChainTip; a nil tipHash means the database holds no block at all.
+//
+// On an empty database the configured start height itself has not been
+// indexed yet, so it is the first height to pull. Only once a tip exists is
+// the next height tip+1. Starting at max(tip, configured)+1 unconditionally
+// skipped the configured start height on every fresh database (height 1 on a
+// regtest chain), which left that height answering with an empty hash.
+func initialSyncStartHeight(tipHash []byte, tipHeight, configured uint32) int64 {
+	if tipHash == nil {
+		return int64(configured)
+	}
+	return max(int64(tipHeight)+1, int64(configured))
 }
 
 func (b *Builder) SyncBlocks(

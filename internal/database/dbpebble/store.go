@@ -1,6 +1,7 @@
 package dbpebble
 
 import (
+	"bytes"
 	"sync"
 	"sync/atomic"
 
@@ -93,6 +94,12 @@ func (s *Store) FlushBatch(sync bool) error {
 	s.batchSync.Unlock()
 
 	if counter == 0 {
+		if sync {
+			// A synchronous flush promises that every write handed to the
+			// store so far is visible, including batches still committing in
+			// the background.
+			s.waitForPendingCommitsQuiet()
+		}
 		return nil
 	}
 	logging.L.Info().
@@ -139,7 +146,13 @@ func (s *Store) commitBatch(sync bool) error {
 	}
 
 	if sync {
-		return closeOldBatch()
+		if err := closeOldBatch(); err != nil {
+			return err
+		}
+		// Background commits of earlier batches may still be in flight; a
+		// synchronous commit is only complete once those have landed too.
+		s.waitForPendingCommitsQuiet()
+		return nil
 	} else {
 		// Track pending background commit
 		atomic.AddInt64(&s.pendingCommits, 1)
@@ -325,7 +338,17 @@ func attachBlockToBatch(batch *pebble.Batch, block *database.DBBlock) error {
 	return nil
 }
 
+// ApplyBlock writes block at block.Height. If a different block is already
+// indexed at that height the chain has reorganised, and the displaced block's
+// contributions are removed in the same batch; see replaceBlock.
 func (s *Store) ApplyBlock(block *database.DBBlock) error {
+	existing, err := s.GetBlockHashByHeight(block.Height)
+	if err != nil {
+		return err
+	}
+	if existing != nil && !bytes.Equal(existing, block.Hash[:]) {
+		return s.replaceBlock(existing, block)
+	}
 	return s.collectAndWrite(block)
 }
 
@@ -336,6 +359,15 @@ func (s *Store) WaitForPendingCommits() {
 		Msg("waiting for pending commits")
 	s.closeWaitGroup.Wait()
 	logging.L.Info().Msg("all pending commits completed")
+}
+
+// waitForPendingCommitsQuiet is WaitForPendingCommits without the log lines,
+// for hot paths that wait on every block.
+func (s *Store) waitForPendingCommitsQuiet() {
+	if atomic.LoadInt64(&s.pendingCommits) == 0 {
+		return
+	}
+	s.closeWaitGroup.Wait()
 }
 
 // Close safely closes the store by waiting for all pending commits before closing the database

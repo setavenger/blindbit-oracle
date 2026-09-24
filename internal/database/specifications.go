@@ -18,6 +18,7 @@ type DB interface {
 	ChainIterator(asc bool) (<-chan []byte, error) // todo: add context
 	FetchComputeIndex(height uint32) ([]*pb.ComputeIndexTxItem, error)
 	BlockhashInDB(blockhash []byte) (bool, error)
+	PurgeOrphanedBlocks() (int, error)
 	BatchSize() int
 	KeyExistsComputeIndex(blockhash []byte) (bool, error)
 

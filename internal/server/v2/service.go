@@ -4,6 +4,7 @@ package v2
 import (
 	"context"
 	"encoding/hex"
+	"math"
 	"sort"
 
 	"google.golang.org/grpc/codes"
@@ -89,6 +90,27 @@ func (s *OracleService) GetBlockHashByHeight(
 	}, nil
 }
 
+// streamBlockHash returns the stored block hash for a height visited by a
+// streaming RPC. A height that is not indexed (no stored hash, or too large
+// for the uint32 key space) ends the stream with NOT_FOUND instead of being
+// sent as an empty block, which clients would read as "no payments here".
+func (s *OracleService) streamBlockHash(height uint64) ([]byte, error) {
+	if height > math.MaxUint32 {
+		return nil, status.Errorf(codes.NotFound, "height %d is not indexed", height)
+	}
+	blockhash, err := s.db.GetBlockHashByHeight(uint32(height))
+	if err != nil {
+		logging.L.Err(err).
+			Uint64("height", height).
+			Msg("failed to blockash by height")
+		return nil, err
+	}
+	if len(blockhash) == 0 {
+		return nil, status.Errorf(codes.NotFound, "height %d is not indexed", height)
+	}
+	return blockhash, nil
+}
+
 func (s *OracleService) StreamComputeIndex(
 	req *pb.RangedBlockHeightRequestFiltered,
 	stream pb.OracleService_StreamComputeIndexServer,
@@ -96,11 +118,8 @@ func (s *OracleService) StreamComputeIndex(
 	logging.L.Info().Any("req", req).Msg("StreamComputeIndexServer")
 	for height := req.Start; height <= req.End; height++ {
 		logging.L.Trace().Uint64("height", height).Msg("processing height")
-		blockhash, err := s.db.GetBlockHashByHeight(uint32(height))
+		blockhash, err := s.streamBlockHash(height)
 		if err != nil {
-			logging.L.Err(err).
-				Uint64("height", height).
-				Msg("failed to blockash by height")
 			return err
 		}
 
@@ -142,11 +161,8 @@ func (s *OracleService) StreamBlockScanDataShort(
 ) error {
 	logging.L.Info().Any("req", req).Msg("StreamBlockScanDataShort")
 	for height := req.Start; height <= req.End; height++ {
-		blockhash, err := s.db.GetBlockHashByHeight(uint32(height))
+		blockhash, err := s.streamBlockHash(height)
 		if err != nil {
-			logging.L.Err(err).
-				Uint64("height", height).
-				Msg("failed to blockash by height")
 			return err
 		}
 

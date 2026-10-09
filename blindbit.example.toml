@@ -1,50 +1,56 @@
-# 0.0.0.0:8000 to expose outside of localhost
+# possible values: trace, debug, info, warn, error
+log_level = "trace"
+
+# binds http server to this address
 # default: "127.0.0.1:8000"
-host = "127.0.0.1:8000"
+http_host = "127.0.0.1:7000" 
+
+# binds grpc server to this address
+grpc_host = "127.0.0.1:7001"
 
 # Defines on which chain the wallet runs. Allowed values: main, testnet, signet, regtest.
 # default: signet
 chain = "signet"
 
-# default: http://127.0.0.1:8332
-rpc_endpoint = "http://127.0.0.1:38332"
-
-# required, unless rpc_user and rpc_pass are set
-cookie_path = ""
-
-# required, unless cookie_path is set
-rpc_user = "your-rpc-user"
-
-# required, unless cookie_path is set
-rpc_pass = "your-rpc-password"
+# rest endpoint of Bitcoin core node (will be same port as rpc)
+# note bitcoin core node requires https://github.com/bitcoin/bitcoin/pull/32540 (merged in core v30)
+core_rest_endpoint = "http://127.0.0.1:38332"
 
 # required (has to be >= 1)
-sync_start_height = 1
+# sync_start_height = 709656 // taproot activation on mainnet
+sync_start_height = 260000 # example height for signet
 
 # the default for this is 1, but should be set to a higher value to increase performance, 
 # one should set this in accordance to how many cores one wants to use
-max_parallel_tweak_computations = 4
+max_parallel_tweak_computations = 20
 
 # (depends on max-rpc-workers of the underlying full node)
-max_parallel_requests = 4
+max_parallel_requests = 20
 
+# oracle will use these many threads on the machine
+max_cpu_cores = 10 
+
+# legacy: has no real impact
 # optional - will only generate tweaks (still both cut-through and full-index)
 # default: 0
 tweaks_only = 0
 
+# legacy: has no real impact
 # The base index. Only includes the tweaks. No dust filtering or cut-through possible
 # default: 1
 tweaks_full_basic = 1
 
+# legacy: has no real impact
 # if this is set a full non-cut-through index will be created.
 # This index can be used to filter for dust (?dustLimit=). If this is active the base index will not be created.
 # All full index queries will be served from this with or without (?dustLimit=) set in the query.
 # default 0
-tweaks_full_with_dust_filter = 0
+tweaks_full_with_dust_filter = 1
 
+# legacy: has no real impact
 # This index applies cut-through and dust filtering.
 # Beware that it will be stored in addition to any full index (with or without dust) if activated.
 # It has more storage requirements than the simple indices.
 # Currently still requires tweaks_only=0.
 # default: 0
-tweaks_cut_through_with_dust_filter = 0
+tweaks_cut_through_with_dust_filter = 1

@@ -22,7 +22,7 @@ func CheckForNewBlockRoutine() {
 		err = FullProcessBlockHash(blockHash)
 		if err != nil {
 			common.ErrorLogger.Println(err)
-			return
+			continue
 		}
 	}
 }

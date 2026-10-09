@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 )
 
 // todo might need to unify common.types and the types here for consistency
@@ -34,7 +35,7 @@ func makeRPCRequest(rpcData interface{}, result interface{}) error {
 	req.Header.Add("Authorization", "Basic "+auth)
 
 	// Make the HTTP request...
-	client := &http.Client{}
+	client := &http.Client{Timeout: 2 * time.Minute}
 	resp, err := client.Do(req)
 	if err != nil {
 		common.DebugLogger.Printf("response %+v\n", resp)
@@ -106,7 +107,7 @@ func GetBestBlockHash() (string, error) {
 
 	if rpcResponse.Error != nil {
 		common.ErrorLogger.Printf("RPC Error: %v\n", rpcResponse.Error)
-		return "", err
+		return "", fmt.Errorf("RPC error: %v", rpcResponse.Error)
 	}
 
 	return rpcResponse.Result, nil

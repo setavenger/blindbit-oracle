@@ -1,6 +1,7 @@
 package indexer
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -63,14 +64,14 @@ func GetChainInfo() (*ChainInfo, error) {
 		nil,
 	)
 	if err != nil {
-		err = fmt.Errorf("error creating request: %v", err)
+		err = fmt.Errorf("error creating request: %w", err)
 		logging.L.Err(err).Msg("error creating request")
 		return nil, err
 	}
 
 	resp, err := httpClient.Do(req) // <-- reuse the shared client
 	if err != nil {
-		err = fmt.Errorf("error performing request: %v", err)
+		err = fmt.Errorf("error performing request: %w", err)
 		logging.L.Err(err).Msg("error performing request")
 		return nil, err
 	}
@@ -93,21 +94,22 @@ func GetChainInfo() (*ChainInfo, error) {
 	return &chainInfo, err
 }
 
-func getBlockHashByHeight(height int64) (*chainhash.Hash, error) {
-	req, err := http.NewRequest(
+func getBlockHashByHeight(ctx context.Context, height int64) (*chainhash.Hash, error) {
+	req, err := http.NewRequestWithContext(
+		ctx,
 		http.MethodGet,
 		fmt.Sprintf("%s/rest/blockhashbyheight/%d.bin", config.RestEndpoint, height),
 		nil,
 	)
 	if err != nil {
-		err = fmt.Errorf("error creating request: %v", err)
+		err = fmt.Errorf("error creating request: %w", err)
 		logging.L.Err(err).Msg("error creating request")
 		return nil, err
 	}
 
 	resp, err := httpClient.Do(req) // <-- reuse the shared client
 	if err != nil {
-		err = fmt.Errorf("error performing request: %v", err)
+		err = fmt.Errorf("error performing request: %w", err)
 		logging.L.Err(err).Msg("error performing request")
 		return nil, err
 	}
@@ -126,21 +128,22 @@ func getBlockHashByHeight(height int64) (*chainhash.Hash, error) {
 	return &blockhash, err
 }
 
-func getSpentUtxos(blockhash string) ([][]*wire.TxOut, error) {
-	req, err := http.NewRequest(
+func getSpentUtxos(ctx context.Context, blockhash string) ([][]*wire.TxOut, error) {
+	req, err := http.NewRequestWithContext(
+		ctx,
 		http.MethodGet,
 		fmt.Sprintf("%s/rest/spenttxouts/%s.bin", config.RestEndpoint, blockhash),
 		nil,
 	)
 	if err != nil {
-		err = fmt.Errorf("error creating request: %v", err)
+		err = fmt.Errorf("error creating request: %w", err)
 		logging.L.Err(err).Msg("error creating request")
 		return nil, err
 	}
 
 	resp, err := httpClient.Do(req) // <-- reuse the shared client
 	if err != nil {
-		err = fmt.Errorf("error performing request: %v", err)
+		err = fmt.Errorf("error performing request: %w", err)
 		logging.L.Err(err).Msg("error performing request")
 		return nil, err
 	}
@@ -156,21 +159,22 @@ func getSpentUtxos(blockhash string) ([][]*wire.TxOut, error) {
 	return ParseSpentTxOuts(resp.Body)
 }
 
-func getBlockByHash(blockhash string) (block *btcutil.Block, err error) {
-	req, err := http.NewRequest(
+func getBlockByHash(ctx context.Context, blockhash string) (block *btcutil.Block, err error) {
+	req, err := http.NewRequestWithContext(
+		ctx,
 		http.MethodGet,
 		fmt.Sprintf("%s/rest/block/%s.bin", config.RestEndpoint, blockhash),
 		nil,
 	)
 	if err != nil {
-		err = fmt.Errorf("error creating request: %v", err)
+		err = fmt.Errorf("error creating request: %w", err)
 		logging.L.Err(err).Msg("error creating request")
 		return
 	}
 
 	resp, err := httpClient.Do(req) // <-- reuse the shared client
 	if err != nil {
-		err = fmt.Errorf("error performing request: %v", err)
+		err = fmt.Errorf("error performing request: %w", err)
 		logging.L.Err(err).Msg("error performing request")
 		return
 	}

@@ -45,8 +45,14 @@ func NewBuilder(ctx context.Context, db database.DB) *Builder {
 	}
 }
 
-func (b *Builder) ContinuousSync(ctx context.Context) error {
+func (b *Builder) ContinuousSync(parent context.Context) error {
 	logging.L.Info().Msg("running continuous sync")
+
+	// The writer cancels ctx when it fails, which unblocks a handleBlock that is
+	// waiting to hand it a block. Without this the main loop could block on
+	// writerChan while the writer blocks reporting its error: a deadlock.
+	ctx, cancel := context.WithCancel(parent)
+	defer cancel()
 	tickerBlockCheck := time.Tick(3 * time.Second)
 	tickerInfo := time.Tick(60 * time.Second)
 
@@ -54,9 +60,20 @@ func (b *Builder) ContinuousSync(ctx context.Context) error {
 	b.newBlockChan = make(chan *Block, config.MaxParallelRequests*20)
 	b.writerChan = make(chan *database.DBBlock, config.MaxParallelTweakComputations*20)
 
-	// Start writer goroutine to process blocks from writerChan
-	errChan := make(chan error)
+	// Start writer goroutine to process blocks from writerChan.
+	// errChan is buffered: the writer sends at most one error and then exits,
+	// so the send never blocks even if the main loop has already returned.
+	errChan := make(chan error, 1)
 	doneChan := make(chan struct{})
+	// writerErr prefers the writer's own error over the cancellation it caused.
+	writerErr := func(fallback error) error {
+		select {
+		case err := <-errChan:
+			return err
+		default:
+			return fallback
+		}
+	}
 
 	go func() {
 		defer close(doneChan)
@@ -78,6 +95,7 @@ func (b *Builder) ContinuousSync(ctx context.Context) error {
 						Uint32("height", dbBlock.Height).
 						Msg("failed storing block")
 					errChan <- err
+					cancel()
 					return
 				}
 
@@ -87,6 +105,7 @@ func (b *Builder) ContinuousSync(ctx context.Context) error {
 				if err != nil {
 					logging.L.Err(err).Msg("failed flushing batch")
 					errChan <- err
+					cancel()
 					return
 				}
 
@@ -97,10 +116,16 @@ func (b *Builder) ContinuousSync(ctx context.Context) error {
 		}
 	}()
 
+	// On return, stop the writer and wait for it so it never outlives the call.
+	defer func() {
+		cancel()
+		<-doneChan
+	}()
+
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return writerErr(ctx.Err())
 		case err := <-errChan:
 			logging.L.Err(err).Msg("there was an error processing blocks")
 			return err
@@ -134,6 +159,7 @@ func (b *Builder) ContinuousSync(ctx context.Context) error {
 				// +1 because we already processed the tip
 				err = b.SingleBlockPullAndHandle(ctx, uint32(chainInfo.Blocks))
 				if err != nil {
+					err = writerErr(err)
 					logging.L.Err(err).Msg("failed syncing blocks")
 					return err
 				}
@@ -179,36 +205,72 @@ func (b *Builder) InitialSyncToTip(
 	return nil
 }
 
+// SyncBlocks indexes the heights in [startHeight, endHeight].
+//
+// Three stages are connected by channels: pullers fetch blocks from the node
+// (at most MaxParallelRequests at a time), workers compute the tweaks and a
+// single writer stores the results. The first error from any stage cancels the
+// others and is returned. Errors are recorded without blocking, so several
+// stages may fail at the same time, and every channel send also selects on the
+// context, so a stage can never wait forever on a peer that has stopped.
+//
+// SyncBlocks only returns after every goroutine it started has exited: none of
+// them outlives the call or touches the builder's channels afterwards.
 func (b *Builder) SyncBlocks(
-	ctx context.Context,
+	parent context.Context,
 	startHeight, endHeight int64,
 ) error {
-	errChan := make(chan error)
-	pullSemaphore := make(chan struct{}, config.MaxParallelRequests)
-	doneChan := make(chan struct{})
+	ctx, cancel := context.WithCancel(parent)
+	defer cancel()
+
+	var (
+		errOnce  sync.Once
+		firstErr error
+	)
+	// fail records the first error and stops every stage. It never blocks.
+	fail := func(err error) {
+		errOnce.Do(func() { firstErr = err })
+		cancel()
+	}
+
 	b.newBlockChan = make(chan *Block, config.MaxParallelRequests*20)
 	b.writerChan = make(chan *database.DBBlock, config.MaxParallelTweakComputations*20)
+	newBlockChan, writerChan := b.newBlockChan, b.writerChan
 
+	var stages sync.WaitGroup
+
+	// Pullers. newBlockChan is closed once every started pull has returned.
+	stages.Add(1)
 	go func() {
-		var wg sync.WaitGroup
+		defer stages.Done()
+
+		var pullers sync.WaitGroup
+		defer func() {
+			pullers.Wait()
+			close(newBlockChan)
+		}()
+
+		pullSemaphore := make(chan struct{}, config.MaxParallelRequests)
 		for i := startHeight; i <= endHeight; i++ {
 			select {
 			case pullSemaphore <- struct{}{}:
-				wg.Add(1)
 			case <-ctx.Done():
-				errChan <- ctx.Err()
 				return
 			}
 
+			pullers.Add(1)
 			logging.L.Trace().Int64("height", i).Msgf("pulling block %d from blockchain", i)
 			go func(height int64) {
+				defer pullers.Done()
 				defer func() { <-pullSemaphore }() // Release semaphore
 
 				pullStartTime := time.Now()
-				err := b.pullBlockToChan(height)
+				err := b.pullBlockToChan(ctx, height)
 				if err != nil {
-					logging.L.Err(err).Int64("height", height).Msg("failed pulling block")
-					errChan <- err
+					if ctx.Err() == nil {
+						logging.L.Err(err).Int64("height", height).Msg("failed pulling block")
+					}
+					fail(err)
 					return
 				}
 
@@ -217,26 +279,23 @@ func (b *Builder) SyncBlocks(
 					Int64("height", height).
 					Dur("pull_time", pullTime).
 					Msgf("pulled block %d from blockchain", height)
-
-				wg.Done()
 			}(i)
 		}
-		wg.Wait()
-		close(b.newBlockChan)
 	}()
 
-	var handleWG sync.WaitGroup
+	// Workers. writerChan is closed once every worker has returned.
+	var workers sync.WaitGroup
 	for i := 0; i < config.MaxParallelTweakComputations; i++ {
-		handleWG.Add(1)
+		workers.Add(1)
 		workerID := i
 		go func() {
-			defer handleWG.Done()
+			defer workers.Done()
 			for {
 				select {
 				case <-ctx.Done():
 					logging.L.Trace().Int("worker_id", workerID).Msg("Handler goroutine received context cancellation")
 					return
-				case block, ok := <-b.newBlockChan:
+				case block, ok := <-newBlockChan:
 					if !ok {
 						return
 					}
@@ -250,12 +309,15 @@ func (b *Builder) SyncBlocks(
 
 					err := b.handleBlock(ctx, block)
 					if err != nil {
-						logging.L.Err(err).
-							Int("worker_id", workerID).
-							Str("blockhash", block.Hash.String()).
-							Int64("height", block.Height).
-							Msg("failed handling block")
-						errChan <- err
+						if ctx.Err() == nil {
+							logging.L.Err(err).
+								Int("worker_id", workerID).
+								Str("blockhash", block.Hash.String()).
+								Int64("height", block.Height).
+								Msg("failed handling block")
+						}
+						fail(err)
+						return
 					}
 
 					handleTime := time.Since(handleStartTime)
@@ -270,24 +332,27 @@ func (b *Builder) SyncBlocks(
 		}()
 	}
 
-	// Close writerChan after all handlers finish sending.
+	stages.Add(1)
 	go func() {
-		handleWG.Wait()
-		close(b.writerChan)
+		defer stages.Done()
+		workers.Wait()
+		close(writerChan)
 	}()
 
+	// Writer. Single goroutine so that blocks are applied one at a time.
+	stages.Add(1)
 	go func() {
+		defer stages.Done()
+
 		tickerReports := time.Tick(500 * time.Millisecond)
 		blockHeightTicker := time.Tick(10 * time.Second)
-
-		defer close(doneChan) // signal completion when we exit this goroutine
 
 		for {
 			select {
 			case <-ctx.Done():
 				logging.L.Trace().Msg("Writer goroutine received context cancellation")
 				return
-			case dbBlock, ok := <-b.writerChan:
+			case dbBlock, ok := <-writerChan:
 				if !ok {
 					// channel drained and closed: all done
 					return
@@ -299,7 +364,7 @@ func (b *Builder) SyncBlocks(
 						Str("blockhash", dbBlock.Hash.String()).
 						Uint32("height", dbBlock.Height).
 						Msg("failed storing block")
-					errChan <- err
+					fail(err)
 					return
 				}
 
@@ -312,7 +377,7 @@ func (b *Builder) SyncBlocks(
 				_, syncTip, err := b.store.GetChainTip()
 				if err != nil {
 					logging.L.Err(err).Msg("failed pulling indexing chain tip")
-					errChan <- err
+					fail(err)
 					return
 				}
 
@@ -328,8 +393,8 @@ func (b *Builder) SyncBlocks(
 					Uint32("indexed_height", syncTip).
 					Int64("blockchain_tip", chainInfo.Blocks).
 					Int64("blocks_behind", chainInfo.Blocks-int64(syncTip)).
-					Int("backlog_chan_pull", len(b.newBlockChan)).
-					Int("backlog_chan_db_writer", len(b.writerChan)).
+					Int("backlog_chan_pull", len(newBlockChan)).
+					Int("backlog_chan_db_writer", len(writerChan)).
 					Int("batch_length", b.store.BatchSize()).
 					Msgf("Indexer status: indexed height %d, blockchain tip %d (behind by %d blocks)", syncTip, chainInfo.Blocks, chainInfo.Blocks-int64(syncTip))
 
@@ -337,48 +402,50 @@ func (b *Builder) SyncBlocks(
 				if chainInfo.Blocks > int64(syncTip) {
 					logging.L.Info().
 						Int64("blocks_behind", chainInfo.Blocks-int64(syncTip)).
-						Int("blocks_in_pull_queue", len(b.newBlockChan)).
-						Int("blocks_in_write_queue", len(b.writerChan)).
+						Int("blocks_in_pull_queue", len(newBlockChan)).
+						Int("blocks_in_write_queue", len(writerChan)).
 						Msg("Background catchup in progress - blocks are being processed below chain tip")
 				} else {
 					logging.L.Info().Msg("Indexer is up to date with blockchain tip")
 				}
 			case <-tickerReports:
 				logging.L.Trace().
-					Int("backlog_chan_pull", len(b.newBlockChan)).
-					Int("backlog_chan_db_writer", len(b.writerChan)).
+					Int("backlog_chan_pull", len(newBlockChan)).
+					Int("backlog_chan_db_writer", len(writerChan)).
 					Msg("new_tick_report")
 			}
 		}
 	}()
 
-	for {
-		select {
-		case <-ctx.Done():
-			// check here as well
-			return ctx.Err()
-		case err := <-errChan:
-			logging.L.Err(err).Msg("there was an error pulling blocks")
-			return err
-		case <-doneChan:
-			// should probably flush as a defer
-			return b.store.FlushBatch(true)
-		}
+	stages.Wait()
+
+	if firstErr != nil {
+		logging.L.Err(firstErr).Msg("there was an error pulling blocks")
+		return firstErr
 	}
+	if err := parent.Err(); err != nil {
+		return err
+	}
+	// should probably flush as a defer
+	return b.store.FlushBatch(true)
 }
 
-func (b *Builder) pullBlockToChan(height int64) error {
-	block, err := b.pullBlock(height)
+func (b *Builder) pullBlockToChan(ctx context.Context, height int64) error {
+	block, err := b.pullBlock(ctx, height)
 	if err != nil {
 		logging.L.Err(err).Int64("height", height).Msg("failed to pull blockhash")
 		return err
 	}
-	b.newBlockChan <- block
-	return err
+	select {
+	case b.newBlockChan <- block:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
-func (b *Builder) pullBlock(height int64) (*Block, error) {
-	blockhash, err := getBlockHashByHeight(height)
+func (b *Builder) pullBlock(ctx context.Context, height int64) (*Block, error) {
+	blockhash, err := getBlockHashByHeight(ctx, height)
 	if err != nil {
 		logging.L.Err(err).Int64("height", height).Msg("failed to pull blockhash")
 		return nil, err
@@ -387,7 +454,7 @@ func (b *Builder) pullBlock(height int64) (*Block, error) {
 		Int64("height", height).
 		Str("blockhash", blockhash.String()).
 		Msg("pulling block")
-	block, err := PullBlockData(blockhash)
+	block, err := PullBlockData(ctx, blockhash)
 	if err != nil {
 		logging.L.Err(err).Int64("height", height).Msg("failed to pull block")
 		return nil, err
@@ -444,11 +511,12 @@ func (b *Builder) handleBlock(ctx context.Context, block *Block) error {
 
 	// Send the block to the writer channel instead of applying directly
 	// This ensures proper chain tip updates and batch processing
+	// The send must also watch ctx: if the writer has stopped (error or
+	// cancellation) nobody drains writerChan and a plain send blocks forever.
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	default:
-		b.writerChan <- dbBlock
+	case b.writerChan <- dbBlock:
 		logging.L.Trace().
 			Str("blockhash", block.Hash.String()).
 			Int64("height", block.Height).

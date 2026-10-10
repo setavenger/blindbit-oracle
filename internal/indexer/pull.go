@@ -2,6 +2,7 @@ package indexer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/setavenger/blindbit-oracle/internal/config"
 	"sync"
@@ -12,46 +13,42 @@ import (
 	"github.com/setavenger/blindbit-lib/logging"
 )
 
-func PullBlockData(blockHash *chainhash.Hash) (*Block, error) {
+// PullBlockData fetches a block and its spent outputs concurrently.
+//
+// Each fetch records its own error and the results are only read after both
+// goroutines have finished. A previous version sent errors on an unbuffered
+// channel that was only read after wg.Wait(); any single failed request
+// therefore blocked its goroutine before wg.Done() and deadlocked the indexer
+// permanently.
+func PullBlockData(ctx context.Context, blockHash *chainhash.Hash) (*Block, error) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 
 	var spentTxOuts [][]*wire.TxOut
 	var block *btcutil.Block
-
-	errChan := make(chan error)
+	var spentErr, blockErr error
 
 	blockHashStr := blockHash.String()
 	go func() {
 		defer wg.Done()
-		var err error
-		spentTxOuts, err = getSpentUtxos(blockHashStr)
-		if err != nil {
-			logging.L.Err(err).Str("blockhash", blockHashStr).Msg("failed to pull spentutxos")
-			errChan <- err
-			return
+		spentTxOuts, spentErr = getSpentUtxos(ctx, blockHashStr)
+		if spentErr != nil {
+			logging.L.Err(spentErr).Str("blockhash", blockHashStr).Msg("failed to pull spentutxos")
 		}
 	}()
 
 	go func() {
 		defer wg.Done()
-		var err error
-		block, err = getBlockByHash(blockHashStr)
-		if err != nil {
-			logging.L.Err(err).Str("blockhash", blockHashStr).Msg("failed to pull block data")
-			errChan <- err
-			return
+		block, blockErr = getBlockByHash(ctx, blockHashStr)
+		if blockErr != nil {
+			logging.L.Err(blockErr).Str("blockhash", blockHashStr).Msg("failed to pull block data")
 		}
 	}()
 
 	wg.Wait()
 
-	select {
-	case err := <-errChan:
-		logging.L.Err(err).Msg("ended with err")
+	if err := errors.Join(spentErr, blockErr); err != nil {
 		return nil, err
-	default:
-		// No errors
 	}
 
 	return mergeBlockAndSpentTxOuts(block, spentTxOuts)
@@ -105,7 +102,7 @@ func mergeBlockAndSpentTxOuts(b *btcutil.Block, spentTxOuts [][]*wire.TxOut) (*B
 func (b *Builder) SingleBlockPullAndHandle(
 	ctx context.Context, height uint32,
 ) error {
-	block, err := b.pullBlock(int64(height))
+	block, err := b.pullBlock(ctx, int64(height))
 	if err != nil {
 		return err
 	}

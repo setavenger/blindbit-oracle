@@ -75,29 +75,37 @@ func TestPullBlockDataCancel(t *testing.T) {
 // When one of the two concurrent fetches fails the block cannot be built, so
 // the other request must be cancelled rather than left running until the
 // client timeout. The returned error is the real failure, not the
-// cancellation PullBlockData caused itself.
+// cancellation PullBlockData caused itself. Both directions are covered.
 func TestPullBlockDataCancelsSiblingRequest(t *testing.T) {
-	node := newFaultNode(t, 5)
-	node.inject("spenttxouts", 3, faultDrop)
-	node.inject("block", 3, faultHang)
-	hash := node.hashAt(3)
+	cases := []struct{ name, fails, hangs string }{
+		{"spenttxouts fails, block hangs", "spenttxouts", "block"},
+		{"block fails, spenttxouts hangs", "block", "spenttxouts"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			node := newFaultNode(t, 5)
+			node.inject(tc.fails, 3, faultDrop)
+			node.inject(tc.hangs, 3, faultHang)
+			hash := node.hashAt(3)
 
-	start := time.Now()
-	err := returnsWithin(t, syncTimeout, "PullBlockData", func() error {
-		_, err := PullBlockData(context.Background(), &hash)
-		return err
-	})
-	if errors.Is(err, errDeadlock) {
-		return
+			start := time.Now()
+			err := returnsWithin(t, syncTimeout, "PullBlockData", func() error {
+				_, err := PullBlockData(context.Background(), &hash)
+				return err
+			})
+			if errors.Is(err, errDeadlock) {
+				return
+			}
+			if err == nil {
+				t.Fatalf("PullBlockData returned nil, want the %s error", tc.fails)
+			}
+			if errors.Is(err, context.Canceled) {
+				t.Errorf("error %q reports the internal cancellation, want only the real failure", err)
+			}
+			if d := time.Since(start); d > 2*time.Second {
+				t.Errorf("PullBlockData took %v, want the hanging request cancelled promptly", d)
+			}
+			assertNoIndexerGoroutines(t)
+		})
 	}
-	if err == nil {
-		t.Fatalf("PullBlockData returned nil, want the spenttxouts error")
-	}
-	if errors.Is(err, context.Canceled) {
-		t.Errorf("error %q reports the internal cancellation, want only the real failure", err)
-	}
-	if d := time.Since(start); d > 2*time.Second {
-		t.Errorf("PullBlockData took %v, want the hanging request cancelled promptly", d)
-	}
-	assertNoIndexerGoroutines(t)
 }

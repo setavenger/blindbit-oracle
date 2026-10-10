@@ -13,6 +13,11 @@ import (
 	"github.com/setavenger/go-bip352"
 )
 
+// progressReportInterval is how often SyncBlocks logs its progress, which
+// includes asking the node for its chain state. A variable so tests can
+// shorten it.
+var progressReportInterval = 10 * time.Second
+
 type Builder struct {
 	ctx context.Context
 
@@ -147,7 +152,7 @@ func (b *Builder) ContinuousSync(parent context.Context) error {
 				return err
 			}
 
-			chainInfo, err := GetChainInfo()
+			chainInfo, err := GetChainInfo(ctx)
 			if err != nil {
 				logging.L.Err(err).Msg("failed to pull chainInfo")
 				return err
@@ -178,7 +183,7 @@ func (b *Builder) InitialSyncToTip(
 		return err
 	}
 
-	chainInfo, err := GetChainInfo()
+	chainInfo, err := GetChainInfo(ctx)
 	if err != nil {
 		logging.L.Err(err).Msg("failed to pull chainInfo")
 		return err
@@ -228,6 +233,9 @@ func (b *Builder) SyncBlocks(
 		firstErr error
 	)
 	// fail records the first error and stops every stage. It never blocks.
+	// cancel() is only called here, after the error has been recorded, so an
+	// error that merely results from this cancellation can never be recorded
+	// first; context.Canceled wins only when the caller cancelled.
 	fail := func(err error) {
 		errOnce.Do(func() { firstErr = err })
 		cancel()
@@ -345,7 +353,7 @@ func (b *Builder) SyncBlocks(
 		defer stages.Done()
 
 		tickerReports := time.Tick(500 * time.Millisecond)
-		blockHeightTicker := time.Tick(10 * time.Second)
+		blockHeightTicker := time.Tick(progressReportInterval)
 
 		for {
 			select {
@@ -382,7 +390,7 @@ func (b *Builder) SyncBlocks(
 				}
 
 				// Get current blockchain tip for comparison
-				chainInfo, err := GetChainInfo()
+				chainInfo, err := GetChainInfo(ctx)
 				if err != nil {
 					logging.L.Warn().Err(err).Msg("failed to get chain info for progress report")
 					chainInfo = &ChainInfo{Blocks: int64(syncTip)} // fallback

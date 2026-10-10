@@ -170,3 +170,62 @@ func TestContinuousSyncWriterError(t *testing.T) {
 	}
 	assertNoIndexerGoroutines(t)
 }
+
+// Cancelling SyncBlocks while its progress report waits on an unresponsive
+// node must not wait for the HTTP client timeout.
+func TestSyncBlocksCancelWhileChainInfoHangs(t *testing.T) {
+	withParallelism(t, 1, 1)
+	oldInterval := progressReportInterval
+	progressReportInterval = 50 * time.Millisecond
+	t.Cleanup(func() { progressReportInterval = oldInterval })
+
+	node := newFaultNode(t, 30)
+	node.inject("spenttxouts", 20, faultHang) // keeps the sync running
+	node.inject("chaininfo", 0, faultHang)    // the progress report blocks here
+	b := NewBuilder(context.Background(), newFaultStore())
+
+	ctx, cancel := context.WithCancel(context.Background())
+	time.AfterFunc(500*time.Millisecond, cancel)
+
+	start := time.Now()
+	err := returnsWithin(t, syncTimeout, "SyncBlocks", func() error {
+		return b.SyncBlocks(ctx, 1, 30)
+	})
+	if errors.Is(err, errDeadlock) {
+		return
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("SyncBlocks error = %v, want context.Canceled", err)
+	}
+	if d := time.Since(start); d > 3*time.Second {
+		t.Errorf("SyncBlocks took %v to honour cancellation", d)
+	}
+	assertNoIndexerGoroutines(t)
+}
+
+// The same for ContinuousSync's polling of the node.
+func TestContinuousSyncCancelWhileChainInfoHangs(t *testing.T) {
+	withParallelism(t, 1, 1)
+	node := newFaultNode(t, 3)
+	node.inject("chaininfo", 0, faultHang)
+	b := NewBuilder(context.Background(), newFaultStore())
+
+	// ContinuousSync first asks the node after its 3 s block check.
+	ctx, cancel := context.WithCancel(context.Background())
+	time.AfterFunc(3500*time.Millisecond, cancel)
+
+	start := time.Now()
+	err := returnsWithin(t, syncTimeout, "ContinuousSync", func() error {
+		return b.ContinuousSync(ctx)
+	})
+	if errors.Is(err, errDeadlock) {
+		return
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("ContinuousSync error = %v, want context.Canceled", err)
+	}
+	if d := time.Since(start); d > 6*time.Second {
+		t.Errorf("ContinuousSync took %v to honour cancellation", d)
+	}
+	assertNoIndexerGoroutines(t)
+}

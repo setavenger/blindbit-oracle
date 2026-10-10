@@ -57,8 +57,11 @@ type ChainInfo struct {
 	Warnings             json.RawMessage `json:"warnings"`
 }
 
-func GetChainInfo() (*ChainInfo, error) {
-	req, err := http.NewRequest(
+// GetChainInfo returns the node's chain state. ctx bounds the request, so a
+// caller that is being cancelled is not held up by an unresponsive node.
+func GetChainInfo(ctx context.Context) (*ChainInfo, error) {
+	req, err := http.NewRequestWithContext(
+		ctx,
 		http.MethodGet,
 		fmt.Sprintf("%s/rest/chaininfo.json", config.RestEndpoint),
 		nil,

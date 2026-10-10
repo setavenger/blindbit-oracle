@@ -107,6 +107,13 @@ func (n *faultNode) serve(w http.ResponseWriter, r *http.Request) {
 	endpoint, arg, _ := strings.Cut(path, "/")
 
 	if path == "chaininfo.json" {
+		if n.fault("chaininfo", 0) == faultHang {
+			select {
+			case <-r.Context().Done():
+			case <-n.stop:
+			}
+			return
+		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"chain":  "regtest",
 			"blocks": len(n.blocks) - 1,

@@ -20,7 +20,12 @@ import (
 // channel that was only read after wg.Wait(); any single failed request
 // therefore blocked its goroutine before wg.Done() and deadlocked the indexer
 // permanently.
-func PullBlockData(ctx context.Context, blockHash *chainhash.Hash) (*Block, error) {
+func PullBlockData(parent context.Context, blockHash *chainhash.Hash) (*Block, error) {
+	// If one fetch fails the block cannot be built, so the other request is
+	// cancelled instead of being left to run until its timeout.
+	ctx, cancel := context.WithCancel(parent)
+	defer cancel()
+
 	var wg sync.WaitGroup
 	wg.Add(2)
 
@@ -33,7 +38,10 @@ func PullBlockData(ctx context.Context, blockHash *chainhash.Hash) (*Block, erro
 		defer wg.Done()
 		spentTxOuts, spentErr = getSpentUtxos(ctx, blockHashStr)
 		if spentErr != nil {
-			logging.L.Err(spentErr).Str("blockhash", blockHashStr).Msg("failed to pull spentutxos")
+			if ctx.Err() == nil {
+				logging.L.Err(spentErr).Str("blockhash", blockHashStr).Msg("failed to pull spentutxos")
+			}
+			cancel()
 		}
 	}()
 
@@ -41,17 +49,39 @@ func PullBlockData(ctx context.Context, blockHash *chainhash.Hash) (*Block, erro
 		defer wg.Done()
 		block, blockErr = getBlockByHash(ctx, blockHashStr)
 		if blockErr != nil {
-			logging.L.Err(blockErr).Str("blockhash", blockHashStr).Msg("failed to pull block data")
+			if ctx.Err() == nil {
+				logging.L.Err(blockErr).Str("blockhash", blockHashStr).Msg("failed to pull block data")
+			}
+			cancel()
 		}
 	}()
 
 	wg.Wait()
 
-	if err := errors.Join(spentErr, blockErr); err != nil {
+	if err := pullError(parent, spentErr, blockErr); err != nil {
 		return nil, err
 	}
 
 	return mergeBlockAndSpentTxOuts(block, spentTxOuts)
+}
+
+// pullError combines the errors of the two fetches in PullBlockData. When the
+// caller's context is still live, a context.Canceled error can only come from
+// PullBlockData cancelling the sibling request after the other one failed, so
+// it is dropped in favour of the real failure.
+func pullError(parent context.Context, errs ...error) error {
+	if parent.Err() == nil {
+		var real []error
+		for _, err := range errs {
+			if err != nil && !errors.Is(err, context.Canceled) {
+				real = append(real, err)
+			}
+		}
+		if len(real) > 0 {
+			return errors.Join(real...)
+		}
+	}
+	return errors.Join(errs...)
 }
 
 func mergeBlockAndSpentTxOuts(b *btcutil.Block, spentTxOuts [][]*wire.TxOut) (*Block, error) {

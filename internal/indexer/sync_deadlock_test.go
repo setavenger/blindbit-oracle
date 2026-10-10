@@ -6,6 +6,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/setavenger/blindbit-oracle/internal/config"
 )
 
 // These tests only use SyncBlocks/ContinuousSync, whose signatures did not
@@ -145,6 +147,11 @@ func TestSyncBlocksCancelWithHangingRequest(t *testing.T) {
 // ContinuousSync must return the writer's error rather than block or mask it.
 func TestContinuousSyncWriterError(t *testing.T) {
 	withParallelism(t, 1, 1)
+	// Do not depend on the package default start height: reorg handling that
+	// walks back to SyncStartHeight would otherwise skip this short chain.
+	oldStart := config.SyncStartHeight
+	config.SyncStartHeight = 0
+	t.Cleanup(func() { config.SyncStartHeight = oldStart })
 	newFaultNode(t, 3)
 	store := newFaultStore()
 	errWrite := errors.New("injected write failure")

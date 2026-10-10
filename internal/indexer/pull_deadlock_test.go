@@ -71,3 +71,33 @@ func TestPullBlockDataCancel(t *testing.T) {
 		t.Fatalf("PullBlockData error = %v, want context.DeadlineExceeded", err)
 	}
 }
+
+// When one of the two concurrent fetches fails the block cannot be built, so
+// the other request must be cancelled rather than left running until the
+// client timeout. The returned error is the real failure, not the
+// cancellation PullBlockData caused itself.
+func TestPullBlockDataCancelsSiblingRequest(t *testing.T) {
+	node := newFaultNode(t, 5)
+	node.inject("spenttxouts", 3, faultDrop)
+	node.inject("block", 3, faultHang)
+	hash := node.hashAt(3)
+
+	start := time.Now()
+	err := returnsWithin(t, syncTimeout, "PullBlockData", func() error {
+		_, err := PullBlockData(context.Background(), &hash)
+		return err
+	})
+	if errors.Is(err, errDeadlock) {
+		return
+	}
+	if err == nil {
+		t.Fatalf("PullBlockData returned nil, want the spenttxouts error")
+	}
+	if errors.Is(err, context.Canceled) {
+		t.Errorf("error %q reports the internal cancellation, want only the real failure", err)
+	}
+	if d := time.Since(start); d > 2*time.Second {
+		t.Errorf("PullBlockData took %v, want the hanging request cancelled promptly", d)
+	}
+	assertNoIndexerGoroutines(t)
+}

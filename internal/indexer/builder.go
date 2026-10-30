@@ -14,9 +14,13 @@ import (
 )
 
 // progressReportInterval is how often SyncBlocks logs its progress, which
-// includes asking the node for its chain state. A variable so tests can
-// shorten it.
-var progressReportInterval = 10 * time.Second
+// includes asking the node for its chain state. blockCheckInterval is how often
+// ContinuousSync asks the node for new blocks. Variables so tests can shorten
+// them.
+var (
+	progressReportInterval = 10 * time.Second
+	blockCheckInterval     = 3 * time.Second
+)
 
 type Builder struct {
 	ctx context.Context
@@ -58,7 +62,7 @@ func (b *Builder) ContinuousSync(parent context.Context) error {
 	// writerChan while the writer blocks reporting its error: a deadlock.
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
-	tickerBlockCheck := time.Tick(3 * time.Second)
+	tickerBlockCheck := time.Tick(blockCheckInterval)
 	tickerInfo := time.Tick(60 * time.Second)
 
 	// recreate the channels, as they might have been closed by previous SyncBlocks
@@ -389,8 +393,9 @@ func (b *Builder) SyncBlocks(
 					return
 				}
 
-				// Get current blockchain tip for comparison
-				chainInfo, err := GetChainInfo(ctx)
+				// Get current blockchain tip for comparison. A single attempt:
+				// waiting for an unavailable node here would stall the writer.
+				chainInfo, err := getChainInfoOnce(ctx)
 				if err != nil {
 					logging.L.Warn().Err(err).Msg("failed to get chain info for progress report")
 					chainInfo = &ChainInfo{Blocks: int64(syncTip)} // fallback

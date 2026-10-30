@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"runtime"
@@ -29,48 +30,144 @@ const (
 	faultDrop faultKind = iota + 1
 	// faultHang never answers until the request is cancelled or the test ends.
 	faultHang
+	// faultWarmup answers 503 like Bitcoin Core while it loads its block index.
+	faultWarmup
+	// faultNotFound answers 404 like Core for a block it does not have (e.g.
+	// pruned): waiting does not help, so the indexer must not retry it.
+	faultNotFound
+	// faultUnauthorized answers 401, like a proxy in front of Core that wants
+	// credentials: a configuration error.
+	faultUnauthorized
+	// faultRESTDisabled answers an empty 404, like Core started without rest=1.
+	faultRESTDisabled
+	// faultTruncate starts a 200 answer and closes the connection mid-body,
+	// like a node that stops while it sends a block.
+	faultTruncate
 )
 
 // faultNode serves the subset of Bitcoin Core's REST interface used by the
 // indexer (chaininfo, blockhashbyheight, block, spenttxouts) from a chain of
 // coinbase-only blocks, and can inject faults per endpoint and height.
+//
+// The node can also go offline and come back on the same address, like a
+// restarting bitcoind: while it is offline connections are refused.
 type faultNode struct {
-	t       *testing.T
-	srv     *httptest.Server
+	t    *testing.T
+	addr string // host:port, kept across restarts
+
+	mu      sync.Mutex
+	srv     *httptest.Server // nil while offline
 	blocks  []*wire.MsgBlock
 	heights map[chainhash.Hash]int
-
-	mu     sync.Mutex
-	faults map[string]faultKind // key: "<endpoint>/<height>"
-	stop   chan struct{}
+	faults  map[string]faultKind // key: "<endpoint>/<height>"
+	counts  map[string]int       // remaining answers for a fault; absent = forever
+	// nodeFault applies to every request while nodeFaultLeft > 0 (or < 0:
+	// forever), like a node that is still starting.
+	nodeFault     faultKind
+	nodeFaultLeft int
+	requests      map[string]int // served requests per endpoint
+	onRequest     func(endpoint string, height int)
+	stop          chan struct{}
 }
 
 func newFaultNode(t *testing.T, tip int) *faultNode {
 	t.Helper()
+	n := newOfflineFaultNode(t, tip)
+	n.goOnline()
+	return n
+}
+
+// newOfflineFaultNode reserves an address but does not listen on it yet:
+// requests are refused until goOnline.
+func newOfflineFaultNode(t *testing.T, tip int) *faultNode {
+	t.Helper()
 	n := &faultNode{
-		t:       t,
-		heights: map[chainhash.Hash]int{},
-		faults:  map[string]faultKind{},
-		stop:    make(chan struct{}),
+		t:        t,
+		heights:  map[chainhash.Hash]int{},
+		faults:   map[string]faultKind{},
+		counts:   map[string]int{},
+		requests: map[string]int{},
+		stop:     make(chan struct{}),
 	}
+	n.extend(tip + 1)
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("faultnode: reserve address: %v", err)
+	}
+	n.addr = ln.Addr().String()
+	_ = ln.Close()
+
+	oldEndpoint := config.RestEndpoint
+	config.RestEndpoint = "http://" + n.addr
+	t.Cleanup(func() {
+		close(n.stop) // release hanging handlers before closing the server
+		n.goOffline()
+		config.RestEndpoint = oldEndpoint
+	})
+	return n
+}
+
+// goOnline starts listening on the node's address.
+func (n *faultNode) goOnline() {
+	n.t.Helper()
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.srv != nil {
+		return
+	}
+	var ln net.Listener
+	var err error
+	for range 50 { // the port may take a moment to be released
+		if ln, err = net.Listen("tcp", n.addr); err == nil {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if err != nil {
+		n.t.Fatalf("faultnode: listen on %s: %v", n.addr, err)
+	}
+	srv := httptest.NewUnstartedServer(http.HandlerFunc(n.serve))
+	_ = srv.Listener.Close()
+	srv.Listener = ln
+	srv.Start()
+	n.srv = srv
+}
+
+// goOffline closes the listener and every open connection: in-flight
+// requests fail and new ones are refused, as when bitcoind stops.
+func (n *faultNode) goOffline() {
+	n.mu.Lock()
+	srv := n.srv
+	n.srv = nil
+	n.mu.Unlock()
+	if srv != nil {
+		srv.CloseClientConnections()
+		srv.Close()
+	}
+}
+
+// extend appends k blocks to the node's chain, like a node receiving blocks.
+func (n *faultNode) extend(k int) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
 	prev := chainhash.Hash{}
-	for h := 0; h <= tip; h++ {
+	if len(n.blocks) > 0 {
+		prev = n.blocks[len(n.blocks)-1].BlockHash()
+	}
+	for range k {
+		h := len(n.blocks)
 		blk := faultCoinbaseBlock(prev, h)
 		n.blocks = append(n.blocks, blk)
 		prev = blk.BlockHash()
 		n.heights[prev] = h
 	}
-	n.srv = httptest.NewServer(http.HandlerFunc(n.serve))
+}
 
-	oldEndpoint := config.RestEndpoint
-	config.RestEndpoint = n.srv.URL
-	t.Cleanup(func() {
-		close(n.stop) // release hanging handlers before closing the server
-		n.srv.CloseClientConnections()
-		n.srv.Close()
-		config.RestEndpoint = oldEndpoint
-	})
-	return n
+func (n *faultNode) tip() int {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return len(n.blocks) - 1
 }
 
 func faultCoinbaseBlock(prev chainhash.Hash, height int) *wire.MsgBlock {
@@ -88,93 +185,171 @@ func faultCoinbaseBlock(prev chainhash.Hash, height int) *wire.MsgBlock {
 	return blk
 }
 
+// inject makes every request for endpoint at height fail with kind.
 func (n *faultNode) inject(endpoint string, height int, kind faultKind) {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-	n.faults[fmt.Sprintf("%s/%d", endpoint, height)] = kind
+	n.injectN(endpoint, height, kind, -1)
 }
 
+// injectN makes the next count requests for endpoint at height fail with
+// kind; count < 0 means every request.
+func (n *faultNode) injectN(endpoint string, height int, kind faultKind, count int) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	key := fmt.Sprintf("%s/%d", endpoint, height)
+	n.faults[key] = kind
+	delete(n.counts, key)
+	if count >= 0 {
+		n.counts[key] = count
+	}
+}
+
+// failAll makes the next count requests to any endpoint fail with kind;
+// count < 0 means until failAll is called again.
+func (n *faultNode) failAll(kind faultKind, count int) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.nodeFault, n.nodeFaultLeft = kind, count
+}
+
+// fault returns the fault for this request and records the request.
 func (n *faultNode) fault(endpoint string, height int) faultKind {
 	n.mu.Lock()
-	defer n.mu.Unlock()
-	return n.faults[fmt.Sprintf("%s/%d", endpoint, height)]
+	n.requests[endpoint]++
+	hook := n.onRequest
+	kind := faultKind(0)
+	if n.nodeFaultLeft != 0 {
+		kind = n.nodeFault
+		if n.nodeFaultLeft > 0 {
+			n.nodeFaultLeft--
+		}
+	} else {
+		key := fmt.Sprintf("%s/%d", endpoint, height)
+		kind = n.faults[key]
+		if left, ok := n.counts[key]; ok {
+			if left == 0 {
+				kind = 0
+			} else {
+				n.counts[key] = left - 1
+			}
+		}
+	}
+	n.mu.Unlock()
+	if hook != nil {
+		hook(endpoint, height)
+	}
+	return kind
 }
 
-func (n *faultNode) hashAt(height int) chainhash.Hash { return n.blocks[height].BlockHash() }
+func (n *faultNode) requestCount(endpoint string) int {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return n.requests[endpoint]
+}
+
+func (n *faultNode) hashAt(height int) chainhash.Hash {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return n.blocks[height].BlockHash()
+}
+
+func (n *faultNode) blockAt(height int) *wire.MsgBlock {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return n.blocks[height]
+}
+
+// answerFault writes the response for kind and reports whether it did.
+func (n *faultNode) answerFault(w http.ResponseWriter, r *http.Request, kind faultKind) bool {
+	switch kind {
+	case faultDrop:
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			n.t.Errorf("faultnode: response writer cannot hijack")
+			return true
+		}
+		conn, _, err := hj.Hijack()
+		if err == nil {
+			_ = conn.Close()
+		}
+	case faultHang:
+		select {
+		case <-r.Context().Done():
+		case <-n.stop:
+		}
+	case faultTruncate:
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			n.t.Errorf("faultnode: response writer cannot hijack")
+			return true
+		}
+		conn, buf, err := hj.Hijack()
+		if err == nil {
+			_, _ = buf.WriteString("HTTP/1.1 200 OK\r\nContent-Length: 1000\r\n\r\n0123456789")
+			_ = buf.Flush()
+			_ = conn.Close()
+		}
+	case faultWarmup:
+		http.Error(w, "Service temporarily unavailable: Loading block index…", http.StatusServiceUnavailable)
+	case faultNotFound:
+		http.Error(w, strings.TrimPrefix(r.URL.Path, "/rest/")+" not found", http.StatusNotFound)
+	case faultUnauthorized:
+		w.WriteHeader(http.StatusUnauthorized)
+	case faultRESTDisabled:
+		w.WriteHeader(http.StatusNotFound)
+	default:
+		return false
+	}
+	return true
+}
 
 func (n *faultNode) serve(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/rest/")
 	endpoint, arg, _ := strings.Cut(path, "/")
 
 	if path == "chaininfo.json" {
-		if n.fault("chaininfo", 0) == faultHang {
-			select {
-			case <-r.Context().Done():
-			case <-n.stop:
-			}
+		if n.answerFault(w, r, n.fault("chaininfo", 0)) {
 			return
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"chain":  "regtest",
-			"blocks": len(n.blocks) - 1,
+			"blocks": n.tip(),
 		})
 		return
 	}
 
 	arg = strings.TrimSuffix(arg, ".bin")
 	height := -1
+	n.mu.Lock()
 	switch endpoint {
 	case "blockhashbyheight":
-		h, err := strconv.Atoi(arg)
-		if err != nil || h < 0 || h >= len(n.blocks) {
-			http.NotFound(w, r)
-			return
+		if h, err := strconv.Atoi(arg); err == nil && h >= 0 && h < len(n.blocks) {
+			height = h
 		}
-		height = h
 	case "block", "spenttxouts":
-		hash, err := chainhash.NewHashFromStr(arg)
-		if err != nil {
-			http.NotFound(w, r)
-			return
+		if hash, err := chainhash.NewHashFromStr(arg); err == nil {
+			if h, ok := n.heights[*hash]; ok {
+				height = h
+			}
 		}
-		h, ok := n.heights[*hash]
-		if !ok {
-			http.NotFound(w, r)
-			return
-		}
-		height = h
-	default:
+	}
+	n.mu.Unlock()
+	if height < 0 {
 		http.NotFound(w, r)
 		return
 	}
 
-	switch n.fault(endpoint, height) {
-	case faultDrop:
-		hj, ok := w.(http.Hijacker)
-		if !ok {
-			n.t.Errorf("faultnode: response writer cannot hijack")
-			return
-		}
-		conn, _, err := hj.Hijack()
-		if err == nil {
-			_ = conn.Close()
-		}
-		return
-	case faultHang:
-		select {
-		case <-r.Context().Done():
-		case <-n.stop:
-		}
+	if n.answerFault(w, r, n.fault(endpoint, height)) {
 		return
 	}
 
+	blk := n.blockAt(height)
 	switch endpoint {
 	case "blockhashbyheight":
-		hash := n.hashAt(height)
+		hash := blk.BlockHash()
 		_, _ = w.Write(hash[:])
 	case "block":
 		var buf bytes.Buffer
-		if err := n.blocks[height].Serialize(&buf); err != nil {
+		if err := blk.Serialize(&buf); err != nil {
 			n.t.Errorf("faultnode: serialize block %d: %v", height, err)
 			return
 		}
@@ -182,8 +357,8 @@ func (n *faultNode) serve(w http.ResponseWriter, r *http.Request) {
 	case "spenttxouts":
 		// one transaction (the coinbase) spending zero outputs
 		var buf bytes.Buffer
-		_ = wire.WriteVarInt(&buf, 0, uint64(len(n.blocks[height].Transactions)))
-		for range n.blocks[height].Transactions {
+		_ = wire.WriteVarInt(&buf, 0, uint64(len(blk.Transactions)))
+		for range blk.Transactions {
 			_ = wire.WriteVarInt(&buf, 0, 0)
 		}
 		_, _ = w.Write(buf.Bytes())
@@ -242,6 +417,18 @@ func (s *faultStore) GetChainTip() ([]byte, uint32, error) {
 		}
 	}
 	return hash, tip, nil
+}
+
+func (s *faultStore) indexedCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.byHeight)
+}
+
+func (s *faultStore) appliedAt(height uint32) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.applied[height]
 }
 
 func (s *faultStore) GetBlockHashByHeight(height uint32) ([]byte, error) {

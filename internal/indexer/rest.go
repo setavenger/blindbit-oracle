@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"time"
@@ -11,13 +12,10 @@ import (
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/setavenger/blindbit-lib/logging"
-	"github.com/setavenger/blindbit-oracle/internal/config"
 )
 
-// pooling of api calls to potentially improve performance
-// todo: revise to see what a proper solution to timeouts is:
-// retries in roundtripper?, retries off blocks generally (put them into failed block list which is being retried until success)
+// pooling of api calls to potentially improve performance.
+// Requests that fail because Core is unavailable are retried by restGet.
 var httpClient = &http.Client{
 	Timeout: 100 * time.Second,
 	Transport: &http.Transport{
@@ -57,138 +55,44 @@ type ChainInfo struct {
 	Warnings             json.RawMessage `json:"warnings"`
 }
 
-// GetChainInfo returns the node's chain state. ctx bounds the request, so a
-// caller that is being cancelled is not held up by an unresponsive node.
+const chainInfoPath = "/rest/chaininfo.json"
+
+// GetChainInfo returns the node's chain state, waiting for Core while it is
+// unavailable. ctx bounds the wait, so a caller that is being cancelled is not
+// held up by an unresponsive node.
 func GetChainInfo(ctx context.Context) (*ChainInfo, error) {
-	req, err := http.NewRequestWithContext(
-		ctx,
-		http.MethodGet,
-		fmt.Sprintf("%s/rest/chaininfo.json", config.RestEndpoint),
-		nil,
-	)
-	if err != nil {
-		err = fmt.Errorf("error creating request: %w", err)
-		logging.L.Err(err).Msg("error creating request")
-		return nil, err
-	}
+	return restGet(ctx, chainInfoPath, decodeChainInfo)
+}
 
-	resp, err := httpClient.Do(req) // <-- reuse the shared client
-	if err != nil {
-		err = fmt.Errorf("error performing request: %w", err)
-		logging.L.Err(err).Msg("error performing request")
-		return nil, err
-	}
-	defer resp.Body.Close()
+// getChainInfoOnce makes a single attempt, for callers that must not wait.
+func getChainInfoOnce(ctx context.Context) (*ChainInfo, error) {
+	return restGetOnce(ctx, chainInfoPath, decodeChainInfo)
+}
 
-	if resp.StatusCode != 200 {
-		logging.L.Fatal().
-			Str("url", req.URL.String()).
-			Str("status", resp.Status).
-			Msg("bad status code")
-	}
-
+func decodeChainInfo(r io.Reader) (*ChainInfo, error) {
 	var chainInfo ChainInfo
-	err = json.NewDecoder(resp.Body).Decode(&chainInfo)
-	if err != nil {
-		logging.L.Err(err).Msg("unable to decode body")
+	if err := json.NewDecoder(r).Decode(&chainInfo); err != nil {
 		return nil, err
 	}
-
-	return &chainInfo, err
+	return &chainInfo, nil
 }
 
 func getBlockHashByHeight(ctx context.Context, height int64) (*chainhash.Hash, error) {
-	req, err := http.NewRequestWithContext(
-		ctx,
-		http.MethodGet,
-		fmt.Sprintf("%s/rest/blockhashbyheight/%d.bin", config.RestEndpoint, height),
-		nil,
-	)
-	if err != nil {
-		err = fmt.Errorf("error creating request: %w", err)
-		logging.L.Err(err).Msg("error creating request")
-		return nil, err
-	}
+	return restGet(ctx, fmt.Sprintf("/rest/blockhashbyheight/%d.bin", height), decodeBlockHash)
+}
 
-	resp, err := httpClient.Do(req) // <-- reuse the shared client
-	if err != nil {
-		err = fmt.Errorf("error performing request: %w", err)
-		logging.L.Err(err).Msg("error performing request")
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		logging.L.Fatal().
-			Str("url", req.URL.String()).
-			Str("status", resp.Status).
-			Msg("bad status code")
-	}
-
+func decodeBlockHash(r io.Reader) (*chainhash.Hash, error) {
 	var blockhash chainhash.Hash
-	resp.Body.Read(blockhash[:])
-
-	return &blockhash, err
+	if _, err := io.ReadFull(r, blockhash[:]); err != nil {
+		return nil, err
+	}
+	return &blockhash, nil
 }
 
 func getSpentUtxos(ctx context.Context, blockhash string) ([][]*wire.TxOut, error) {
-	req, err := http.NewRequestWithContext(
-		ctx,
-		http.MethodGet,
-		fmt.Sprintf("%s/rest/spenttxouts/%s.bin", config.RestEndpoint, blockhash),
-		nil,
-	)
-	if err != nil {
-		err = fmt.Errorf("error creating request: %w", err)
-		logging.L.Err(err).Msg("error creating request")
-		return nil, err
-	}
-
-	resp, err := httpClient.Do(req) // <-- reuse the shared client
-	if err != nil {
-		err = fmt.Errorf("error performing request: %w", err)
-		logging.L.Err(err).Msg("error performing request")
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		logging.L.Fatal().
-			Str("url", req.URL.String()).
-			Str("status", resp.Status).
-			Msg("bad status code")
-	}
-
-	return ParseSpentTxOuts(resp.Body)
+	return restGet(ctx, fmt.Sprintf("/rest/spenttxouts/%s.bin", blockhash), ParseSpentTxOuts)
 }
 
-func getBlockByHash(ctx context.Context, blockhash string) (block *btcutil.Block, err error) {
-	req, err := http.NewRequestWithContext(
-		ctx,
-		http.MethodGet,
-		fmt.Sprintf("%s/rest/block/%s.bin", config.RestEndpoint, blockhash),
-		nil,
-	)
-	if err != nil {
-		err = fmt.Errorf("error creating request: %w", err)
-		logging.L.Err(err).Msg("error creating request")
-		return
-	}
-
-	resp, err := httpClient.Do(req) // <-- reuse the shared client
-	if err != nil {
-		err = fmt.Errorf("error performing request: %w", err)
-		logging.L.Err(err).Msg("error performing request")
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		logging.L.Fatal().
-			Str("url", req.URL.String()).
-			Str("status", resp.Status).
-			Msg("bad status code")
-	}
-
-	return btcutil.NewBlockFromReader(resp.Body)
+func getBlockByHash(ctx context.Context, blockhash string) (*btcutil.Block, error) {
+	return restGet(ctx, fmt.Sprintf("/rest/block/%s.bin", blockhash), btcutil.NewBlockFromReader)
 }

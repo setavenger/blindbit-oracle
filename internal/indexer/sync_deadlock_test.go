@@ -47,15 +47,17 @@ func TestSyncBlocksHappyPath(t *testing.T) {
 	assertNoIndexerGoroutines(t)
 }
 
-// TestSyncBlocksPullTransportError is the regression test for the production
+// TestSyncBlocksPullError is the regression test for the production
 // incident: one failed REST request (there: a 100 s client timeout) left the
-// indexer blocked forever with the process still running.
-func TestSyncBlocksPullTransportError(t *testing.T) {
+// indexer blocked forever with the process still running. Transport errors
+// such as that timeout are now retried (core_unavailable_test.go), so the
+// failure injected here is one that retrying cannot fix.
+func TestSyncBlocksPullError(t *testing.T) {
 	for _, endpoint := range []string{"spenttxouts", "block", "blockhashbyheight"} {
 		t.Run(endpoint, func(t *testing.T) {
 			withParallelism(t, 1, 2)
 			node := newFaultNode(t, 30)
-			node.inject(endpoint, 15, faultDrop)
+			node.inject(endpoint, 15, faultNotFound)
 			b := NewBuilder(context.Background(), newFaultStore())
 
 			err := returnsWithin(t, syncTimeout, "SyncBlocks", func() error {
@@ -65,7 +67,7 @@ func TestSyncBlocksPullTransportError(t *testing.T) {
 				return // already reported with a goroutine dump
 			}
 			if err == nil {
-				t.Fatalf("SyncBlocks returned nil, want the transport error")
+				t.Fatalf("SyncBlocks returned nil, want the request error")
 			}
 			assertNoIndexerGoroutines(t)
 		})
@@ -78,8 +80,8 @@ func TestSyncBlocksConcurrentPullErrors(t *testing.T) {
 	withParallelism(t, 4, 2)
 	node := newFaultNode(t, 40)
 	for _, h := range []int{10, 11, 12, 13} {
-		node.inject("spenttxouts", h, faultDrop)
-		node.inject("block", h, faultDrop)
+		node.inject("spenttxouts", h, faultNotFound)
+		node.inject("block", h, faultNotFound)
 	}
 	b := NewBuilder(context.Background(), newFaultStore())
 

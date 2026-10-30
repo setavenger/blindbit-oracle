@@ -7,7 +7,10 @@ import (
 	"time"
 )
 
-func TestPullBlockDataTransportErrors(t *testing.T) {
+// A fetch that fails for good (here: the node no longer has the block) must
+// make PullBlockData return its error, whichever of the two fetches fails.
+// Transport errors are retried instead; see core_unavailable_test.go.
+func TestPullBlockDataPermanentErrors(t *testing.T) {
 	cases := []struct {
 		name   string
 		faults []string
@@ -20,7 +23,7 @@ func TestPullBlockDataTransportErrors(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			node := newFaultNode(t, 5)
 			for _, ep := range tc.faults {
-				node.inject(ep, 3, faultDrop)
+				node.inject(ep, 3, faultNotFound)
 			}
 			hash := node.hashAt(3)
 
@@ -84,7 +87,7 @@ func TestPullBlockDataCancelsSiblingRequest(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			node := newFaultNode(t, 5)
-			node.inject(tc.fails, 3, faultDrop)
+			node.inject(tc.fails, 3, faultNotFound)
 			node.inject(tc.hangs, 3, faultHang)
 			hash := node.hashAt(3)
 

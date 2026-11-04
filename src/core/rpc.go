@@ -112,6 +112,40 @@ func GetBestBlockHash() (string, error) {
 	return rpcResponse.Result, nil
 }
 
+// GetBlockHeader fetches a single block header by hash.
+func GetBlockHeader(blockHash string) (*types.BlockHeader, error) {
+	rpcData := types.RPCRequest{
+		JSONRPC: "1.0",
+		ID:      "blindbit-silent-payment-backend-v0",
+		Method:  "getblockheader",
+		Params:  []interface{}{blockHash},
+	}
+
+	var rpcResponse struct {
+		ID     string               `json:"id"`
+		Result types.BlockHeaderRPC `json:"result,omitempty"`
+		Error  interface{}          `json:"error,omitempty"`
+	}
+
+	err := makeRPCRequest(rpcData, &rpcResponse)
+	if err != nil {
+		common.ErrorLogger.Printf("%v\n", err)
+		return nil, err
+	}
+
+	if rpcResponse.Error != nil {
+		common.ErrorLogger.Printf("RPC Error: %v\n", rpcResponse.Error)
+		return nil, fmt.Errorf("RPC Error: %v", rpcResponse.Error)
+	}
+
+	return &types.BlockHeader{
+		Hash:          rpcResponse.Result.Hash,
+		PrevBlockHash: rpcResponse.Result.PreviousBlockHash,
+		Timestamp:     rpcResponse.Result.Timestamp,
+		Height:        rpcResponse.Result.Height,
+	}, nil
+}
+
 func GetBlockHeadersBatch(heights []uint32) ([]types.BlockHeader, error) {
 	// Prepare the batch request
 	batch := make([]types.RPCRequest, len(heights))

@@ -27,30 +27,51 @@ func CheckForNewBlockRoutine() {
 	}
 }
 
+// FullProcessBlockHash processes blockHash and its unprocessed ancestors, oldest first.
+// It first walks back by header to the first block already in the index, keeping only
+// the hashes, and then fetches and processes one full block at a time. Memory therefore
+// does not grow with the number of missing blocks. As before, the walk follows
+// previousblockhash from the given block, which is how a reorg at the tip is picked up.
+// Ancestors are processed first so that spent UTXOs can be deleted afterwards.
 func FullProcessBlockHash(blockHash string) error {
-	block, err := PullBlock(blockHash)
-	if err != nil && err.Error() != "block already processed" { // todo built in error
-		common.ErrorLogger.Println(err)
-		return err
-	}
-	if block == nil {
-		return nil
-	}
-	// check whether previous block has already been processed
-	// we do the check before so that we can subsequently delete spent UTXOs
-	// this should not be a problem and only apply in very few cases
-	// the index should be caught up on startup and hence a previous block
-	// will most likely only be squeezed in if there were several blocks in between tip queries
-	if block.Height > common.SyncStartHeight {
-		err = FullProcessBlockHash(block.PreviousBlockHash)
+	var missing []string // newest first
+	for hash := blockHash; ; {
+		if len(hash) != 64 {
+			common.ErrorLogger.Println("block_hash invalid:", hash)
+			return fmt.Errorf("block_hash invalid: %s", hash)
+		}
+		header, err := dblevel.FetchByBlockHashBlockHeader(hash)
+		if err != nil && !errors.Is(err, dblevel.NoEntryErr{}) {
+			common.ErrorLogger.Println(err)
+			return err
+		}
+		if header != nil {
+			break // already processed
+		}
+		nodeHeader, err := GetBlockHeader(hash)
 		if err != nil {
 			common.ErrorLogger.Println(err)
 			return err
 		}
+		missing = append(missing, hash)
+		if nodeHeader.Height <= common.SyncStartHeight {
+			break
+		}
+		hash = nodeHeader.PrevBlockHash
 	}
 
-	CheckBlock(block)
-	return err
+	for i := len(missing) - 1; i >= 0; i-- {
+		block, err := PullBlock(missing[i])
+		if err != nil && err.Error() != "block already processed" { // todo built in error
+			common.ErrorLogger.Println(err)
+			return err
+		}
+		if block == nil {
+			continue
+		}
+		CheckBlock(block)
+	}
+	return nil
 }
 
 func PullBlock(blockHash string) (*types.Block, error) {

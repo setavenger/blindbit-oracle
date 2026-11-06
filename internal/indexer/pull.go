@@ -151,8 +151,8 @@ func (b *Builder) SingleBlockPullAndHandle(
 	}
 	// Stop at genesis and at the operator's configured start height. `height` is
 	// unsigned: without the height > 0 guard, height-1 at genesis wraps to
-	// 4294967295 and the node answers 400 for that blockhash, which rest.go
-	// treats as fatal. On a fresh database the previous hash is never in the DB,
+	// 4294967295 and the node answers 400 for that blockhash, which restGet
+	// returns as a permanent error. On a fresh database the previous hash is never in the DB,
 	// so this recursion walks the whole chain down and would always underflow.
 	if !blockhashInDB && height > 0 && height > config.SyncStartHeight {
 		// do previous block as well

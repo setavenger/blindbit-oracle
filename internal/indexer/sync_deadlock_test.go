@@ -4,15 +4,15 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/setavenger/blindbit-oracle/internal/config"
 )
 
-// These tests only use SyncBlocks/ContinuousSync, whose signatures did not
-// change, so they also run against the code before the fix and reproduce the
-// original deadlock there.
+// These tests cover sync completion, cancellation and failure propagation.
+// Later tests also use polling controls added with the resilience fixes.
 
 // syncTimeout bounds every sync call. Healthy runs finish in milliseconds;
 // the HTTP client's own timeout (100 s) is far above this, so a pass proves
@@ -208,13 +208,35 @@ func TestSyncBlocksCancelWhileChainInfoHangs(t *testing.T) {
 // The same for ContinuousSync's polling of the node.
 func TestContinuousSyncCancelWhileChainInfoHangs(t *testing.T) {
 	withParallelism(t, 1, 1)
+	withFastPolling(t)
 	node := newFaultNode(t, 3)
 	node.inject("chaininfo", 0, faultHang)
 	b := NewBuilder(context.Background(), newFaultStore())
 
-	// ContinuousSync first asks the node after its 3 s block check.
+	// Cancel only after the polling request has actually started.
 	ctx, cancel := context.WithCancel(context.Background())
-	time.AfterFunc(3500*time.Millisecond, cancel)
+	defer cancel()
+	var sawPoll atomic.Bool
+	go func() {
+		deadline := time.NewTimer(syncTimeout / 2)
+		defer deadline.Stop()
+		ticker := time.NewTicker(time.Millisecond)
+		defer ticker.Stop()
+		defer cancel()
+		for {
+			if node.requestCount("chaininfo") > 0 {
+				sawPoll.Store(true)
+				return
+			}
+			select {
+			case <-ticker.C:
+			case <-deadline.C:
+				return
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
 
 	start := time.Now()
 	err := returnsWithin(t, syncTimeout, "ContinuousSync", func() error {
@@ -225,6 +247,9 @@ func TestContinuousSyncCancelWhileChainInfoHangs(t *testing.T) {
 	}
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("ContinuousSync error = %v, want context.Canceled", err)
+	}
+	if !sawPoll.Load() {
+		t.Fatal("no chain-info request was in flight at cancellation")
 	}
 	if d := time.Since(start); d > 6*time.Second {
 		t.Errorf("ContinuousSync took %v to honour cancellation", d)

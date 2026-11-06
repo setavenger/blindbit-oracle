@@ -124,6 +124,7 @@ func (b *bodyReader) Read(p []byte) (int, error) {
 func restGet[T any](ctx context.Context, path string, decode func(io.Reader) (T, error)) (T, error) {
 	delay := retryInitialDelay
 	for {
+		generation := coreAvailability.generation.Load()
 		v, err := restGetOnce(ctx, path, decode)
 		if err == nil {
 			coreAvailability.up()
@@ -138,7 +139,7 @@ func restGet[T any](ctx context.Context, path string, decode func(io.Reader) (T,
 
 		// Jitter spreads out the parallel block requests that all failed at once.
 		wait := delay/2 + rand.N(delay/2+1)
-		coreAvailability.down(path, err, wait)
+		coreAvailability.down(generation, path, err, wait)
 
 		timer := time.NewTimer(wait)
 		select {
@@ -212,17 +213,22 @@ func restGetOnce[T any](ctx context.Context, path string, decode func(io.Reader)
 var coreAvailability coreState
 
 type coreState struct {
-	unavailable atomic.Bool // read on every successful request
+	unavailable atomic.Bool
+	// A success invalidates failures from attempts that started before it.
+	generation atomic.Uint64
 
 	mu      sync.Mutex
 	since   time.Time
 	lastLog time.Time
 }
 
-func (c *coreState) down(path string, err error, retryIn time.Duration) {
+func (c *coreState) down(generation uint64, path string, err error, retryIn time.Duration) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	if generation != c.generation.Load() {
+		return // A newer success already superseded this failed attempt.
+	}
 	now := time.Now()
 	switch {
 	case !c.unavailable.Load():
@@ -248,11 +254,9 @@ func (c *coreState) down(path string, err error, retryIn time.Duration) {
 }
 
 func (c *coreState) up() {
-	if !c.unavailable.Load() {
-		return
-	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.generation.Add(1)
 	if !c.unavailable.Load() {
 		return
 	}

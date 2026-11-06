@@ -14,12 +14,14 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/setavenger/blindbit-lib/logging"
 	"github.com/setavenger/blindbit-oracle/internal/config"
+	"github.com/setavenger/blindbit-oracle/internal/database"
 )
 
 // These tests cover Bitcoin Core being unavailable: still starting (503),
@@ -578,5 +580,162 @@ func TestIsEndpointMismatch(t *testing.T) {
 		if got := isEndpointMismatch(tc.err); got != tc.want {
 			t.Errorf("isEndpointMismatch(%v) = %v, want %v", tc.err, got, tc.want)
 		}
+	}
+}
+
+// roundTripFunc lets tests hold failed attempts until a newer request succeeds.
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func TestCoreAvailabilityIgnoresStaleFailures(t *testing.T) {
+	for _, recovering := range []bool{false, true} {
+		t.Run(fmt.Sprintf("recovering=%v", recovering), func(t *testing.T) {
+			withFastRetry(t)
+			logs := captureLogs(t)
+			coreAvailability.unavailable.Store(recovering)
+			const callers = 8
+			started := make(chan struct{}, callers)
+			release := make(chan struct{})
+			var attempts atomic.Int32
+			oldClient, oldEndpoint := httpClient, config.RestEndpoint
+			config.RestEndpoint = "http://core.test"
+			ctx, cancel := context.WithTimeout(context.Background(), syncTimeout)
+			defer cancel()
+			httpClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				if r.URL.Path == "/stale" && attempts.Add(1) <= callers {
+					started <- struct{}{}
+					select {
+					case <-release:
+					case <-r.Context().Done():
+						return nil, r.Context().Err()
+					}
+					return nil, errors.New("failure from before the successful request")
+				}
+				return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader("{}")), Header: make(http.Header), Request: r}, nil
+			})}
+			t.Cleanup(func() { httpClient, config.RestEndpoint = oldClient, oldEndpoint })
+			errs := make(chan error, callers)
+			for i := 0; i < callers; i++ {
+				go func() { _, err := restGet(ctx, "/stale", decodeChainInfo); errs <- err }()
+			}
+			for i := 0; i < callers; i++ {
+				select {
+				case <-started:
+				case <-ctx.Done():
+					t.Fatal("stale requests did not start")
+				}
+			}
+			if _, err := GetChainInfo(ctx); err != nil {
+				t.Fatal(err)
+			}
+			close(release)
+			for i := 0; i < callers; i++ {
+				if err := <-errs; err != nil {
+					t.Fatal(err)
+				}
+			}
+			if n := logs.count(logCoreDown); n != 0 {
+				t.Errorf("stale failures logged %d new outages, want 0", n)
+			}
+			wantUp := 0
+			if recovering {
+				wantUp = 1
+			}
+			if n := logs.count(logCoreUp); n != wantUp {
+				t.Errorf("recovery logged %d times, want %d", n, wantUp)
+			}
+			// A genuinely new failed attempt must still mark Core unavailable.
+			outageCtx, stopOutage := context.WithTimeout(ctx, 30*time.Millisecond)
+			defer stopOutage()
+			_, err := restGet(outageCtx, "/new-outage", func(io.Reader) (*ChainInfo, error) { return nil, &coreUnavailableError{errors.New("new outage")} })
+			if !errors.Is(err, context.DeadlineExceeded) {
+				t.Fatalf("new outage: %v", err)
+			}
+			if n := logs.count(logCoreDown); n != 1 {
+				t.Errorf("new outage logged %d times, want 1", n)
+			}
+		})
+	}
+}
+
+type pollingFailStore struct {
+	*faultStore
+	node    *faultNode
+	err     error
+	sawPoll atomic.Bool
+}
+
+func (s *pollingFailStore) ApplyBlock(*database.DBBlock) error {
+	before := s.node.requestCount("chaininfo")
+	s.node.inject("chaininfo", 0, faultHang)
+	deadline := time.Now().Add(syncTimeout / 2)
+	for s.node.requestCount("chaininfo") == before {
+		if time.Now().After(deadline) {
+			return errors.New("poll never started")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	s.sawPoll.Store(true)
+	return s.err
+}
+func TestContinuousSyncWriterErrorWhilePolling(t *testing.T) {
+	withParallelism(t, 1, 1)
+	withSyncStartHeight(t, 0)
+	withFastPolling(t)
+	captureLogs(t)
+	node := newFaultNode(t, 3)
+	errWrite := errors.New("injected write failure while polling")
+	store := &pollingFailStore{faultStore: newFaultStore(), node: node, err: errWrite}
+	b := NewBuilder(context.Background(), store)
+	err := returnsWithin(t, syncTimeout, "ContinuousSync", func() error { return b.ContinuousSync(context.Background()) })
+	if !errors.Is(err, errWrite) {
+		t.Fatalf("got %v, want %v", err, errWrite)
+	}
+	if !store.sawPoll.Load() {
+		t.Fatal("writer did not overlap a poll")
+	}
+	assertNoIndexerGoroutines(t)
+}
+
+func TestSyncBlocksProgressReportUnavailable(t *testing.T) {
+	for _, kind := range []faultKind{faultWarmup, faultHang} {
+		t.Run(fmt.Sprintf("fault=%d", kind), func(t *testing.T) {
+			withParallelism(t, 1, 1)
+			withFastRetry(t)
+			logs := captureLogs(t)
+			oldInterval, oldTimeout := progressReportInterval, progressReportTimeout
+			progressReportInterval, progressReportTimeout = time.Millisecond, 20*time.Millisecond
+			t.Cleanup(func() { progressReportInterval, progressReportTimeout = oldInterval, oldTimeout })
+			node := newFaultNode(t, 3)
+			node.inject("chaininfo", 0, kind)
+			reporting := make(chan struct{})
+			var once sync.Once
+			node.onRequest = func(endpoint string, height int) {
+				if endpoint == "chaininfo" {
+					once.Do(func() { close(reporting) })
+				}
+				if endpoint == "spenttxouts" && height == 1 {
+					select {
+					case <-reporting:
+					case <-time.After(syncTimeout / 2):
+					}
+				}
+			}
+			b := NewBuilder(context.Background(), newFaultStore())
+			if err := returnsWithin(t, syncTimeout, "SyncBlocks", func() error { return b.SyncBlocks(context.Background(), 1, 3) }); err != nil {
+				t.Fatal(err)
+			}
+			if node.requestCount("chaininfo") == 0 {
+				t.Fatal("progress report never requested chain info")
+			}
+			if n := logs.count("Indexer is up to date"); n != 0 {
+				t.Errorf("unknown Core tip reported up to date %d times", n)
+			}
+			if n := logs.count("failed to get chain info for progress report"); n != 0 {
+				t.Errorf("progress report emitted %d repetitive outage warnings", n)
+			}
+			assertNoIndexerGoroutines(t)
+		})
 	}
 }

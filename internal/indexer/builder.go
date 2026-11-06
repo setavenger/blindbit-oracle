@@ -19,6 +19,7 @@ import (
 // them.
 var (
 	progressReportInterval = 10 * time.Second
+	progressReportTimeout  = 2 * time.Second
 	blockCheckInterval     = 3 * time.Second
 )
 
@@ -158,6 +159,7 @@ func (b *Builder) ContinuousSync(parent context.Context) error {
 
 			chainInfo, err := GetChainInfo(ctx)
 			if err != nil {
+				err = writerErr(err)
 				logging.L.Err(err).Msg("failed to pull chainInfo")
 				return err
 			}
@@ -393,12 +395,17 @@ func (b *Builder) SyncBlocks(
 					return
 				}
 
-				// Get current blockchain tip for comparison. A single attempt:
-				// waiting for an unavailable node here would stall the writer.
-				chainInfo, err := getChainInfoOnce(ctx)
+				// Progress is optional: skip a known outage and bound even a
+				// single attempt so a blackholed node cannot stall the writer.
+				if coreAvailability.unavailable.Load() {
+					continue
+				}
+				reportCtx, cancelReport := context.WithTimeout(ctx, progressReportTimeout)
+				chainInfo, err := getChainInfoOnce(reportCtx)
+				cancelReport()
 				if err != nil {
-					logging.L.Warn().Err(err).Msg("failed to get chain info for progress report")
-					chainInfo = &ChainInfo{Blocks: int64(syncTip)} // fallback
+					logging.L.Debug().Err(err).Msg("Core tip unavailable for progress report")
+					continue // An unknown tip must never be reported as up to date.
 				}
 
 				// Enhanced progress reporting
@@ -446,7 +453,9 @@ func (b *Builder) SyncBlocks(
 func (b *Builder) pullBlockToChan(ctx context.Context, height int64) error {
 	block, err := b.pullBlock(ctx, height)
 	if err != nil {
-		logging.L.Err(err).Int64("height", height).Msg("failed to pull blockhash")
+		if ctx.Err() == nil {
+			logging.L.Err(err).Int64("height", height).Msg("failed to pull block")
+		}
 		return err
 	}
 	select {
@@ -460,7 +469,9 @@ func (b *Builder) pullBlockToChan(ctx context.Context, height int64) error {
 func (b *Builder) pullBlock(ctx context.Context, height int64) (*Block, error) {
 	blockhash, err := getBlockHashByHeight(ctx, height)
 	if err != nil {
-		logging.L.Err(err).Int64("height", height).Msg("failed to pull blockhash")
+		if ctx.Err() == nil {
+			logging.L.Err(err).Int64("height", height).Msg("failed to pull blockhash")
+		}
 		return nil, err
 	}
 	logging.L.Trace().
@@ -469,7 +480,9 @@ func (b *Builder) pullBlock(ctx context.Context, height int64) (*Block, error) {
 		Msg("pulling block")
 	block, err := PullBlockData(ctx, blockhash)
 	if err != nil {
-		logging.L.Err(err).Int64("height", height).Msg("failed to pull block")
+		if ctx.Err() == nil {
+			logging.L.Err(err).Int64("height", height).Msg("failed to pull block")
+		}
 		return nil, err
 	}
 	block.Height = height
